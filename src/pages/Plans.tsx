@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useVideoUsage } from '@/hooks/useVideoUsage';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Sparkles, Zap, Crown, ArrowLeft, Check, Lock } from 'lucide-react';
+import { PixPaymentDialog } from '@/components/PixPaymentDialog';
+import { Sparkles, Zap, Crown, ArrowLeft, Check, Lock, QrCode } from 'lucide-react';
 
 const plans = [
   {
+    id: 'free' as const,
     name: 'Gratuito',
     price: 'R$ 0',
     period: '/mês',
@@ -19,11 +22,10 @@ const plans = [
       'Download dos vídeos gerados',
       'Configurações de processamento',
     ],
-    current: true,
     highlight: false,
-    cta: 'Plano Atual',
   },
   {
+    id: 'professional' as const,
     name: 'Profissional',
     price: 'R$ 97',
     period: '/mês',
@@ -37,11 +39,10 @@ const plans = [
       'Processamento prioritário',
       'Suporte por e-mail',
     ],
-    current: false,
     highlight: true,
-    cta: 'Assinar Profissional',
   },
   {
+    id: 'enterprise' as const,
     name: 'Empresarial',
     price: 'R$ 297',
     period: '/mês',
@@ -56,18 +57,28 @@ const plans = [
       'Suporte prioritário 24/7',
       'API de integração',
     ],
-    current: false,
     highlight: false,
-    cta: 'Assinar Empresarial',
   },
 ];
 
 const Plans = () => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const { videoCount, limit, remaining, plan } = useVideoUsage();
+  const { videoCount, limit, remaining, plan, fetchUsage } = useVideoUsage();
+  const [pixDialog, setPixDialog] = useState<{ open: boolean; planId: 'professional' | 'enterprise' }>({
+    open: false,
+    planId: 'professional',
+  });
 
   const usagePercent = limit === Infinity ? 0 : Math.min(100, (videoCount / limit) * 100);
+
+  const handleSelectPlan = (planId: string) => {
+    if (planId === 'professional' || planId === 'enterprise') {
+      setPixDialog({ open: true, planId });
+    }
+  };
+
+  const isCurrent = (planId: string) => plan === planId || (plan === 'free' && planId === 'free');
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,76 +129,80 @@ const Plans = () => {
           <p className="text-muted-foreground max-w-xl mx-auto">
             Escale sua produção de criativos com o plano que melhor se adapta às suas necessidades.
           </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <QrCode className="w-4 h-4" />
+            <span>Pagamento seguro via Pix</span>
+          </div>
         </div>
 
         {/* Plans grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {plans.map((p) => (
-            <div
-              key={p.name}
-              className={`relative rounded-2xl border p-6 flex flex-col gap-5 transition-all ${
-                p.highlight
-                  ? 'border-primary bg-card shadow-lg shadow-primary/10 scale-[1.02]'
-                  : 'border-border bg-card'
-              }`}
-            >
-              {p.highlight && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs font-bold px-4 py-1 rounded-full uppercase tracking-wide">
-                  Mais Popular
-                </span>
-              )}
-              <div className="flex items-center gap-3">
-                <div className={`rounded-xl p-3 ${p.highlight ? 'bg-primary/20' : 'bg-muted'}`}>
-                  <p.icon className={`w-6 h-6 ${p.highlight ? 'text-primary' : 'text-muted-foreground'}`} />
-                </div>
-                <div>
-                  <p className="font-bold text-lg text-foreground">{p.name}</p>
-                  <p className="text-xs text-muted-foreground">{p.description}</p>
-                </div>
-              </div>
-
-              <div className="flex items-end gap-1">
-                <span className="text-4xl font-extrabold text-foreground">{p.price}</span>
-                <span className="text-muted-foreground text-sm mb-1">{p.period}</span>
-              </div>
-
-              <ul className="space-y-2.5 flex-1">
-                {p.features.map((feat) => (
-                  <li key={feat} className="flex items-start gap-2 text-sm">
-                    <Check className={`w-4 h-4 mt-0.5 shrink-0 ${p.highlight ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <span className="text-foreground">{feat}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button
-                className={`w-full rounded-full font-semibold ${
-                  p.current
-                    ? 'border border-border bg-muted text-muted-foreground cursor-default'
-                    : p.highlight
-                    ? 'bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90'
-                    : ''
+          {plans.map((p) => {
+            const current = isCurrent(p.id);
+            return (
+              <div
+                key={p.name}
+                className={`relative rounded-2xl border p-6 flex flex-col gap-5 transition-all ${
+                  p.highlight
+                    ? 'border-primary bg-card shadow-lg shadow-primary/10 scale-[1.02]'
+                    : 'border-border bg-card'
                 }`}
-                variant={p.current ? 'outline' : p.highlight ? 'default' : 'outline'}
-                disabled={p.current}
-                onClick={() => {
-                  if (!p.current) {
-                    // TODO: Implement payment flow
-                    window.open('https://pay.hotmart.com', '_blank');
-                  }
-                }}
               >
-                {p.current ? (
-                  <>{p.cta}</>
-                ) : (
-                  <>
-                    <Lock className="w-4 h-4 mr-2" />
-                    {p.cta}
-                  </>
+                {p.highlight && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs font-bold px-4 py-1 rounded-full uppercase tracking-wide">
+                    Mais Popular
+                  </span>
                 )}
-              </Button>
-            </div>
-          ))}
+                <div className="flex items-center gap-3">
+                  <div className={`rounded-xl p-3 ${p.highlight ? 'bg-primary/20' : 'bg-muted'}`}>
+                    <p.icon className={`w-6 h-6 ${p.highlight ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-lg text-foreground">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">{p.description}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-end gap-1">
+                  <span className="text-4xl font-extrabold text-foreground">{p.price}</span>
+                  <span className="text-muted-foreground text-sm mb-1">{p.period}</span>
+                </div>
+
+                <ul className="space-y-2.5 flex-1">
+                  {p.features.map((feat) => (
+                    <li key={feat} className="flex items-start gap-2 text-sm">
+                      <Check className={`w-4 h-4 mt-0.5 shrink-0 ${p.highlight ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <span className="text-foreground">{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  className={`w-full rounded-full font-semibold ${
+                    current
+                      ? 'border border-border bg-muted text-muted-foreground cursor-default'
+                      : p.highlight
+                      ? 'bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90'
+                      : ''
+                  }`}
+                  variant={current ? 'outline' : p.highlight ? 'default' : 'outline'}
+                  disabled={current}
+                  onClick={() => handleSelectPlan(p.id)}
+                >
+                  {current ? (
+                    'Plano Atual'
+                  ) : p.id === 'free' ? (
+                    'Plano Atual'
+                  ) : (
+                    <>
+                      <QrCode className="w-4 h-4 mr-2" />
+                      Pagar com Pix
+                    </>
+                  )}
+                </Button>
+              </div>
+            );
+          })}
         </div>
 
         {/* FAQ */}
@@ -197,10 +212,19 @@ const Plans = () => {
             Ao atingir o limite mensal, seus vídeos continuam disponíveis para download.
           </p>
           <p className="text-xs text-muted-foreground">
-            Dúvidas? Entre em contato pelo suporte dentro da plataforma.
+            O pagamento é processado via Pix. Após escanear o QR Code e realizar o pagamento, 
+            clique em "Já realizei o pagamento" para ativar seu plano instantaneamente.
           </p>
         </div>
       </main>
+
+      {/* Pix Payment Dialog */}
+      <PixPaymentDialog
+        open={pixDialog.open}
+        onOpenChange={(open) => setPixDialog((prev) => ({ ...prev, open }))}
+        planId={pixDialog.planId}
+        onPaymentConfirmed={() => fetchUsage()}
+      />
     </div>
   );
 };

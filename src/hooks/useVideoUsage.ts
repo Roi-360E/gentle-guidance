@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-const FREE_PLAN_LIMIT = 100;
+const PLAN_LIMITS: Record<string, number> = {
+  free: 100,
+  professional: 1000,
+  enterprise: Infinity,
+};
 
 function getCurrentMonthYear() {
   const now = new Date();
@@ -16,9 +20,10 @@ export function useVideoUsage() {
   const [loading, setLoading] = useState(true);
 
   const monthYear = getCurrentMonthYear();
-  const limit = plan === 'free' ? FREE_PLAN_LIMIT : Infinity;
+  const planLimit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+  const limit = planLimit;
   const remaining = Math.max(0, limit - videoCount);
-  const isLimitReached = plan === 'free' && videoCount >= FREE_PLAN_LIMIT;
+  const isLimitReached = limit !== Infinity && videoCount >= limit;
 
   const fetchUsage = useCallback(async () => {
     if (!user) return;
@@ -49,8 +54,9 @@ export function useVideoUsage() {
     if (!user) return false;
 
     const newCount = videoCount + count;
+    const currentLimit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
 
-    if (plan === 'free' && newCount > FREE_PLAN_LIMIT) {
+    if (currentLimit !== Infinity && newCount > currentLimit) {
       return false;
     }
 
