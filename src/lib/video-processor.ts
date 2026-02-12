@@ -4,6 +4,31 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 
+/**
+ * Fetch a URL as a blob URL with a timeout to prevent hanging.
+ */
+async function toBlobURLWithTimeout(
+  url: string,
+  mimeType: string,
+  timeoutMs = 30000
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout loading ${url} after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    toBlobURL(url, mimeType)
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpegLoaded) return ffmpeg;
 
@@ -12,47 +37,61 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     console.log('[FFmpeg]', message);
   });
 
+  // Use UMD version which doesn't require SharedArrayBuffer/COOP/COEP
   const loadStrategies = [
+    {
+      name: 'Full CDN (jsdelivr - UMD)',
+      coreJS: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
+      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm',
+    },
+    {
+      name: 'Full CDN (unpkg - UMD)',
+      coreJS: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
+      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm',
+    },
+    {
+      name: 'Full CDN (jsdelivr - ESM)',
+      coreJS: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
+    },
     {
       name: 'Local JS + CDN WASM (jsdelivr)',
       coreJS: `${window.location.origin}/ffmpeg-core/ffmpeg-core.js`,
       wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
     },
     {
-      name: 'Local JS + CDN WASM (unpkg)',
-      coreJS: `${window.location.origin}/ffmpeg-core/ffmpeg-core.js`,
-      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
-    },
-    {
-      name: 'Full CDN (jsdelivr)',
-      coreJS: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
-      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
-    },
-    {
-      name: 'Full CDN (unpkg)',
+      name: 'Full CDN (unpkg - ESM)',
       coreJS: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
       wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
     },
   ];
 
+  const errors: string[] = [];
+
   for (const strategy of loadStrategies) {
     try {
       console.log(`[VideoProcessor] Trying: ${strategy.name}...`);
-      const coreURL = await toBlobURL(strategy.coreJS, 'text/javascript');
-      const wasmURL = await toBlobURL(strategy.wasm, 'application/wasm');
+      const coreURL = await toBlobURLWithTimeout(strategy.coreJS, 'text/javascript', 20000);
+      const wasmURL = await toBlobURLWithTimeout(strategy.wasm, 'application/wasm', 30000);
       await instance.load({ coreURL, wasmURL });
       ffmpeg = instance;
       ffmpegLoaded = true;
       console.log(`[VideoProcessor] ✅ FFmpeg loaded via "${strategy.name}"`);
       return ffmpeg;
     } catch (err) {
-      console.warn(`[VideoProcessor] Failed "${strategy.name}":`, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${strategy.name}: ${msg}`);
+      console.warn(`[VideoProcessor] Failed "${strategy.name}":`, msg);
     }
   }
 
   ffmpeg = null;
   ffmpegLoaded = false;
-  throw new Error('Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente.');
+  console.error('[VideoProcessor] All load strategies failed:', errors);
+  throw new Error(
+    'Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente. ' +
+    'Detalhes: ' + errors.join(' | ')
+  );
 }
 
 export interface VideoFile {

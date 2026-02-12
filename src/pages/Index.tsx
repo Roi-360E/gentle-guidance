@@ -58,13 +58,22 @@ const Index = () => {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    await processQueue(
-      combos,
-      settings,
-      (updated) => setCombinations([...updated]),
-      (p) => setCurrentProgress(p),
-      controller.signal
-    );
+    try {
+      await processQueue(
+        combos,
+        settings,
+        (updated) => setCombinations([...updated]),
+        (p) => setCurrentProgress(p),
+        controller.signal
+      );
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[Index] processQueue error:', errorMsg);
+      toast.error(`Erro no processamento: ${errorMsg}`);
+      setIsProcessing(false);
+      abortRef.current = null;
+      return;
+    }
 
     setIsProcessing(false);
     abortRef.current = null;
