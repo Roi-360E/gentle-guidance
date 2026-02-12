@@ -7,37 +7,51 @@ let ffmpegLoaded = false;
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpegLoaded) return ffmpeg;
 
-  // Check for cross-origin isolation (required for SharedArrayBuffer)
-  if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) {
-    console.warn('[VideoProcessor] crossOriginIsolated is false. SharedArrayBuffer may not be available.');
-  }
-
   const instance = new FFmpeg();
   instance.on('log', ({ message }) => {
     console.log('[FFmpeg]', message);
   });
 
-  // Use ESM format for Vite, version 0.12.10 to match @ffmpeg/ffmpeg@0.12.10
-  const CDN_BASES = [
-    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm',
-    'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm',
+  // Strategy 1: Load core JS locally (from public/ffmpeg-core/) + WASM from CDN
+  // Strategy 2: Both from CDN (fallback)
+  const loadStrategies = [
+    {
+      name: 'Local JS + CDN WASM (jsdelivr)',
+      coreJS: `${window.location.origin}/ffmpeg-core/ffmpeg-core.js`,
+      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
+    },
+    {
+      name: 'Local JS + CDN WASM (unpkg)',
+      coreJS: `${window.location.origin}/ffmpeg-core/ffmpeg-core.js`,
+      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
+    },
+    {
+      name: 'Full CDN (jsdelivr)',
+      coreJS: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
+    },
+    {
+      name: 'Full CDN (unpkg)',
+      coreJS: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
+    },
   ];
 
-  for (const baseURL of CDN_BASES) {
+  for (const strategy of loadStrategies) {
     try {
-      console.log(`[VideoProcessor] Loading FFmpeg from ${baseURL}...`);
+      console.log(`[VideoProcessor] Trying: ${strategy.name}...`);
 
-      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+      const coreURL = await toBlobURL(strategy.coreJS, 'text/javascript');
+      const wasmURL = await toBlobURL(strategy.wasm, 'application/wasm');
 
       await instance.load({ coreURL, wasmURL });
 
       ffmpeg = instance;
       ffmpegLoaded = true;
-      console.log('[VideoProcessor] ✅ FFmpeg loaded successfully');
+      console.log(`[VideoProcessor] ✅ FFmpeg loaded via "${strategy.name}"`);
       return ffmpeg;
     } catch (err) {
-      console.warn(`[VideoProcessor] Failed to load from ${baseURL}:`, err);
+      console.warn(`[VideoProcessor] Failed "${strategy.name}":`, err);
     }
   }
 
