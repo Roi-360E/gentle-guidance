@@ -37,22 +37,17 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     console.log('[FFmpeg]', message);
   });
 
-  // Use UMD version which doesn't require SharedArrayBuffer/COOP/COEP
+  // ESM format is required by @ffmpeg/ffmpeg 0.12.x (UMD will NOT work)
   const loadStrategies = [
-    {
-      name: 'Full CDN (jsdelivr - UMD)',
-      coreJS: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
-      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm',
-    },
-    {
-      name: 'Full CDN (unpkg - UMD)',
-      coreJS: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
-      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm',
-    },
     {
       name: 'Full CDN (jsdelivr - ESM)',
       coreJS: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
       wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
+    },
+    {
+      name: 'Full CDN (unpkg - ESM)',
+      coreJS: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
     },
     {
       name: 'Local JS + CDN WASM (jsdelivr)',
@@ -60,8 +55,8 @@ export async function getFFmpeg(): Promise<FFmpeg> {
       wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
     },
     {
-      name: 'Full CDN (unpkg - ESM)',
-      coreJS: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+      name: 'Local JS + CDN WASM (unpkg)',
+      coreJS: `${window.location.origin}/ffmpeg-core/ffmpeg-core.js`,
       wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
     },
   ];
