@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      payments: {
+        Row: {
+          amount: number
+          confirmed_at: string | null
+          created_at: string
+          id: string
+          pix_tx_id: string | null
+          plan: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          pix_tx_id?: string | null
+          plan: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          pix_tx_id?: string | null
+          plan?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -77,6 +113,36 @@ export type Database = {
           tone?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      video_usage: {
+        Row: {
+          created_at: string
+          id: string
+          month_year: string
+          plan: string
+          updated_at: string
+          user_id: string
+          video_count: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month_year: string
+          plan?: string
+          updated_at?: string
+          user_id: string
+          video_count?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month_year?: string
+          plan?: string
+          updated_at?: string
+          user_id?: string
+          video_count?: number
         }
         Relationships: []
       }
