@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { VideoUploadZone } from '@/components/VideoUploadZone';
 import { CombinationList } from '@/components/CombinationList';
@@ -11,10 +13,12 @@ import {
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const [hooks, setHooks] = useState<VideoFile[]>([]);
   const [bodies, setBodies] = useState<VideoFile[]>([]);
   const [ctas, setCtas] = useState<VideoFile[]>([]);
@@ -93,13 +97,13 @@ const Index = () => {
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Home className="w-4 h-4" /> Home
             </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/subtitles')}>
+              <Type className="w-4 h-4" /> Legendas IA ✨
+            </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Download className="w-4 h-4" /> Meus Downloads
             </Button>
-            <Button size="sm" className="gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
-              <HelpCircle className="w-4 h-4" /> Pedir Ajuda
-            </Button>
-            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair
             </Button>
           </nav>
