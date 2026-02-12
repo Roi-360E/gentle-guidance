@@ -54,7 +54,13 @@ const Index = () => {
     abortRef.current = null;
 
     if (!controller.signal.aborted) {
-      toast.success('Processamento concluído!');
+      const doneCount = combos.filter(c => c.status === 'done').length;
+      const errorCount = combos.filter(c => c.status === 'error').length;
+      if (errorCount > 0) {
+        toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s). Veja o console (F12) para detalhes.`);
+      } else {
+        toast.success(`Todos os ${doneCount} vídeos foram gerados com sucesso!`);
+      }
     } else {
       toast.info('Processamento cancelado.');
     }

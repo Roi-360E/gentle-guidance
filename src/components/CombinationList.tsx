@@ -62,12 +62,21 @@ export function CombinationList({
         {combinations.map((combo) => (
           <div
             key={combo.id}
-            className="flex items-center gap-3 rounded-lg bg-muted/30 px-3 py-2 text-sm"
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${
+              combo.status === 'error' ? 'bg-destructive/10 border border-destructive/30' :
+              combo.status === 'done' ? 'bg-accent/10 border border-accent/30' :
+              'bg-muted/30'
+            }`}
           >
             {statusIcon[combo.status]}
             <span className="font-mono truncate flex-1 text-xs">
               {combo.outputName}
             </span>
+            {combo.status === 'error' && combo.errorMessage && (
+              <span className="text-destructive text-xs truncate max-w-[200px]" title={combo.errorMessage}>
+                {combo.errorMessage}
+              </span>
+            )}
             <span className="text-muted-foreground text-xs hidden sm:inline">
               H{combo.hook.name.slice(0, 8)}… + B{combo.body.name.slice(0, 8)}… + C{combo.cta.name.slice(0, 8)}…
             </span>
