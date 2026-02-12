@@ -4,25 +4,50 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 
-const CDN_URLS = [
+const CDN_BASES = [
   'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd',
   'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd',
 ];
 
+async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.warn(`[VideoProcessor] Fetch attempt ${i + 1}/${retries} failed for ${url}:`, err);
+      if (i < retries - 1) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+  throw new Error(`Failed to fetch ${url} after ${retries} attempts`);
+}
+
+async function createBlobURL(url: string, mimeType: string): Promise<string> {
+  const res = await fetchWithRetry(url);
+  const buf = await res.arrayBuffer();
+  const blob = new Blob([buf], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
+
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpegLoaded) return ffmpeg;
 
-  for (const baseURL of CDN_URLS) {
+  // First try local files (served from public/ffmpeg/)
+  const localBase = `${window.location.origin}/ffmpeg`;
+  const allBases = [localBase, ...CDN_BASES];
+
+  for (const baseURL of allBases) {
     try {
-      // Always create a fresh instance per attempt
       const instance = new FFmpeg();
       instance.on('log', ({ message }) => {
         console.log('[FFmpeg]', message);
       });
 
       console.log(`[VideoProcessor] Loading FFmpeg from ${baseURL}...`);
-      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+
+      const coreURL = await createBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await createBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
 
       await instance.load({ coreURL, wasmURL });
 
@@ -35,7 +60,6 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     }
   }
 
-  // Reset state so next call tries again
   ffmpeg = null;
   ffmpegLoaded = false;
   throw new Error('Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente.');
