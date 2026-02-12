@@ -2,17 +2,23 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
+let ffmpegLoaded = false;
 
 export async function getFFmpeg(): Promise<FFmpeg> {
-  if (ffmpeg) return ffmpeg;
+  if (ffmpeg && ffmpegLoaded) return ffmpeg;
 
-  ffmpeg = new FFmpeg();
+  if (!ffmpeg) {
+    ffmpeg = new FFmpeg();
+  }
 
-  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-  });
+  if (!ffmpegLoaded) {
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    ffmpegLoaded = true;
+  }
 
   return ffmpeg;
 }
@@ -112,7 +118,10 @@ async function preProcessInput(
     outputName
   );
 
-  await ff.exec(args);
+  const exitCode = await ff.exec(args);
+  if (exitCode !== 0) {
+    throw new Error(`Pre-process failed for ${inputName} (exit code ${exitCode})`);
+  }
 }
 
 export async function concatenateVideos(
@@ -122,6 +131,10 @@ export async function concatenateVideos(
 ): Promise<string> {
   const ff = await getFFmpeg();
 
+  const progressHandler = ({ progress }: { progress: number }) => {
+    onProgress?.(Math.min(Math.round(progress * 100), 100));
+  };
+
   const hookData = await fetchFile(combination.hook.file);
   const bodyData = await fetchFile(combination.body.file);
   const ctaData = await fetchFile(combination.cta.file);
@@ -130,38 +143,45 @@ export async function concatenateVideos(
   await ff.writeFile('body_raw.mp4', bodyData);
   await ff.writeFile('cta_raw.mp4', ctaData);
 
-  ff.on('progress', ({ progress }) => {
-    onProgress?.(Math.min(Math.round(progress * 100), 100));
-  });
+  ff.on('progress', progressHandler);
 
   if (settings.preProcess) {
-    // Pre-process: normalize all inputs to same resolution/codec
+    // Pre-process: normalize all inputs to same resolution/codec as .mp4
     onProgress?.(5);
-    await preProcessInput(ff, 'hook_raw.mp4', 'hook.ts', settings.resolution);
+    await preProcessInput(ff, 'hook_raw.mp4', 'hook_norm.mp4', settings.resolution);
     onProgress?.(25);
-    await preProcessInput(ff, 'body_raw.mp4', 'body.ts', settings.resolution);
+    await preProcessInput(ff, 'body_raw.mp4', 'body_norm.mp4', settings.resolution);
     onProgress?.(50);
-    await preProcessInput(ff, 'cta_raw.mp4', 'cta.ts', settings.resolution);
+    await preProcessInput(ff, 'cta_raw.mp4', 'cta_norm.mp4', settings.resolution);
     onProgress?.(70);
 
-    const concatList = "file 'hook.ts'\nfile 'body.ts'\nfile 'cta.ts'\n";
-    await ff.writeFile('concat.txt', concatList);
-
-    await ff.exec([
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', 'concat.txt',
-      '-c', 'copy',
+    // Use filter_complex concat for reliable merging
+    const exitCode = await ff.exec([
+      '-i', 'hook_norm.mp4',
+      '-i', 'body_norm.mp4',
+      '-i', 'cta_norm.mp4',
+      '-filter_complex',
+      '[0:v:0][0:a:0][1:v:0][1:a:0][2:v:0][2:a:0]concat=n=3:v=1:a=1[outv][outa]',
+      '-map', '[outv]',
+      '-map', '[outa]',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '23',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
       '-y',
       'output.mp4',
     ]);
+
+    if (exitCode !== 0) {
+      throw new Error(`Concatenation failed (exit code ${exitCode})`);
+    }
   } else {
-    // Direct concat with optional re-encode for resolution
     const scale = resolutionMap[settings.resolution];
+    let exitCode: number;
 
     if (scale) {
-      // Must re-encode to match resolution
-      await ff.exec([
+      exitCode = await ff.exec([
         '-i', 'hook_raw.mp4',
         '-i', 'body_raw.mp4',
         '-i', 'cta_raw.mp4',
@@ -176,20 +196,31 @@ export async function concatenateVideos(
         '-preset', 'ultrafast',
         '-crf', '23',
         '-c:a', 'aac',
+        '-movflags', '+faststart',
         '-y',
         'output.mp4',
       ]);
     } else {
-      const concatList = "file 'hook_raw.mp4'\nfile 'body_raw.mp4'\nfile 'cta_raw.mp4'\n";
-      await ff.writeFile('concat.txt', concatList);
-      await ff.exec([
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', 'concat.txt',
-        '-c', 'copy',
+      exitCode = await ff.exec([
+        '-i', 'hook_raw.mp4',
+        '-i', 'body_raw.mp4',
+        '-i', 'cta_raw.mp4',
+        '-filter_complex',
+        '[0:v:0][0:a:0][1:v:0][1:a:0][2:v:0][2:a:0]concat=n=3:v=1:a=1[outv][outa]',
+        '-map', '[outv]',
+        '-map', '[outa]',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-movflags', '+faststart',
         '-y',
         'output.mp4',
       ]);
+    }
+
+    if (exitCode !== 0) {
+      throw new Error(`Concatenation failed (exit code ${exitCode})`);
     }
   }
 
@@ -199,10 +230,16 @@ export async function concatenateVideos(
   const blob = new Blob([new Uint8Array(data as Uint8Array)], { type: 'video/mp4' });
 
   // Cleanup
-  const filesToDelete = ['hook_raw.mp4', 'body_raw.mp4', 'cta_raw.mp4', 'hook.ts', 'body.ts', 'cta.ts', 'concat.txt', 'output.mp4'];
+  const filesToDelete = [
+    'hook_raw.mp4', 'body_raw.mp4', 'cta_raw.mp4',
+    'hook_norm.mp4', 'body_norm.mp4', 'cta_norm.mp4',
+    'output.mp4',
+  ];
   for (const f of filesToDelete) {
     try { await ff.deleteFile(f); } catch {}
   }
+
+  ff.off('progress', progressHandler);
 
   return URL.createObjectURL(blob);
 }
