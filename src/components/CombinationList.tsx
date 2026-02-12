@@ -1,6 +1,8 @@
-import { Download, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Loader2, CheckCircle2, AlertCircle, Clock, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
 import type { Combination } from '@/lib/video-processor';
 
 interface CombinationListProps {
@@ -25,6 +27,7 @@ export function CombinationList({
   onDownloadAll,
   isProcessing,
 }: CombinationListProps) {
+  const [previewCombo, setPreviewCombo] = useState<Combination | null>(null);
   const doneCount = combinations.filter((c) => c.status === 'done').length;
   const totalProgress = combinations.length > 0 ? (doneCount / combinations.length) * 100 : 0;
 
@@ -69,18 +72,37 @@ export function CombinationList({
               H{combo.hook.name.slice(0, 8)}… + B{combo.body.name.slice(0, 8)}… + C{combo.cta.name.slice(0, 8)}…
             </span>
             {combo.status === 'done' && combo.outputUrl && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => onDownload(combo)}
-              >
-                <Download className="w-3.5 h-3.5" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setPreviewCombo(combo)}
+                  title="Visualizar"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onDownload(combo)}
+                  title="Baixar"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             )}
           </div>
         ))}
       </div>
+
+      <VideoPreviewDialog
+        open={!!previewCombo}
+        onOpenChange={(open) => !open && setPreviewCombo(null)}
+        videoUrl={previewCombo?.outputUrl ?? null}
+        title={previewCombo?.outputName ?? ''}
+      />
     </div>
   );
 }
