@@ -127,19 +127,39 @@ const Index = () => {
         </div>
 
         {/* Plan card */}
-        <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="bg-primary/20 rounded-xl p-3">
-              <Zap className="w-6 h-6 text-primary" />
+        <div className="max-w-2xl mx-auto space-y-3">
+          <div className="rounded-2xl border border-border bg-card p-5 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="bg-primary/20 rounded-xl p-3">
+                <Zap className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <p className="font-bold text-foreground">Créditos Ilimitados</p>
+                <p className="text-xs text-primary">● Acesso Total</p>
+              </div>
             </div>
-            <div>
-              <p className="font-bold text-foreground">Créditos Ilimitados</p>
-              <p className="text-xs text-primary">● Acesso Total</p>
-            </div>
+            <span className="text-xs border border-primary/40 text-primary rounded-full px-3 py-1">
+              ● Acesso completo ao app
+            </span>
           </div>
-          <span className="text-xs border border-primary/40 text-primary rounded-full px-3 py-1">
-            ● Acesso completo ao app
-          </span>
+
+          {/* Free Plan info */}
+          <div className="rounded-2xl border border-border bg-card p-5 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="bg-muted rounded-xl p-3">
+                <Sparkles className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-bold text-foreground">Plano Gratuito</p>
+                <p className="text-xs text-muted-foreground">
+                  {combinations.filter(c => c.status === 'done').length} / 100 vídeos usados este mês
+                </p>
+              </div>
+            </div>
+            <span className="text-xs border border-border text-muted-foreground rounded-full px-3 py-1">
+              Limite: 100 vídeos/mês
+            </span>
+          </div>
         </div>
 
         {/* Stats */}
