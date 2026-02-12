@@ -43,6 +43,7 @@ export interface Combination {
   status: 'pending' | 'processing' | 'done' | 'error';
   outputUrl?: string;
   outputName: string;
+  errorMessage?: string;
 }
 
 export type ResolutionPreset = 'original' | '1080p' | '720p' | '480p' | '360p';
@@ -391,11 +392,19 @@ export async function processQueue(
 
     try {
       const url = await concatenateVideos(combo, settings, onProgressItem);
+      if (!url) {
+        throw new Error('URL de saída vazia');
+      }
       combo.status = 'done';
       combo.outputUrl = url;
+      console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído com sucesso!`, 'color: #22c55e; font-weight: bold;');
     } catch (err) {
       combo.status = 'error';
-      console.error(`[VideoProcessor] Error combo ${combo.id}:`, err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      combo.errorMessage = errorMsg;
+      console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
+      console.error(`[VideoProcessor] Detalhes do erro:`, err);
+      console.error(`[VideoProcessor] Arquivos de entrada: Hook=${combo.hook.name} (${combo.hook.file.size}B), Body=${combo.body.name} (${combo.body.file.size}B), CTA=${combo.cta.name} (${combo.cta.file.size}B)`);
     }
 
     onUpdate([...combinations]);
