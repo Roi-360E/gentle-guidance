@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useVideoUsage } from '@/hooks/useVideoUsage';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { VideoUploadZone } from '@/components/VideoUploadZone';
 import { CombinationList } from '@/components/CombinationList';
 import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
@@ -13,12 +15,13 @@ import {
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const { videoCount, remaining, isLimitReached, limit, plan, incrementUsage } = useVideoUsage();
   const [hooks, setHooks] = useState<VideoFile[]>([]);
   const [bodies, setBodies] = useState<VideoFile[]>([]);
   const [ctas, setCtas] = useState<VideoFile[]>([]);
@@ -36,6 +39,19 @@ const Index = () => {
     if (!canProcess) return;
 
     const combos = generateCombinations(hooks, bodies, ctas);
+
+    // Check monthly limit for free plan
+    if (isLimitReached) {
+      toast.error('Você atingiu o limite de 100 vídeos este mês. Faça upgrade do seu plano para continuar.');
+      navigate('/plans');
+      return;
+    }
+
+    if (plan === 'free' && videoCount + combos.length > limit) {
+      toast.error(`Você só pode gerar mais ${remaining} vídeo(s) este mês no plano gratuito.`);
+      return;
+    }
+
     setCombinations(combos);
     setIsProcessing(true);
 
@@ -56,6 +72,12 @@ const Index = () => {
     if (!controller.signal.aborted) {
       const doneCount = combos.filter(c => c.status === 'done').length;
       const errorCount = combos.filter(c => c.status === 'error').length;
+
+      // Increment usage count
+      if (doneCount > 0) {
+        await incrementUsage(doneCount);
+      }
+
       if (errorCount > 0) {
         toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s). Veja o console (F12) para detalhes.`);
       } else {
@@ -64,7 +86,7 @@ const Index = () => {
     } else {
       toast.info('Processamento cancelado.');
     }
-  }, [canProcess, hooks, bodies, ctas, settings]);
+  }, [canProcess, hooks, bodies, ctas, settings, isLimitReached, videoCount, limit, remaining, plan, incrementUsage, navigate]);
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -134,32 +156,39 @@ const Index = () => {
                 <Zap className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="font-bold text-foreground">Créditos Ilimitados</p>
-                <p className="text-xs text-primary">● Acesso Total</p>
-              </div>
-            </div>
-            <span className="text-xs border border-primary/40 text-primary rounded-full px-3 py-1">
-              ● Acesso completo ao app
-            </span>
-          </div>
-
-          {/* Free Plan info */}
-          <div className="rounded-2xl border border-border bg-card p-5 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-muted rounded-xl p-3">
-                <Sparkles className="w-6 h-6 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="font-bold text-foreground">Plano Gratuito</p>
+                <p className="font-bold text-foreground">
+                  {plan === 'free' ? 'Plano Gratuito' : 'Créditos Ilimitados'}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {combinations.filter(c => c.status === 'done').length} / 100 vídeos usados este mês
+                  {videoCount} / {limit === Infinity ? '∞' : limit} vídeos usados este mês
                 </p>
               </div>
             </div>
-            <span className="text-xs border border-border text-muted-foreground rounded-full px-3 py-1">
-              Limite: 100 vídeos/mês
+            <span className={`text-xs border rounded-full px-3 py-1 ${
+              isLimitReached 
+                ? 'border-destructive/40 text-destructive' 
+                : 'border-primary/40 text-primary'
+            }`}>
+              {isLimitReached ? '● Limite atingido' : `${remaining} restantes`}
             </span>
           </div>
+
+          {plan === 'free' && (
+            <div className="space-y-2">
+              <Progress value={limit === Infinity ? 0 : (videoCount / limit) * 100} className="h-2" />
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 rounded-full border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => navigate('/plans')}
+                >
+                  <Crown className="w-4 h-4" />
+                  Ver todos os planos
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Stats */}
