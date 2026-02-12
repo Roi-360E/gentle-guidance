@@ -11,7 +11,7 @@ import {
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
-import { Clapperboard, Sparkles, Zap, Square } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -76,21 +76,61 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="max-w-6xl mx-auto px-4 py-5 flex items-center gap-3">
-          <div className="bg-primary rounded-xl p-2.5">
-            <Clapperboard className="w-6 h-6 text-primary-foreground" />
+      <header className="border-b border-border">
+        <div className="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-7 h-7 text-primary" />
+            <div>
+              <h1 className="text-2xl font-extrabold tracking-tight text-primary uppercase">
+                Escala de Criativo
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Feito para escalar seus criativos de vídeo
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">VideoMix</h1>
-            <p className="text-sm text-muted-foreground">
-              Concatenador de vídeos para Facebook Ads
-            </p>
-          </div>
+          <nav className="hidden md:flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
+              <Home className="w-4 h-4" /> Home
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
+              <Download className="w-4 h-4" /> Meus Downloads
+            </Button>
+            <Button size="sm" className="gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
+              <HelpCircle className="w-4 h-4" /> Pedir Ajuda
+            </Button>
+            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+              <LogOut className="w-4 h-4" /> Sair
+            </Button>
+          </nav>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+        {/* Hero text */}
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Otimize sua produção de criativos em vídeo. Faça upload das peças e gere todas as
+            combinações possíveis automaticamente.
+          </p>
+        </div>
+
+        {/* Plan card */}
+        <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="bg-primary/20 rounded-xl p-3">
+              <Zap className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="font-bold text-foreground">Créditos Ilimitados</p>
+              <p className="text-xs text-primary">● Acesso Total</p>
+            </div>
+          </div>
+          <span className="text-xs border border-primary/40 text-primary rounded-full px-3 py-1">
+            ● Acesso completo ao app
+          </span>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
@@ -165,7 +205,7 @@ const Index = () => {
         <div className="flex justify-center gap-3">
           <Button
             size="lg"
-            className="px-12 text-base font-semibold"
+            className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
             disabled={!canProcess || isProcessing}
             onClick={handleProcess}
           >
@@ -182,12 +222,22 @@ const Index = () => {
             <Button
               size="lg"
               variant="destructive"
+              className="rounded-full"
               onClick={handleCancel}
             >
               <Square className="w-4 h-4 mr-2" />
               Cancelar
             </Button>
           )}
+        </div>
+
+        {/* Novidades banner */}
+        <div className="flex justify-center">
+          <div className="bg-gradient-to-r from-primary/30 to-accent/30 border border-primary/20 rounded-full px-6 py-3 flex items-center gap-3">
+            <Sparkles className="w-5 h-5 text-primary" />
+            <span className="font-bold text-sm uppercase tracking-wide">Novidades em breve</span>
+            <span className="bg-destructive text-destructive-foreground text-xs font-bold px-2 py-0.5 rounded-full">NOVO</span>
+          </div>
         </div>
 
         {/* Results */}
@@ -203,7 +253,7 @@ const Index = () => {
           </div>
         )}
 
-        {/* Info about subtitles & server */}
+        {/* Info footer */}
         <div className="rounded-xl border border-border bg-muted/30 p-5 space-y-2 text-center">
           <p className="text-sm text-muted-foreground">
             <strong>Legendas automáticas:</strong> Para gerar legendas sincronizadas, ative o Lovable Cloud
@@ -213,6 +263,13 @@ const Index = () => {
             <strong>Processamento no servidor:</strong> Para produções com muitos vídeos, considere migrar
             para processamento em nuvem com FFmpeg nativo para maior velocidade.
           </p>
+        </div>
+
+        {/* CTA banner */}
+        <div className="flex justify-center pb-8">
+          <Button className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide">
+            🔥 Indique e ganhe 40% de comissão $$
+          </Button>
         </div>
       </main>
     </div>
