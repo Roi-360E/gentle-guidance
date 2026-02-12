@@ -1,14 +1,17 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { VideoUploadZone } from '@/components/VideoUploadZone';
 import { CombinationList } from '@/components/CombinationList';
+import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
 import {
   generateCombinations,
-  concatenateVideos,
+  processQueue,
+  defaultSettings,
   type VideoFile,
   type Combination,
+  type ProcessingSettings,
 } from '@/lib/video-processor';
-import { Clapperboard, Sparkles, Zap } from 'lucide-react';
+import { Clapperboard, Sparkles, Zap, Square } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -18,6 +21,8 @@ const Index = () => {
   const [combinations, setCombinations] = useState<Combination[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentProgress, setCurrentProgress] = useState(0);
+  const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
+  const abortRef = useRef<AbortController | null>(null);
 
   const totalCombinations = hooks.length * bodies.length * ctas.length;
   const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
@@ -29,28 +34,30 @@ const Index = () => {
     setCombinations(combos);
     setIsProcessing(true);
 
-    for (let i = 0; i < combos.length; i++) {
-      combos[i].status = 'processing';
-      setCombinations([...combos]);
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-      try {
-        const url = await concatenateVideos(combos[i], (p) =>
-          setCurrentProgress(p)
-        );
-        combos[i].status = 'done';
-        combos[i].outputUrl = url;
-      } catch (err) {
-        combos[i].status = 'error';
-        console.error(`Error processing combo ${combos[i].id}:`, err);
-      }
-
-      setCombinations([...combos]);
-      setCurrentProgress(0);
-    }
+    await processQueue(
+      combos,
+      settings,
+      (updated) => setCombinations([...updated]),
+      (p) => setCurrentProgress(p),
+      controller.signal
+    );
 
     setIsProcessing(false);
-    toast.success('Processamento concluído!');
-  }, [canProcess, hooks, bodies, ctas]);
+    abortRef.current = null;
+
+    if (!controller.signal.aborted) {
+      toast.success('Processamento concluído!');
+    } else {
+      toast.info('Processamento cancelado.');
+    }
+  }, [canProcess, hooks, bodies, ctas, settings]);
+
+  const handleCancel = () => {
+    abortRef.current?.abort();
+  };
 
   const handleDownload = (combo: Combination) => {
     if (!combo.outputUrl) return;
@@ -147,8 +154,15 @@ const Index = () => {
           />
         </div>
 
-        {/* Process button */}
-        <div className="flex justify-center">
+        {/* Processing Settings */}
+        <ProcessingSettingsPanel
+          settings={settings}
+          onChange={setSettings}
+          disabled={isProcessing}
+        />
+
+        {/* Process / Cancel buttons */}
+        <div className="flex justify-center gap-3">
           <Button
             size="lg"
             className="px-12 text-base font-semibold"
@@ -164,6 +178,16 @@ const Index = () => {
               </>
             )}
           </Button>
+          {isProcessing && (
+            <Button
+              size="lg"
+              variant="destructive"
+              onClick={handleCancel}
+            >
+              <Square className="w-4 h-4 mr-2" />
+              Cancelar
+            </Button>
+          )}
         </div>
 
         {/* Results */}
@@ -179,11 +203,15 @@ const Index = () => {
           </div>
         )}
 
-        {/* Info about subtitles */}
-        <div className="rounded-xl border border-border bg-muted/30 p-5 text-center">
+        {/* Info about subtitles & server */}
+        <div className="rounded-xl border border-border bg-muted/30 p-5 space-y-2 text-center">
           <p className="text-sm text-muted-foreground">
             <strong>Legendas automáticas:</strong> Para gerar legendas sincronizadas, ative o Lovable Cloud
-            para utilizar transcrição por IA. Entre em contato para configurar.
+            para utilizar transcrição por IA.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <strong>Processamento no servidor:</strong> Para produções com muitos vídeos, considere migrar
+            para processamento em nuvem com FFmpeg nativo para maior velocidade.
           </p>
         </div>
       </main>
