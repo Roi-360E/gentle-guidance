@@ -4,29 +4,41 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 
+const CDN_URLS = [
+  'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd',
+  'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd',
+];
+
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpegLoaded) return ffmpeg;
 
-  if (!ffmpeg) {
-    ffmpeg = new FFmpeg();
-    // Log FFmpeg output for debugging
-    ffmpeg.on('log', ({ message }) => {
-      console.log('[FFmpeg]', message);
-    });
+  for (const baseURL of CDN_URLS) {
+    try {
+      // Always create a fresh instance per attempt
+      const instance = new FFmpeg();
+      instance.on('log', ({ message }) => {
+        console.log('[FFmpeg]', message);
+      });
+
+      console.log(`[VideoProcessor] Loading FFmpeg from ${baseURL}...`);
+      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+
+      await instance.load({ coreURL, wasmURL });
+
+      ffmpeg = instance;
+      ffmpegLoaded = true;
+      console.log('[VideoProcessor] ✅ FFmpeg loaded successfully');
+      return ffmpeg;
+    } catch (err) {
+      console.warn(`[VideoProcessor] Failed to load from ${baseURL}:`, err);
+    }
   }
 
-  if (!ffmpegLoaded) {
-    console.log('[VideoProcessor] Loading FFmpeg...');
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    ffmpegLoaded = true;
-    console.log('[VideoProcessor] FFmpeg loaded successfully');
-  }
-
-  return ffmpeg;
+  // Reset state so next call tries again
+  ffmpeg = null;
+  ffmpegLoaded = false;
+  throw new Error('Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente.');
 }
 
 export interface VideoFile {
