@@ -1,1 +1,4 @@
 project_id = "agiazdqztkagivnenomq"
+
+[functions.generate-subtitles]
+verify_jwt = false
