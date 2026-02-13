@@ -66,8 +66,15 @@ const Index = () => {
         (p) => setCurrentProgress(p),
         controller.signal
       );
-    } catch {
-      // Errors already handled inside processFn
+    } catch (err) {
+      console.group('%c❌ ERRO GERAL NO PROCESSAMENTO', 'color: #ef4444; font-weight: bold; font-size: 14px;');
+      console.error('Tipo:', settings.useCloud ? 'Cloud' : 'Local');
+      console.error('Mensagem:', err instanceof Error ? err.message : String(err));
+      console.error('Stack:', err instanceof Error ? err.stack : 'N/A');
+      console.error('Total combinações:', combos.length);
+      console.error('Concluídos:', combos.filter(c => c.status === 'done').length);
+      console.error('Com erro:', combos.filter(c => c.status === 'error').length);
+      console.groupEnd();
     }
 
     // Only update state if this controller is still active (not replaced by a new run)

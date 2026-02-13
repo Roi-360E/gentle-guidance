@@ -20,12 +20,17 @@ async function uploadFileToStorage(file: File, userId: string): Promise<string> 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${safeName}`;
 
+  console.log(`[CloudProcessor] Uploading "${file.name}" (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
+
   const { error } = await supabase.storage.from("videos").upload(path, file, {
     cacheControl: "3600",
     upsert: false,
   });
 
-  if (error) throw new Error(`Falha no upload de ${file.name}: ${error.message}`);
+  if (error) {
+    console.error(`%c[CloudProcessor] ❌ Upload falhou: ${file.name}`, 'color: #ef4444; font-weight: bold;', error);
+    throw new Error(`Falha no upload de ${file.name}: ${error.message}`);
+  }
 
   const { data } = await supabase.storage.from("videos").createSignedUrl(path, 7200);
   if (!data?.signedUrl) throw new Error(`Falha ao gerar URL para ${file.name}`);
@@ -90,14 +95,26 @@ async function pollAssembly(
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     if (abortSignal?.aborted) throw new Error("Cancelado");
 
-    const res = await fetch(FUNCTION_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ action: "check-status", assemblyId }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "check-status", assemblyId }),
+      });
+    } catch (fetchErr) {
+      console.error(`%c[CloudProcessor] ❌ FETCH FALHOU (polling attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS})`, 'color: #ef4444; font-weight: bold;', {
+        assemblyId,
+        error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+        stack: fetchErr instanceof Error ? fetchErr.stack : undefined,
+        url: FUNCTION_URL,
+      });
+      throw new Error(`Failed to fetch ao verificar status do assembly ${assemblyId}: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`);
+    }
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
+      console.error(`%c[CloudProcessor] ❌ HTTP ${res.status} no polling`, 'color: #ef4444; font-weight: bold;', { assemblyId, status: res.status, errData });
       throw new Error(errData.error || `Status check failed: ${res.status}`);
     }
 
@@ -163,18 +180,30 @@ export async function processQueueCloud(
     onUpdate([...combinations]);
 
     try {
-      const createRes = await fetch(FUNCTION_URL, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          action: "create-assembly",
-          videoUrls,
-          resolution: settings.resolution,
-        }),
-      });
+      let createRes: Response;
+      try {
+        createRes = await fetch(FUNCTION_URL, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            action: "create-assembly",
+            videoUrls,
+            resolution: settings.resolution,
+          }),
+        });
+      } catch (fetchErr) {
+        console.error(`%c[CloudProcessor] ❌ FETCH FALHOU ao criar assembly (batch ${batchStart})`, 'color: #ef4444; font-weight: bold; font-size: 13px;', {
+          error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+          stack: fetchErr instanceof Error ? fetchErr.stack : undefined,
+          url: FUNCTION_URL,
+          batchSize: batch.length,
+        });
+        throw new Error(`Failed to fetch ao criar assembly: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`);
+      }
 
       if (!createRes.ok) {
         const errData = await createRes.json().catch(() => ({}));
+        console.error(`%c[CloudProcessor] ❌ HTTP ${createRes.status} ao criar assembly`, 'color: #ef4444; font-weight: bold;', errData);
         throw new Error(errData.error || `Assembly creation failed: ${createRes.status}`);
       }
 
