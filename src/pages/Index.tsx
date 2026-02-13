@@ -39,8 +39,8 @@ const Index = () => {
   const [ctasPreProcessed, setCtasPreProcessed] = useState(false);
   const [preProcessingSection, setPreProcessingSection] = useState<string | null>(null);
 
-  // Show the video grid view (after clicking "Enviar Vídeos para Processamento")
-  const [showVideoGrid, setShowVideoGrid] = useState(false);
+  // Pre-processing all sections simultaneously
+  const [isPreProcessingAll, setIsPreProcessingAll] = useState(false);
 
   const totalCombinations = hooks.length * bodies.length * ctas.length;
   const canUpload = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
@@ -50,14 +50,38 @@ const Index = () => {
   // Check if any video exceeds 1 minute
   const hasLongVideos = [...hooks, ...bodies, ...ctas].some(f => f.duration !== undefined && f.duration > 60);
 
-  const handleSubmitVideos = () => {
+  const handlePreProcessAll = useCallback(async () => {
     if (hasLongVideos) {
       toast.error('Alguns vídeos excedem 1 minuto de duração. Remova-os antes de prosseguir.');
       return;
     }
-    setShowVideoGrid(true);
+    setIsPreProcessingAll(true);
     preloadFFmpeg();
-  };
+    
+    const sections = [
+      { files: hooks, label: 'Ganchos', setter: setHooksPreProcessed, key: 'hooks' as const },
+      { files: bodies, label: 'Corpos', setter: setBodiesPreProcessed, key: 'bodies' as const },
+      { files: ctas, label: 'CTAs', setter: setCtasPreProcessed, key: 'ctas' as const },
+    ];
+
+    const results = await Promise.allSettled(
+      sections.map(async (s) => {
+        await preProcessFiles(s.files, settings.resolution, (msg, pct) => {
+          setPhaseMessage(`${s.label}: ${msg} (${pct}%)`);
+        });
+        s.setter(true);
+        toast.success(`${s.label} pré-processados com sucesso!`);
+      })
+    );
+
+    const errors = results.filter(r => r.status === 'rejected');
+    if (errors.length > 0) {
+      toast.error(`Erro ao pré-processar ${errors.length} seção(ões).`);
+    }
+
+    setIsPreProcessingAll(false);
+    setPhaseMessage(null);
+  }, [hooks, bodies, ctas, settings.resolution, hasLongVideos]);
 
   const handlePreProcessSection = useCallback(async (section: 'hooks' | 'bodies' | 'ctas') => {
     const files = section === 'hooks' ? hooks : section === 'bodies' ? bodies : ctas;
@@ -152,19 +176,16 @@ const Index = () => {
   const handleHooksChange = (f: VideoFile[]) => {
     setHooks(f);
     setHooksPreProcessed(false);
-    setShowVideoGrid(false);
     if (f.length > 0) preloadFFmpeg();
   };
   const handleBodiesChange = (f: VideoFile[]) => {
     setBodies(f);
     setBodiesPreProcessed(false);
-    setShowVideoGrid(false);
     if (f.length > 0) preloadFFmpeg();
   };
   const handleCtasChange = (f: VideoFile[]) => {
     setCtas(f);
     setCtasPreProcessed(false);
-    setShowVideoGrid(false);
     if (f.length > 0) preloadFFmpeg();
   };
 
@@ -289,17 +310,23 @@ const Index = () => {
           />
         </div>
 
-        {/* Submit videos button */}
-        {canUpload && !showVideoGrid && (
+        {/* Unified Pre-process button */}
+        {canUpload && !allPreProcessed && (
           <div className="flex justify-center">
             <Button
               size="lg"
               className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
-              onClick={handleSubmitVideos}
-              disabled={hasLongVideos}
+              onClick={handlePreProcessAll}
+              disabled={hasLongVideos || isPreProcessingAll}
             >
-              <Upload className="w-5 h-5 mr-2" />
-              Enviar Vídeos para Processamento
+              {isPreProcessingAll ? (
+                <>Pré-processando...</>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 mr-2" />
+                  Pré-processar
+                </>
+              )}
             </Button>
           </div>
         )}
@@ -310,8 +337,8 @@ const Index = () => {
           </p>
         )}
 
-        {/* Video Grid with per-section pre-processing */}
-        {showVideoGrid && (
+        {/* Video Grid - shown immediately after upload */}
+        {canUpload && (
           <div className="space-y-8 rounded-xl border border-border bg-card p-6">
             {/* Phase message */}
             {phaseMessage && !isProcessing && (
@@ -326,7 +353,7 @@ const Index = () => {
               files={hooks}
               onPositionChange={(i, pos) => handlePositionChange('hooks', i, pos)}
               onPreProcess={() => handlePreProcessSection('hooks')}
-              isPreProcessing={preProcessingSection === 'hooks'}
+              isPreProcessing={preProcessingSection === 'hooks' || (isPreProcessingAll && !hooksPreProcessed)}
               isPreProcessed={hooksPreProcessed}
               accentColor="bg-primary"
             />
@@ -337,7 +364,7 @@ const Index = () => {
               files={bodies}
               onPositionChange={(i, pos) => handlePositionChange('bodies', i, pos)}
               onPreProcess={() => handlePreProcessSection('bodies')}
-              isPreProcessing={preProcessingSection === 'bodies'}
+              isPreProcessing={preProcessingSection === 'bodies' || (isPreProcessingAll && !bodiesPreProcessed)}
               isPreProcessed={bodiesPreProcessed}
               accentColor="bg-accent"
             />
@@ -348,7 +375,7 @@ const Index = () => {
               files={ctas}
               onPositionChange={(i, pos) => handlePositionChange('ctas', i, pos)}
               onPreProcess={() => handlePreProcessSection('ctas')}
-              isPreProcessing={preProcessingSection === 'ctas'}
+              isPreProcessing={preProcessingSection === 'ctas' || (isPreProcessingAll && !ctasPreProcessed)}
               isPreProcessed={ctasPreProcessed}
               accentColor="bg-destructive"
             />
@@ -356,7 +383,7 @@ const Index = () => {
         )}
 
         {/* Processing Settings */}
-        {showVideoGrid && (
+        {canUpload && (
           <ProcessingSettingsPanel
             settings={settings}
             onChange={setSettings}
@@ -365,7 +392,7 @@ const Index = () => {
         )}
 
         {/* Generate / Cancel buttons */}
-        {showVideoGrid && (
+        {canUpload && (
           <div className="flex justify-center gap-3">
             <Button
               size="lg"
@@ -393,7 +420,7 @@ const Index = () => {
                 Cancelar
               </Button>
             )}
-            {!allPreProcessed && showVideoGrid && (
+            {!allPreProcessed && canUpload && (
               <p className="text-sm text-muted-foreground self-center">
                 Pré-processe todas as seções para habilitar
               </p>
