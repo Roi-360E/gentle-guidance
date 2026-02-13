@@ -66,6 +66,15 @@ export async function getFFmpeg(): Promise<FFmpeg> {
   return loadFreshFFmpeg();
 }
 
+/** Eagerly pre-load FFmpeg so it's ready when the user clicks "Generate". */
+let preloadPromise: Promise<FFmpeg> | null = null;
+export function preloadFFmpeg(): void {
+  if (ffmpeg && ffmpegLoaded) return;
+  if (preloadPromise) return;
+  console.log('[VideoProcessor] 🚀 Pre-loading FFmpeg in background...');
+  preloadPromise = loadFreshFFmpeg().finally(() => { preloadPromise = null; });
+}
+
 export interface VideoFile {
   file: File;
   name: string;
@@ -417,18 +426,23 @@ export async function processQueue(
   settings: ProcessingSettings,
   onUpdate: (combos: Combination[]) => void,
   onProgressItem: (progress: number) => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  onPhase?: (phase: string) => void
 ): Promise<void> {
   console.log(`[VideoProcessor] Starting queue: ${combinations.length} combinations`);
 
+  onPhase?.('Carregando motor de vídeo…');
   const ff = await getFFmpeg();
 
   if (settings.preProcess) {
     console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
     await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
+      onPhase?.(`Pré-processando: ${msg}`);
       console.log(`[VideoProcessor] ${msg} (${pct}%)`);
     });
   }
+
+  onPhase?.('Gerando vídeos…');
 
   console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
   const queue = [...combinations];

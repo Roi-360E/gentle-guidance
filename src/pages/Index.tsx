@@ -8,6 +8,7 @@ import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
 import {
   generateCombinations,
   processQueue,
+  preloadFFmpeg,
   defaultSettings,
   type VideoFile,
   type Combination,
@@ -25,6 +26,7 @@ const Index = () => {
   const [combinations, setCombinations] = useState<Combination[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentProgress, setCurrentProgress] = useState(0);
+  const [phaseMessage, setPhaseMessage] = useState<string | null>(null);
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
@@ -38,6 +40,7 @@ const Index = () => {
     const combos = generateCombinations(hooks, bodies, ctas);
     setCombinations(combos);
     setIsProcessing(true);
+    setPhaseMessage('Iniciando…');
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -47,10 +50,12 @@ const Index = () => {
       settings,
       (updated) => setCombinations([...updated]),
       (p) => setCurrentProgress(p),
-      controller.signal
+      controller.signal,
+      (phase) => setPhaseMessage(phase)
     );
 
     setIsProcessing(false);
+    setPhaseMessage(null);
     abortRef.current = null;
 
     if (!controller.signal.aborted) {
@@ -184,7 +189,7 @@ const Index = () => {
             description="Até 10 vídeos de abertura"
             maxFiles={10}
             files={hooks}
-            onFilesChange={setHooks}
+            onFilesChange={(f) => { setHooks(f); if (f.length > 0) preloadFFmpeg(); }}
             accentColor="bg-primary"
           />
           <VideoUploadZone
@@ -192,7 +197,7 @@ const Index = () => {
             description="Até 5 vídeos de conteúdo"
             maxFiles={5}
             files={bodies}
-            onFilesChange={setBodies}
+            onFilesChange={(f) => { setBodies(f); if (f.length > 0) preloadFFmpeg(); }}
             accentColor="bg-accent"
           />
           <VideoUploadZone
@@ -200,7 +205,7 @@ const Index = () => {
             description="Até 2 vídeos de chamada"
             maxFiles={2}
             files={ctas}
-            onFilesChange={setCtas}
+            onFilesChange={(f) => { setCtas(f); if (f.length > 0) preloadFFmpeg(); }}
             accentColor="bg-destructive"
           />
         </div>
@@ -295,6 +300,7 @@ const Index = () => {
               onDownload={handleDownload}
               onDownloadAll={handleDownloadAll}
               isProcessing={isProcessing}
+              phaseMessage={phaseMessage}
             />
           </div>
         )}
