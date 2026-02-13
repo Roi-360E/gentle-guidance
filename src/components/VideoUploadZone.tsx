@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { Upload, Film, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { VideoFile } from '@/lib/video-processor';
+import { getVideoDuration } from '@/lib/video-processor';
 
 interface VideoUploadZoneProps {
   label: string;
@@ -23,14 +24,25 @@ export function VideoUploadZone({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback(
-    (newFiles: FileList | null) => {
+    async (newFiles: FileList | null) => {
       if (!newFiles) return;
       const remaining = maxFiles - files.length;
-      const toAdd = Array.from(newFiles).slice(0, remaining).map((file) => ({
-        file,
-        name: file.name,
-        url: URL.createObjectURL(file),
-      }));
+      const filesToAdd = Array.from(newFiles).slice(0, remaining);
+      
+      const toAdd: VideoFile[] = [];
+      for (const file of filesToAdd) {
+        let duration: number | undefined;
+        try {
+          duration = await getVideoDuration(file);
+        } catch {}
+        toAdd.push({
+          file,
+          name: file.name,
+          url: URL.createObjectURL(file),
+          position: files.length + toAdd.length + 1,
+          duration,
+        });
+      }
       onFilesChange([...files, ...toAdd]);
     },
     [files, maxFiles, onFilesChange]

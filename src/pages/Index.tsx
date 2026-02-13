@@ -3,18 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { VideoUploadZone } from '@/components/VideoUploadZone';
+import { VideoGrid } from '@/components/VideoGrid';
 import { CombinationList } from '@/components/CombinationList';
 import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
 import {
   generateCombinations,
   processQueue,
   preloadFFmpeg,
+  preProcessFiles,
   defaultSettings,
   type VideoFile,
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, LogOut, Type, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -31,23 +33,80 @@ const Index = () => {
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
 
+  // Per-section pre-processing state
+  const [hooksPreProcessed, setHooksPreProcessed] = useState(false);
+  const [bodiesPreProcessed, setBodiesPreProcessed] = useState(false);
+  const [ctasPreProcessed, setCtasPreProcessed] = useState(false);
+  const [preProcessingSection, setPreProcessingSection] = useState<string | null>(null);
+
+  // Show the video grid view (after clicking "Enviar Vídeos para Processamento")
+  const [showVideoGrid, setShowVideoGrid] = useState(false);
+
   const totalCombinations = hooks.length * bodies.length * ctas.length;
-  const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
+  const canUpload = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
+  const allPreProcessed = hooksPreProcessed && bodiesPreProcessed && ctasPreProcessed;
+  const canGenerate = allPreProcessed && totalCombinations > 0;
+
+  // Check if any video exceeds 1 minute
+  const hasLongVideos = [...hooks, ...bodies, ...ctas].some(f => f.duration !== undefined && f.duration > 60);
+
+  const handleSubmitVideos = () => {
+    if (hasLongVideos) {
+      toast.error('Alguns vídeos excedem 1 minuto de duração. Remova-os antes de prosseguir.');
+      return;
+    }
+    setShowVideoGrid(true);
+    preloadFFmpeg();
+  };
+
+  const handlePreProcessSection = useCallback(async (section: 'hooks' | 'bodies' | 'ctas') => {
+    const files = section === 'hooks' ? hooks : section === 'bodies' ? bodies : ctas;
+    const label = section === 'hooks' ? 'Ganchos' : section === 'bodies' ? 'Corpos' : 'CTAs';
+    
+    setPreProcessingSection(section);
+    try {
+      await preProcessFiles(files, settings.resolution, (msg, pct) => {
+        setPhaseMessage(`${label}: ${msg} (${pct}%)`);
+      });
+      
+      if (section === 'hooks') setHooksPreProcessed(true);
+      if (section === 'bodies') setBodiesPreProcessed(true);
+      if (section === 'ctas') setCtasPreProcessed(true);
+      
+      toast.success(`${label} pré-processados com sucesso!`);
+    } catch (err) {
+      toast.error(`Erro ao pré-processar ${label}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+    } finally {
+      setPreProcessingSection(null);
+      setPhaseMessage(null);
+    }
+  }, [hooks, bodies, ctas, settings.resolution]);
+
+  const handlePositionChange = (section: 'hooks' | 'bodies' | 'ctas', index: number, position: number) => {
+    const setter = section === 'hooks' ? setHooks : section === 'bodies' ? setBodies : setCtas;
+    const files = section === 'hooks' ? hooks : section === 'bodies' ? bodies : ctas;
+    const updated = [...files];
+    updated[index] = { ...updated[index], position };
+    setter(updated);
+  };
 
   const handleProcess = useCallback(async () => {
-    if (!canProcess) return;
+    if (!canGenerate) return;
 
     const combos = generateCombinations(hooks, bodies, ctas);
     setCombinations(combos);
     setIsProcessing(true);
-    setPhaseMessage('Iniciando…');
+    setPhaseMessage('Iniciando geração…');
 
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // Skip pre-processing in processQueue since it's already done
+    const settingsForQueue = { ...settings, preProcess: true };
+
     await processQueue(
       combos,
-      settings,
+      settingsForQueue,
       (updated) => setCombinations([...updated]),
       (p) => setCurrentProgress(p),
       controller.signal,
@@ -62,14 +121,14 @@ const Index = () => {
       const doneCount = combos.filter(c => c.status === 'done').length;
       const errorCount = combos.filter(c => c.status === 'error').length;
       if (errorCount > 0) {
-        toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s). Veja o console (F12) para detalhes.`);
+        toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s).`);
       } else {
         toast.success(`Todos os ${doneCount} vídeos foram gerados com sucesso!`);
       }
     } else {
       toast.info('Processamento cancelado.');
     }
-  }, [canProcess, hooks, bodies, ctas, settings]);
+  }, [canGenerate, hooks, bodies, ctas, settings]);
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -87,6 +146,26 @@ const Index = () => {
     combinations
       .filter((c) => c.status === 'done' && c.outputUrl)
       .forEach((c) => handleDownload(c));
+  };
+
+  // Reset pre-processing state when files change
+  const handleHooksChange = (f: VideoFile[]) => {
+    setHooks(f);
+    setHooksPreProcessed(false);
+    setShowVideoGrid(false);
+    if (f.length > 0) preloadFFmpeg();
+  };
+  const handleBodiesChange = (f: VideoFile[]) => {
+    setBodies(f);
+    setBodiesPreProcessed(false);
+    setShowVideoGrid(false);
+    if (f.length > 0) preloadFFmpeg();
+  };
+  const handleCtasChange = (f: VideoFile[]) => {
+    setCtas(f);
+    setCtasPreProcessed(false);
+    setShowVideoGrid(false);
+    if (f.length > 0) preloadFFmpeg();
   };
 
   return (
@@ -186,66 +265,141 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <VideoUploadZone
             label="Ganchos"
-            description="Até 10 vídeos de abertura"
+            description="Até 10 vídeos de abertura (máx. 1 min)"
             maxFiles={10}
             files={hooks}
-            onFilesChange={(f) => { setHooks(f); if (f.length > 0) preloadFFmpeg(); }}
+            onFilesChange={handleHooksChange}
             accentColor="bg-primary"
           />
           <VideoUploadZone
             label="Corpo"
-            description="Até 5 vídeos de conteúdo"
+            description="Até 5 vídeos de conteúdo (máx. 1 min)"
             maxFiles={5}
             files={bodies}
-            onFilesChange={(f) => { setBodies(f); if (f.length > 0) preloadFFmpeg(); }}
+            onFilesChange={handleBodiesChange}
             accentColor="bg-accent"
           />
           <VideoUploadZone
             label="CTA"
-            description="Até 2 vídeos de chamada"
+            description="Até 2 vídeos de chamada (máx. 1 min)"
             maxFiles={2}
             files={ctas}
-            onFilesChange={(f) => { setCtas(f); if (f.length > 0) preloadFFmpeg(); }}
+            onFilesChange={handleCtasChange}
             accentColor="bg-destructive"
           />
         </div>
 
-        {/* Processing Settings */}
-        <ProcessingSettingsPanel
-          settings={settings}
-          onChange={setSettings}
-          disabled={isProcessing}
-        />
-
-        {/* Process / Cancel buttons */}
-        <div className="flex justify-center gap-3">
-          <Button
-            size="lg"
-            className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
-            disabled={!canProcess || isProcessing}
-            onClick={handleProcess}
-          >
-            {isProcessing ? (
-              <>Processando...</>
-            ) : (
-              <>
-                <Zap className="w-5 h-5 mr-2" />
-                Gerar {totalCombinations} Vídeos
-              </>
-            )}
-          </Button>
-          {isProcessing && (
+        {/* Submit videos button */}
+        {canUpload && !showVideoGrid && (
+          <div className="flex justify-center">
             <Button
               size="lg"
-              variant="destructive"
-              className="rounded-full"
-              onClick={handleCancel}
+              className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
+              onClick={handleSubmitVideos}
+              disabled={hasLongVideos}
             >
-              <Square className="w-4 h-4 mr-2" />
-              Cancelar
+              <Upload className="w-5 h-5 mr-2" />
+              Enviar Vídeos para Processamento
             </Button>
-          )}
-        </div>
+          </div>
+        )}
+
+        {hasLongVideos && (
+          <p className="text-center text-sm text-destructive font-semibold">
+            ⚠️ Alguns vídeos excedem 1 minuto. Remova-os para continuar.
+          </p>
+        )}
+
+        {/* Video Grid with per-section pre-processing */}
+        {showVideoGrid && (
+          <div className="space-y-8 rounded-xl border border-border bg-card p-6">
+            {/* Phase message */}
+            {phaseMessage && !isProcessing && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary font-medium text-center">
+                {phaseMessage}
+              </div>
+            )}
+
+            {/* Ganchos Grid */}
+            <VideoGrid
+              label="Ganchos"
+              files={hooks}
+              onPositionChange={(i, pos) => handlePositionChange('hooks', i, pos)}
+              onPreProcess={() => handlePreProcessSection('hooks')}
+              isPreProcessing={preProcessingSection === 'hooks'}
+              isPreProcessed={hooksPreProcessed}
+              accentColor="bg-primary"
+            />
+
+            {/* Corpos Grid */}
+            <VideoGrid
+              label="Corpos"
+              files={bodies}
+              onPositionChange={(i, pos) => handlePositionChange('bodies', i, pos)}
+              onPreProcess={() => handlePreProcessSection('bodies')}
+              isPreProcessing={preProcessingSection === 'bodies'}
+              isPreProcessed={bodiesPreProcessed}
+              accentColor="bg-accent"
+            />
+
+            {/* CTAs Grid */}
+            <VideoGrid
+              label="CTAs"
+              files={ctas}
+              onPositionChange={(i, pos) => handlePositionChange('ctas', i, pos)}
+              onPreProcess={() => handlePreProcessSection('ctas')}
+              isPreProcessing={preProcessingSection === 'ctas'}
+              isPreProcessed={ctasPreProcessed}
+              accentColor="bg-destructive"
+            />
+          </div>
+        )}
+
+        {/* Processing Settings */}
+        {showVideoGrid && (
+          <ProcessingSettingsPanel
+            settings={settings}
+            onChange={setSettings}
+            disabled={isProcessing}
+          />
+        )}
+
+        {/* Generate / Cancel buttons */}
+        {showVideoGrid && (
+          <div className="flex justify-center gap-3">
+            <Button
+              size="lg"
+              className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
+              disabled={!canGenerate || isProcessing}
+              onClick={handleProcess}
+            >
+              {isProcessing ? (
+                <>Processando...</>
+              ) : (
+                <>
+                  <Zap className="w-5 h-5 mr-2" />
+                  Gerar {totalCombinations} Vídeos
+                </>
+              )}
+            </Button>
+            {isProcessing && (
+              <Button
+                size="lg"
+                variant="destructive"
+                className="rounded-full"
+                onClick={handleCancel}
+              >
+                <Square className="w-4 h-4 mr-2" />
+                Cancelar
+              </Button>
+            )}
+            {!allPreProcessed && showVideoGrid && (
+              <p className="text-sm text-muted-foreground self-center">
+                Pré-processe todas as seções para habilitar
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Funcionalidades extras */}
         <div className="flex flex-col items-center gap-4">
