@@ -79,6 +79,48 @@ export interface VideoFile {
   file: File;
   name: string;
   url: string;
+  position?: number;
+  duration?: number;
+}
+
+/** Get video duration in seconds */
+export function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error('Failed to load video metadata'));
+    };
+    video.src = URL.createObjectURL(file);
+  });
+}
+
+/** Pre-process a specific set of files (for per-section pre-processing) */
+export async function preProcessFiles(
+  files: VideoFile[],
+  resolution: ResolutionPreset,
+  onProgress?: (msg: string, pct: number) => void
+): Promise<void> {
+  const ff = await getFFmpeg();
+  const uniqueFiles = files.filter(f => !preProcessCache.has(f.file));
+  
+  if (uniqueFiles.length === 0) {
+    onProgress?.('Já pré-processado', 100);
+    return;
+  }
+
+  for (let i = 0; i < uniqueFiles.length; i++) {
+    const file = uniqueFiles[i];
+    onProgress?.(`Normalizando ${i + 1}/${uniqueFiles.length}: ${file.name}`, Math.round((i / uniqueFiles.length) * 100));
+    await preProcessInputCached(ff, file.file, `raw_input_section_${i}.mp4`, resolution);
+  }
+  
+  onProgress?.('Concluído', 100);
 }
 
 export interface Combination {
