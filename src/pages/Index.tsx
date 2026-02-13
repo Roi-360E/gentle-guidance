@@ -18,6 +18,7 @@ import {
 import { processQueueCloud } from '@/lib/cloud-processor';
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type } from 'lucide-react';
 import { toast } from 'sonner';
+import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -34,6 +35,7 @@ const Index = () => {
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
+  const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
 
   // Load user plan data
   useEffect(() => {
@@ -441,7 +443,7 @@ const Index = () => {
           </p>
           <ul className="text-left text-sm text-muted-foreground max-w-md mx-auto space-y-2">
             <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> Grave um vídeo curto contando como o EscalaX ajudou você</li>
-            <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Envie pelo botão abaixo (upload via Google Drive)</li>
+            <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Clique no botão abaixo e envie seu vídeo</li>
             <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> Seus 6 meses serão ativados automaticamente!</li>
           </ul>
           <Button
@@ -450,7 +452,6 @@ const Index = () => {
                 toast.error('Faça login para participar da oferta!');
                 return;
               }
-              // Check if already submitted
               const { data: existing } = await supabase
                 .from('testimonial_submissions')
                 .select('id, expires_at')
@@ -458,35 +459,24 @@ const Index = () => {
                 .maybeSingle();
               if (existing) {
                 toast.info(`Você já participou! Acesso gratuito até ${new Date(existing.expires_at).toLocaleDateString('pt-BR')}`);
-                window.open('https://drive.google.com/drive/folders/1Ji-Doeylr51hy_wLuMXBQ-rtgWq3ohN4?usp=sharing', '_blank');
                 return;
               }
-              // Grant 6 months access
-              const expiresAt = new Date();
-              expiresAt.setMonth(expiresAt.getMonth() + 6);
-              const { error: subError } = await supabase
-                .from('testimonial_submissions')
-                .insert({ user_id: user.id, expires_at: expiresAt.toISOString() });
-              if (subError) {
-                toast.error('Erro ao registrar. Tente novamente.');
-                return;
-              }
-              // Update plan to enterprise for current month
-              const monthYear = new Date().toISOString().slice(0, 7);
-              await supabase
-                .from('video_usage')
-                .update({ plan: 'enterprise' })
-                .eq('user_id', user.id)
-                .eq('month_year', monthYear);
-              setCurrentPlan('enterprise');
-              toast.success('🎉 6 meses de acesso ilimitado ativados! Envie seu vídeo na pasta do Google Drive.');
-              window.open('https://drive.google.com/drive/folders/1Ji-Doeylr51hy_wLuMXBQ-rtgWq3ohN4?usp=sharing', '_blank');
+              setShowTestimonialDialog(true);
             }}
             className="mt-2 px-6 py-3 text-sm font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full hover:opacity-90 uppercase tracking-wide"
           >
             🎬 Enviar feedback e ganhar 6 meses grátis!
           </Button>
         </div>
+
+        {user && (
+          <TestimonialUploadDialog
+            open={showTestimonialDialog}
+            onOpenChange={setShowTestimonialDialog}
+            userId={user.id}
+            onSuccess={() => setCurrentPlan('enterprise')}
+          />
+        )}
 
         {/* CTA banner */}
         <div className="flex justify-center pb-8">
