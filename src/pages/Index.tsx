@@ -14,7 +14,7 @@ import {
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
-import { processQueueCloud } from '@/lib/cloud-processor';
+
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -56,7 +56,7 @@ const Index = () => {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const processFn = settings.useCloud ? processQueueCloud : processQueue;
+    const processFn = processQueue;
 
     try {
       await processFn(
@@ -68,7 +68,7 @@ const Index = () => {
       );
     } catch (err) {
       console.group('%c❌ ERRO GERAL NO PROCESSAMENTO', 'color: #ef4444; font-weight: bold; font-size: 14px;');
-      console.error('Tipo:', settings.useCloud ? 'Cloud' : 'Local');
+      console.error('Tipo:', 'Local');
       console.error('Mensagem:', err instanceof Error ? err.message : String(err));
       console.error('Stack:', err instanceof Error ? err.stack : 'N/A');
       console.error('Total combinações:', combos.length);
