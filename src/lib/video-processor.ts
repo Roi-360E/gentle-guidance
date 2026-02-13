@@ -4,6 +4,19 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 
+const CORE_VERSION = '0.12.10';
+const BASE_JSDELIVR = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
+const BASE_UNPKG = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
+
+async function toBlobURLWithTimeout(url: string, mimeType: string, timeoutMs = 30000): Promise<string> {
+  return Promise.race([
+    toBlobURL(url, mimeType),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout loading ${url}`)), timeoutMs)
+    ),
+  ]);
+}
+
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpegLoaded) return ffmpeg;
 
@@ -12,46 +25,31 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     console.log('[FFmpeg]', message);
   });
 
-  const loadStrategies = [
-    {
-      name: 'Local JS + CDN WASM (jsdelivr)',
-      coreJS: `${window.location.origin}/ffmpeg-core/ffmpeg-core.js`,
-      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
-    },
-    {
-      name: 'Local JS + CDN WASM (unpkg)',
-      coreJS: `${window.location.origin}/ffmpeg-core/ffmpeg-core.js`,
-      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
-    },
-    {
-      name: 'Full CDN (jsdelivr)',
-      coreJS: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
-      wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
-    },
-    {
-      name: 'Full CDN (unpkg)',
-      coreJS: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
-      wasm: 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
-    },
+  // Check cross-origin isolation
+  if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) {
+    console.warn('[VideoProcessor] ⚠️ crossOriginIsolated is false — SharedArrayBuffer may not be available. FFmpeg will use single-thread mode.');
+  }
+
+  const strategies = [
+    { name: 'jsdelivr', base: BASE_JSDELIVR },
+    { name: 'unpkg', base: BASE_UNPKG },
   ];
 
-  for (const strategy of loadStrategies) {
+  for (const { name, base } of strategies) {
     try {
-      console.log(`[VideoProcessor] Trying: ${strategy.name}...`);
-      const coreURL = await toBlobURL(strategy.coreJS, 'text/javascript');
-      const wasmURL = await toBlobURL(strategy.wasm, 'application/wasm');
+      console.log(`[VideoProcessor] Trying CDN: ${name}...`);
+      const coreURL = await toBlobURLWithTimeout(`${base}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await toBlobURLWithTimeout(`${base}/ffmpeg-core.wasm`, 'application/wasm');
       await instance.load({ coreURL, wasmURL });
       ffmpeg = instance;
       ffmpegLoaded = true;
-      console.log(`[VideoProcessor] ✅ FFmpeg loaded via "${strategy.name}"`);
+      console.log(`[VideoProcessor] ✅ FFmpeg loaded via ${name}`);
       return ffmpeg;
     } catch (err) {
-      console.warn(`[VideoProcessor] Failed "${strategy.name}":`, err);
+      console.warn(`[VideoProcessor] ❌ Failed ${name}:`, err);
     }
   }
 
-  ffmpeg = null;
-  ffmpegLoaded = false;
   throw new Error('Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente.');
 }
 
@@ -122,7 +120,6 @@ export function generateCombinations(
 }
 
 // ─── Pre-processing cache ───────────────────────────────────────────────
-// Key = File object reference, Value = normalized filename in FFmpeg FS
 const preProcessCache = new Map<File, string>();
 let cacheCounter = 0;
 
@@ -130,10 +127,6 @@ function getCacheKey(file: File): string {
   return `norm_${cacheCounter++}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
 }
 
-/**
- * Pre-process a single input video with caching.
- * If the same File was already pre-processed, returns the cached filename instantly.
- */
 async function preProcessInputCached(
   ff: FFmpeg,
   file: File,
@@ -147,8 +140,6 @@ async function preProcessInputCached(
   }
 
   const outputName = getCacheKey(file);
-  
-  // Write raw file
   const data = await fetchFile(file);
   await ff.writeFile(rawName, data);
 
@@ -173,7 +164,7 @@ async function preProcessInputCached(
   );
 
   let exitCode = await ff.exec(args);
-  
+
   if (exitCode !== 0) {
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
     const args2: string[] = ['-i', rawName];
@@ -185,7 +176,6 @@ async function preProcessInputCached(
     if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
   }
 
-  // Clean raw file to save memory
   try { await ff.deleteFile(rawName); } catch {}
 
   preProcessCache.set(file, outputName);
@@ -193,17 +183,12 @@ async function preProcessInputCached(
   return outputName;
 }
 
-/**
- * Pre-process ALL unique input files upfront, before any concatenation.
- * This is the key optimization: each unique file is encoded only once.
- */
 async function preProcessAllInputs(
   ff: FFmpeg,
   combinations: Combination[],
   settings: ProcessingSettings,
   onProgress?: (msg: string, pct: number) => void
 ): Promise<void> {
-  // Collect unique files
   const uniqueFiles = new Set<File>();
   for (const c of combinations) {
     uniqueFiles.add(c.hook.file);
@@ -212,11 +197,11 @@ async function preProcessAllInputs(
   }
 
   const files = Array.from(uniqueFiles);
-  console.log(`[VideoProcessor] 🔄 Pre-processing ${files.length} unique files (instead of ${combinations.length * 3} total)`);
+  console.log(`[VideoProcessor] 🔄 Pre-processing ${files.length} unique files`);
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    onProgress?.(`Normalizando ${i + 1}/${files.length}: ${file.name}`, Math.round(((i) / files.length) * 100));
+    onProgress?.(`Normalizando ${i + 1}/${files.length}: ${file.name}`, Math.round((i / files.length) * 100));
     await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings.resolution);
   }
 
@@ -238,16 +223,14 @@ export async function concatenateVideos(
 
   try {
     if (settings.preProcess) {
-      // Files should already be cached from preProcessAllInputs
       const hookNorm = preProcessCache.get(combination.hook.file);
       const bodyNorm = preProcessCache.get(combination.body.file);
       const ctaNorm = preProcessCache.get(combination.cta.file);
 
       if (!hookNorm || !bodyNorm || !ctaNorm) {
-        throw new Error(`Cache miss for combo ${combination.id} — files not pre-processed`);
+        throw new Error(`Cache miss for combo ${combination.id}`);
       }
 
-      // Concat demuxer (fastest — just copies streams)
       const outputFile = `out_${combination.id}.mp4`;
       const concatList = `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`;
       await ff.writeFile('concat.txt', concatList);
@@ -286,11 +269,9 @@ export async function concatenateVideos(
       try { await ff.deleteFile(outputFile); } catch {}
       try { await ff.deleteFile('concat.txt'); } catch {}
 
-      console.log(`[VideoProcessor] Combo ${combination.id} done! Size: ${blob.size}B`);
       return URL.createObjectURL(blob);
 
     } else {
-      // Direct concat (no pre-processing)
       const hookData = await fetchFile(combination.hook.file);
       const bodyData = await fetchFile(combination.body.file);
       const ctaData = await fetchFile(combination.cta.file);
@@ -365,9 +346,6 @@ export async function concatenateVideos(
   }
 }
 
-/**
- * Clear the pre-processing cache and free FFmpeg FS memory.
- */
 async function clearCache(): Promise<void> {
   if (!ffmpeg) return;
   for (const [, filename] of preProcessCache) {
@@ -378,11 +356,6 @@ async function clearCache(): Promise<void> {
   console.log('[VideoProcessor] Cache cleared');
 }
 
-/**
- * Process combinations with optimized pipeline:
- * 1. Pre-process all unique files once (cached)
- * 2. Concatenate each combo using cached files (concat demuxer = near-instant)
- */
 export async function processQueue(
   combinations: Combination[],
   settings: ProcessingSettings,
@@ -394,7 +367,6 @@ export async function processQueue(
 
   const ff = await getFFmpeg();
 
-  // Phase 1: Pre-process all unique inputs (the expensive part, done only once)
   if (settings.preProcess) {
     console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
     await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
@@ -402,7 +374,6 @@ export async function processQueue(
     });
   }
 
-  // Phase 2: Concatenate each combo (fast when using cached pre-processed files)
   console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
   const queue = [...combinations];
 
@@ -424,14 +395,12 @@ export async function processQueue(
       const errorMsg = err instanceof Error ? err.message : String(err);
       combo.errorMessage = errorMsg;
       console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
-      console.error(`[VideoProcessor] Detalhes:`, err);
     }
 
     onUpdate([...combinations]);
     onProgressItem(0);
   }
 
-  // Cleanup cache after all done
   await clearCache();
 
   console.log(`[VideoProcessor] Queue complete. Done: ${combinations.filter(c => c.status === 'done').length}, Errors: ${combinations.filter(c => c.status === 'error').length}`);
