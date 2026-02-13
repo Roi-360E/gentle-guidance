@@ -25,9 +25,9 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     console.log('[FFmpeg]', message);
   });
 
-  // Check cross-origin isolation
+  // Cross-origin isolation check (informational only — single-thread mode works fine)
   if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) {
-    console.warn('[VideoProcessor] ⚠️ crossOriginIsolated is false — SharedArrayBuffer may not be available. FFmpeg will use single-thread mode.');
+    console.info('[VideoProcessor] ℹ️ Running in single-thread mode (crossOriginIsolated=false). This is normal in preview environments.');
   }
 
   const strategies = [
@@ -217,9 +217,23 @@ export async function concatenateVideos(
   console.log(`[VideoProcessor] Concatenating combo ${combination.id}: ${combination.outputName}`);
 
   const progressHandler = ({ progress }: { progress: number }) => {
-    onProgress?.(Math.min(Math.round(progress * 100), 100));
+    const pct = Math.min(Math.round(progress * 100), 100);
+    if (pct > 0) onProgress?.(pct);
   };
+  
+  // Also track via log messages for -c copy mode where progress events are sparse
+  let lastLogProgress = 0;
+  const logHandler = ({ message }: { message: string }) => {
+    // Detect frame/time progress from FFmpeg log output
+    const timeMatch = message.match(/time=(\d+):(\d+):(\d+)/);
+    if (timeMatch) {
+      lastLogProgress = Math.min(lastLogProgress + 5, 90);
+      onProgress?.(lastLogProgress);
+    }
+  };
+  
   ff.on('progress', progressHandler);
+  ff.on('log', logHandler);
 
   try {
     if (settings.preProcess) {
@@ -343,6 +357,7 @@ export async function concatenateVideos(
     }
   } finally {
     ff.off('progress', progressHandler);
+    ff.off('log', logHandler);
   }
 }
 
@@ -385,8 +400,10 @@ export async function processQueue(
     onUpdate([...combinations]);
 
     try {
+      onProgressItem(5); // Immediately show activity
       const url = await concatenateVideos(combo, settings, onProgressItem);
       if (!url) throw new Error('URL de saída vazia');
+      onProgressItem(100); // Mark complete
       combo.status = 'done';
       combo.outputUrl = url;
       console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');

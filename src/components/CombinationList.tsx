@@ -56,15 +56,19 @@ export function CombinationList({
 
       {/* Current item progress */}
       {isProcessing && processingCombo && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2 animate-pulse-slow">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
           <div className="flex items-center gap-2">
             <Loader2 className="w-4 h-4 text-primary animate-spin" />
             <span className="text-sm font-medium text-primary">
               Gerando: {processingCombo.outputName}
             </span>
-            <span className="ml-auto text-sm font-bold text-primary">{currentProgress}%</span>
+            <span className="ml-auto text-sm font-bold text-primary">
+              {currentProgress > 0 ? `${currentProgress}%` : 'Iniciando...'}
+            </span>
           </div>
-          <Progress value={currentProgress} className="h-1.5" />
+          <div className="relative">
+            <Progress value={currentProgress > 0 ? currentProgress : undefined} className={`h-1.5 ${currentProgress === 0 ? 'animate-pulse' : ''}`} />
+          </div>
           <p className="text-xs text-muted-foreground">
             Vídeo {doneCount + errorCount + 1} de {combinations.length}
           </p>
