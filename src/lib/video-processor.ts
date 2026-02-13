@@ -419,7 +419,10 @@ export async function processQueue(
   onProgressItem: (progress: number) => void,
   abortSignal?: AbortSignal
 ): Promise<void> {
-  console.log(`[VideoProcessor] Starting queue: ${combinations.length} combinations`);
+  console.log(
+    `%c[VideoProcessor] 🚀 Iniciando fila: ${combinations.length} combinações | Resolução: ${settings.resolution} | Pré-processo: ${settings.preProcess} | Batch: ${settings.batchSize}`,
+    'color: #3b82f6; font-weight: bold; font-size: 14px;'
+  );
 
   const onAbort = () => {
     console.log('[VideoProcessor] 🛑 Abort requested — terminating FFmpeg');
@@ -471,11 +474,27 @@ export async function processQueue(
         }
         combo.status = 'error';
         const errorMsg = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : '';
         combo.errorMessage = errorMsg;
-        console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
+
+        console.group(`%c❌ ERRO — Combo ${combo.id} / ${combo.outputName}`, 'color: #ef4444; font-weight: bold; font-size: 13px;');
+        console.error('Mensagem:', errorMsg);
+        if (errorStack) console.error('Stack trace:', errorStack);
+        console.error('Detalhes do combo:', JSON.stringify({
+          id: combo.id,
+          hook: combo.hook.file.name,
+          body: combo.body.file.name,
+          cta: combo.cta.file.name,
+          hookSize: `${(combo.hook.file.size / 1024 / 1024).toFixed(1)}MB`,
+          bodySize: `${(combo.body.file.size / 1024 / 1024).toFixed(1)}MB`,
+          ctaSize: `${(combo.cta.file.size / 1024 / 1024).toFixed(1)}MB`,
+        }, null, 2));
+        console.error('Settings:', JSON.stringify(settings, null, 2));
+        console.error('Progresso da fila:', `${combinations.filter(c => c.status === 'done').length} concluídos, ${combinations.filter(c => c.status === 'error').length} erros, ${combinations.filter(c => c.status === 'pending').length} pendentes`);
+        console.groupEnd();
 
         if (errorMsg.includes('memory') || errorMsg.includes('out of bounds')) {
-          console.log('[VideoProcessor] ♻️ OOM detected — recycling FFmpeg');
+          console.log('%c[VideoProcessor] ♻️ OOM detected — recycling FFmpeg', 'color: #f59e0b; font-weight: bold;');
           await terminateFFmpeg();
           ff = await getFFmpeg();
           if (settings.preProcess) {
