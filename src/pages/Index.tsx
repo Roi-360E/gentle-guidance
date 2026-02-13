@@ -409,6 +409,37 @@ const Index = () => {
           </p>
         </div>
 
+        {/* Feedback offer banner */}
+        <div className="max-w-2xl mx-auto rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 p-8 text-center space-y-4">
+          <div className="inline-flex items-center gap-2 bg-primary/10 rounded-full px-4 py-1.5 mx-auto">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span className="text-xs font-bold text-primary uppercase tracking-wide">Oferta Exclusiva</span>
+          </div>
+          <h3 className="text-xl font-extrabold text-foreground">
+            🎁 Ganhe 6 meses de acesso gratuito e ilimitado!
+          </h3>
+          <p className="text-muted-foreground text-sm max-w-lg mx-auto">
+            Compartilhe sua experiência com o EscalaX enviando um vídeo depoimento e desbloqueie <strong className="text-foreground">6 meses de acesso gratuito</strong> a todas as funcionalidades do aplicativo!
+          </p>
+          <ul className="text-left text-sm text-muted-foreground max-w-md mx-auto space-y-2">
+            <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> Grave um vídeo curto contando como o EscalaX ajudou você</li>
+            <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Envie pelo botão abaixo (upload via Google Drive)</li>
+            <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> Após aprovação, seus 6 meses serão ativados automaticamente</li>
+          </ul>
+          <a
+            href="https://drive.google.com/drive/folders/YOUR_FOLDER_ID?usp=sharing"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button
+              size="lg"
+              className="mt-2 px-10 py-6 text-base font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full hover:opacity-90 uppercase tracking-wide"
+            >
+              🎬 Clique aqui para enviar seu feedback e ganhar 6 meses de acesso gratuito e ilimitado!
+            </Button>
+          </a>
+        </div>
+
         {/* CTA banner */}
         <div className="flex justify-center pb-8">
           <Button className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide">
