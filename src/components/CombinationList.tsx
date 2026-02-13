@@ -24,7 +24,11 @@ export function CombinationList({
   const doneCount = combinations.filter((c) => c.status === 'done').length;
   const errorCount = combinations.filter((c) => c.status === 'error').length;
   const processingCombo = combinations.find((c) => c.status === 'processing');
-  const totalProgress = combinations.length > 0 ? (doneCount / combinations.length) * 100 : 0;
+  const completedCount = doneCount + errorCount;
+  // Smooth overall progress: completed videos + fractional progress of current video
+  const totalProgress = combinations.length > 0
+    ? ((completedCount + (processingCombo ? currentProgress / 100 : 0)) / combinations.length) * 100
+    : 0;
 
   return (
     <div className="space-y-4">
