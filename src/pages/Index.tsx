@@ -71,6 +71,9 @@ const Index = () => {
 
   const handleCancel = () => {
     abortRef.current?.abort();
+    setIsProcessing(false);
+    abortRef.current = null;
+    toast.info('Cancelamento solicitado...');
   };
 
   const handleDownload = (combo: Combination) => {
