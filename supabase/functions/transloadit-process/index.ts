@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createHmac } from "https://deno.land/std@0.168.0/crypto/mod.ts";
+import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 const corsHeaders = {
@@ -16,15 +16,18 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-// Generate Transloadit signature
-function signParams(params: string, authSecret: string): string {
+// Generate Transloadit signature using Web Crypto API
+async function signParams(params: string, authSecret: string): Promise<string> {
   const encoder = new TextEncoder();
-  const key = encoder.encode(authSecret);
-  const data = encoder.encode(params);
-  const hmac = createHmac("sha384", key);
-  hmac.update(data);
-  const digest = hmac.digest();
-  const hex = new TextDecoder().decode(hexEncode(new Uint8Array(digest)));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(authSecret),
+    { name: "HMAC", hash: "SHA-384" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(params));
+  const hex = new TextDecoder().decode(hexEncode(new Uint8Array(signature)));
   return `sha384:${hex}`;
 }
 
@@ -135,7 +138,7 @@ serve(async (req) => {
           steps,
         });
 
-        const signature = signParams(params, TRANSLOADIT_AUTH_SECRET);
+        const signature = await signParams(params, TRANSLOADIT_AUTH_SECRET);
 
         // Create assembly via Transloadit API
         const formData = new FormData();
