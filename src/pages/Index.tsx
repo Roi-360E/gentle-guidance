@@ -172,9 +172,14 @@ const Index = () => {
               <p className="text-xs text-primary">● Acesso Total</p>
             </div>
           </div>
-          <span className="text-xs border border-primary/40 text-primary rounded-full px-3 py-1">
-            ● Acesso completo ao app
-          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full border-primary/40 text-primary"
+            onClick={() => navigate('/plans')}
+          >
+            Gerenciar Plano
+          </Button>
         </div>
 
         {/* Stats */}
