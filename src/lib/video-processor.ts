@@ -3,16 +3,12 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
-let videosSinceReset = 0;
-
-// Reset FFmpeg every N videos to prevent WASM heap exhaustion ("memory access out of bounds")
-const RESET_INTERVAL = 25;
 
 const CORE_VERSION = '0.12.10';
 const CDN_BASES = [
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,   // UMD — works without SharedArrayBuffer
   `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,   // ESM fallback
   `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
 ];
 
@@ -25,19 +21,15 @@ async function toBlobURLWithTimeout(url: string, mimeType: string, timeoutMs = 3
   ]);
 }
 
-async function loadFreshFFmpeg(): Promise<FFmpeg> {
-  // Terminate previous instance if it exists
-  if (ffmpeg) {
-    try { ffmpeg.terminate(); } catch {}
-    ffmpeg = null;
-    ffmpegLoaded = false;
-  }
+export async function getFFmpeg(): Promise<FFmpeg> {
+  if (ffmpeg && ffmpegLoaded) return ffmpeg;
 
   const instance = new FFmpeg();
   instance.on('log', ({ message }) => {
     console.log('[FFmpeg]', message);
   });
 
+  // Informational — single-thread mode is expected in preview / iframe environments
   if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) {
     console.info('[VideoProcessor] ℹ️ Running in single-thread mode (crossOriginIsolated=false). This is normal.');
   }
@@ -50,7 +42,6 @@ async function loadFreshFFmpeg(): Promise<FFmpeg> {
       await instance.load({ coreURL, wasmURL });
       ffmpeg = instance;
       ffmpegLoaded = true;
-      videosSinceReset = 0;
       console.log(`[VideoProcessor] ✅ FFmpeg loaded successfully from ${base}`);
       return ffmpeg;
     } catch (err) {
@@ -61,67 +52,10 @@ async function loadFreshFFmpeg(): Promise<FFmpeg> {
   throw new Error('Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente.');
 }
 
-export async function getFFmpeg(): Promise<FFmpeg> {
-  if (ffmpeg && ffmpegLoaded) return ffmpeg;
-  return loadFreshFFmpeg();
-}
-
-/** Eagerly pre-load FFmpeg so it's ready when the user clicks "Generate". */
-let preloadPromise: Promise<FFmpeg> | null = null;
-export function preloadFFmpeg(): void {
-  if (ffmpeg && ffmpegLoaded) return;
-  if (preloadPromise) return;
-  console.log('[VideoProcessor] 🚀 Pre-loading FFmpeg in background...');
-  preloadPromise = loadFreshFFmpeg().finally(() => { preloadPromise = null; });
-}
-
 export interface VideoFile {
   file: File;
   name: string;
   url: string;
-  position?: number;
-  duration?: number;
-}
-
-/** Get video duration in seconds */
-export function getVideoDuration(file: File): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      URL.revokeObjectURL(video.src);
-      resolve(video.duration);
-    };
-    video.onerror = () => {
-      URL.revokeObjectURL(video.src);
-      reject(new Error('Failed to load video metadata'));
-    };
-    video.src = URL.createObjectURL(file);
-  });
-}
-
-/** Pre-process a specific set of files (for per-section pre-processing) */
-export async function preProcessFiles(
-  files: VideoFile[],
-  resolution: ResolutionPreset,
-  onProgress?: (msg: string, pct: number, fileIndex?: number) => void
-): Promise<void> {
-  const ff = await getFFmpeg();
-  const uniqueFiles = files.filter(f => !preProcessCache.has(f.file));
-  
-  if (uniqueFiles.length === 0) {
-    onProgress?.('Já pré-processado', 100);
-    return;
-  }
-
-  for (let i = 0; i < uniqueFiles.length; i++) {
-    const file = uniqueFiles[i];
-    const fileIndex = files.indexOf(file);
-    onProgress?.(`Normalizando ${i + 1}/${uniqueFiles.length}: ${file.name}`, Math.round(((i + 1) / uniqueFiles.length) * 100), fileIndex);
-    await preProcessInputCached(ff, file.file, `raw_input_section_${i}.mp4`, resolution);
-  }
-  
-  onProgress?.('Concluído', 100);
 }
 
 export interface Combination {
@@ -160,20 +94,14 @@ const resolutionMap: Record<ResolutionPreset, string | null> = {
 export function generateCombinations(
   hooks: VideoFile[],
   bodies: VideoFile[],
-  ctas: VideoFile[],
-  maxCombinations = 100
+  ctas: VideoFile[]
 ): Combination[] {
   const combinations: Combination[] = [];
-  const seen = new Set<string>();
   let id = 1;
 
   for (const hook of hooks) {
     for (const body of bodies) {
       for (const cta of ctas) {
-        if (combinations.length >= maxCombinations) break;
-        const key = `${hook.name}_${body.name}_${cta.name}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
         combinations.push({
           id,
           hook,
@@ -184,9 +112,7 @@ export function generateCombinations(
         });
         id++;
       }
-      if (combinations.length >= maxCombinations) break;
     }
-    if (combinations.length >= maxCombinations) break;
   }
 
   return combinations;
@@ -294,6 +220,7 @@ export async function concatenateVideos(
     if (pct > 0) onProgress?.(pct);
   };
   
+  // Track via log messages for -c copy mode where progress events are sparse
   let lastLogProgress = 0;
   const logHandler = ({ message }: { message: string }) => {
     const timeMatch = message.match(/time=(\d+):(\d+):(\d+)/);
@@ -442,58 +369,23 @@ async function clearCache(): Promise<void> {
   console.log('[VideoProcessor] Cache cleared');
 }
 
-/**
- * Reset FFmpeg instance completely to reclaim WASM heap memory.
- * Re-runs pre-processing for remaining combos.
- */
-async function resetFFmpegForMemory(
-  remainingCombos: Combination[],
-  settings: ProcessingSettings
-): Promise<void> {
-  console.log(`%c[VideoProcessor] 🔄 Resetting FFmpeg to free WASM memory (processed ${videosSinceReset} videos)`, 'color: #f59e0b; font-weight: bold;');
-  
-  // Clear cache references (files will be gone after terminate)
-  preProcessCache.clear();
-  cacheCounter = 0;
-
-  // Terminate and reload
-  if (ffmpeg) {
-    try { ffmpeg.terminate(); } catch {}
-    ffmpeg = null;
-    ffmpegLoaded = false;
-  }
-
-  const ff = await loadFreshFFmpeg();
-
-  // Re-run pre-processing for files needed by remaining combos
-  if (settings.preProcess && remainingCombos.length > 0) {
-    console.log('[VideoProcessor] Re-pre-processing files for remaining combos...');
-    await preProcessAllInputs(ff, remainingCombos, settings);
-  }
-}
-
 export async function processQueue(
   combinations: Combination[],
   settings: ProcessingSettings,
   onUpdate: (combos: Combination[]) => void,
   onProgressItem: (progress: number) => void,
-  abortSignal?: AbortSignal,
-  onPhase?: (phase: string) => void
+  abortSignal?: AbortSignal
 ): Promise<void> {
   console.log(`[VideoProcessor] Starting queue: ${combinations.length} combinations`);
 
-  onPhase?.('Carregando motor de vídeo…');
   const ff = await getFFmpeg();
 
   if (settings.preProcess) {
     console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
     await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
-      onPhase?.(`Pré-processando: ${msg}`);
       console.log(`[VideoProcessor] ${msg} (${pct}%)`);
     });
   }
-
-  onPhase?.('Gerando vídeos…');
 
   console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
   const queue = [...combinations];
@@ -501,40 +393,23 @@ export async function processQueue(
   while (queue.length > 0) {
     if (abortSignal?.aborted) break;
 
-    // Check if we need to reset FFmpeg to avoid memory overflow
-    if (videosSinceReset >= RESET_INTERVAL && queue.length > 0) {
-      const remaining = queue.filter(c => c.status === 'pending');
-      await resetFFmpegForMemory(remaining, settings);
-    }
-
     const combo = queue.shift()!;
     combo.status = 'processing';
     onUpdate([...combinations]);
 
     try {
-      onProgressItem(5);
+      onProgressItem(5); // Immediately show activity
       const url = await concatenateVideos(combo, settings, onProgressItem);
       if (!url) throw new Error('URL de saída vazia');
-      onProgressItem(100);
+      onProgressItem(100); // Mark complete
       combo.status = 'done';
       combo.outputUrl = url;
-      videosSinceReset++;
       console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');
     } catch (err) {
       combo.status = 'error';
       const errorMsg = err instanceof Error ? err.message : String(err);
       combo.errorMessage = errorMsg;
-      videosSinceReset++;
       console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
-
-      // If it's a memory error, force reset immediately
-      if (errorMsg.includes('memory') || errorMsg.includes('out of bounds') || errorMsg.includes('OOM')) {
-        console.warn('[VideoProcessor] ⚠️ Memory error detected — forcing FFmpeg reset');
-        const remaining = queue.filter(c => c.status === 'pending');
-        if (remaining.length > 0) {
-          await resetFFmpegForMemory(remaining, settings);
-        }
-      }
     }
 
     onUpdate([...combinations]);
@@ -543,7 +418,5 @@ export async function processQueue(
 
   await clearCache();
 
-  const doneCount = combinations.filter(c => c.status === 'done').length;
-  const errorCount = combinations.filter(c => c.status === 'error').length;
-  console.log(`[VideoProcessor] Queue complete. Done: ${doneCount}, Errors: ${errorCount}`);
+  console.log(`[VideoProcessor] Queue complete. Done: ${combinations.filter(c => c.status === 'done').length}, Errors: ${combinations.filter(c => c.status === 'error').length}`);
 }

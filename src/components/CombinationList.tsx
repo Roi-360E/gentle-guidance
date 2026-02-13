@@ -11,7 +11,6 @@ interface CombinationListProps {
   onDownload: (combo: Combination) => void;
   onDownloadAll: () => void;
   isProcessing: boolean;
-  phaseMessage?: string | null;
 }
 
 export function CombinationList({
@@ -20,17 +19,12 @@ export function CombinationList({
   onDownload,
   onDownloadAll,
   isProcessing,
-  phaseMessage,
 }: CombinationListProps) {
   const [previewCombo, setPreviewCombo] = useState<Combination | null>(null);
   const doneCount = combinations.filter((c) => c.status === 'done').length;
   const errorCount = combinations.filter((c) => c.status === 'error').length;
   const processingCombo = combinations.find((c) => c.status === 'processing');
-  const completedCount = doneCount + errorCount;
-  // Smooth overall progress: completed videos + fractional progress of current video
-  const totalProgress = combinations.length > 0
-    ? ((completedCount + (processingCombo ? currentProgress / 100 : 0)) / combinations.length) * 100
-    : 0;
+  const totalProgress = combinations.length > 0 ? (doneCount / combinations.length) * 100 : 0;
 
   return (
     <div className="space-y-4">
@@ -60,17 +54,6 @@ export function CombinationList({
         <Progress value={totalProgress} className="h-2" />
       </div>
 
-      {/* Phase message (loading FFmpeg, pre-processing) */}
-      {isProcessing && phaseMessage && !processingCombo && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <Loader2 className="w-4 h-4 text-primary animate-spin" />
-            <span className="text-sm font-medium text-primary">{phaseMessage}</span>
-          </div>
-          <Progress value={undefined} className="h-1.5 animate-pulse" />
-        </div>
-      )}
-
       {/* Current item progress */}
       {isProcessing && processingCombo && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
@@ -87,7 +70,6 @@ export function CombinationList({
             <Progress value={currentProgress > 0 ? currentProgress : undefined} className={`h-1.5 ${currentProgress === 0 ? 'animate-pulse' : ''}`} />
           </div>
           <p className="text-xs text-muted-foreground">
-            {phaseMessage && <span className="mr-2">{phaseMessage} ·</span>}
             Vídeo {doneCount + errorCount + 1} de {combinations.length}
           </p>
         </div>
