@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import {
   generateCombinations,
   processQueue,
   defaultSettings,
+  revokeBlobUrls,
   type VideoFile,
   type Combination,
   type ProcessingSettings,
@@ -30,14 +31,26 @@ const Index = () => {
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
 
+  // Revoke blob URLs when combinations change or on unmount to prevent memory leaks
+  const prevCombosRef = useRef<Combination[]>([]);
+  useEffect(() => {
+    return () => {
+      revokeBlobUrls(prevCombosRef.current);
+    };
+  }, []);
+
   const totalCombinations = hooks.length * bodies.length * ctas.length;
   const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
 
   const handleProcess = useCallback(async () => {
     if (!canProcess) return;
 
+    // Revoke old blob URLs before starting new batch
+    revokeBlobUrls(combinations);
+
     const combos = generateCombinations(hooks, bodies, ctas);
     setCombinations(combos);
+    prevCombosRef.current = combos;
     setIsProcessing(true);
 
     const controller = new AbortController();
@@ -45,34 +58,43 @@ const Index = () => {
 
     const processFn = settings.useCloud ? processQueueCloud : processQueue;
 
-    await processFn(
-      combos,
-      settings,
-      (updated) => setCombinations([...updated]),
-      (p) => setCurrentProgress(p),
-      controller.signal
-    );
-
-    setIsProcessing(false);
-    abortRef.current = null;
-
-    if (!controller.signal.aborted) {
-      const doneCount = combos.filter(c => c.status === 'done').length;
-      const errorCount = combos.filter(c => c.status === 'error').length;
-      if (errorCount > 0) {
-        toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s). Veja o console (F12) para detalhes.`);
-      } else {
-        toast.success(`Todos os ${doneCount} vídeos foram gerados com sucesso!`);
-      }
-    } else {
-      toast.info('Processamento cancelado.');
+    try {
+      await processFn(
+        combos,
+        settings,
+        (updated) => setCombinations([...updated]),
+        (p) => setCurrentProgress(p),
+        controller.signal
+      );
+    } catch {
+      // Errors already handled inside processFn
     }
-  }, [canProcess, hooks, bodies, ctas, settings]);
+
+    // Only update state if this controller is still active (not replaced by a new run)
+    if (abortRef.current === controller) {
+      setIsProcessing(false);
+      abortRef.current = null;
+
+      if (!controller.signal.aborted) {
+        const doneCount = combos.filter(c => c.status === 'done').length;
+        const errorCount = combos.filter(c => c.status === 'error').length;
+        if (errorCount > 0) {
+          toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s).`);
+        } else {
+          toast.success(`Todos os ${doneCount} vídeos foram gerados com sucesso!`);
+        }
+      } else {
+        toast.info('Processamento cancelado.');
+      }
+    }
+  }, [canProcess, hooks, bodies, ctas, settings, combinations]);
 
   const handleCancel = () => {
-    abortRef.current?.abort();
-    setIsProcessing(false);
+    if (!abortRef.current) return;
+    abortRef.current.abort();
     abortRef.current = null;
+    setIsProcessing(false);
+    setCurrentProgress(0);
     toast.info('Cancelamento solicitado...');
   };
 
