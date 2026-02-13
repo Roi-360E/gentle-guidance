@@ -104,7 +104,7 @@ export function getVideoDuration(file: File): Promise<number> {
 export async function preProcessFiles(
   files: VideoFile[],
   resolution: ResolutionPreset,
-  onProgress?: (msg: string, pct: number) => void
+  onProgress?: (msg: string, pct: number, fileIndex?: number) => void
 ): Promise<void> {
   const ff = await getFFmpeg();
   const uniqueFiles = files.filter(f => !preProcessCache.has(f.file));
@@ -116,7 +116,8 @@ export async function preProcessFiles(
 
   for (let i = 0; i < uniqueFiles.length; i++) {
     const file = uniqueFiles[i];
-    onProgress?.(`Normalizando ${i + 1}/${uniqueFiles.length}: ${file.name}`, Math.round((i / uniqueFiles.length) * 100));
+    const fileIndex = files.indexOf(file);
+    onProgress?.(`Normalizando ${i + 1}/${uniqueFiles.length}: ${file.name}`, Math.round(((i + 1) / uniqueFiles.length) * 100), fileIndex);
     await preProcessInputCached(ff, file.file, `raw_input_section_${i}.mp4`, resolution);
   }
   
@@ -159,14 +160,20 @@ const resolutionMap: Record<ResolutionPreset, string | null> = {
 export function generateCombinations(
   hooks: VideoFile[],
   bodies: VideoFile[],
-  ctas: VideoFile[]
+  ctas: VideoFile[],
+  maxCombinations = 100
 ): Combination[] {
   const combinations: Combination[] = [];
+  const seen = new Set<string>();
   let id = 1;
 
   for (const hook of hooks) {
     for (const body of bodies) {
       for (const cta of ctas) {
+        if (combinations.length >= maxCombinations) break;
+        const key = `${hook.name}_${body.name}_${cta.name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         combinations.push({
           id,
           hook,
@@ -177,7 +184,9 @@ export function generateCombinations(
         });
         id++;
       }
+      if (combinations.length >= maxCombinations) break;
     }
+    if (combinations.length >= maxCombinations) break;
   }
 
   return combinations;
