@@ -211,6 +211,9 @@ const Index = () => {
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/subtitles')}>
               <Type className="w-4 h-4" /> Legendas IA ✨
             </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
+              <Zap className="w-4 h-4" /> Planos
+            </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Download className="w-4 h-4" /> Meus Downloads
             </Button>
