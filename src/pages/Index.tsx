@@ -13,6 +13,7 @@ import {
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
+import { processQueueCloud } from '@/lib/cloud-processor';
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,7 +43,9 @@ const Index = () => {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    await processQueue(
+    const processFn = settings.useCloud ? processQueueCloud : processQueue;
+
+    await processFn(
       combos,
       settings,
       (updated) => setCombinations([...updated]),
