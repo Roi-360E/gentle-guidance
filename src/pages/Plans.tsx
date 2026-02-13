@@ -302,6 +302,23 @@ export default function Plans() {
                     <Badge variant="outline" className="w-full justify-center py-2">
                       Plano Atual
                     </Badge>
+                  ) : user?.email === 'matheuslaurindo900@gmail.com' ? (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={async () => {
+                        const monthYear = new Date().toISOString().substring(0, 7);
+                        await supabase
+                          .from('video_usage')
+                          .update({ plan: plan.id })
+                          .eq('user_id', user.id)
+                          .eq('month_year', monthYear);
+                        setCurrentPlan(plan.id);
+                        toast.success(`Plano alterado para ${plan.name}!`);
+                      }}
+                    >
+                      Ativar {plan.name}
+                    </Button>
                   ) : plan.price > 0 ? (
                     <div className="space-y-2">
                       <Button
