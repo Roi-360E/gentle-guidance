@@ -5,8 +5,12 @@ let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 
 const CORE_VERSION = '0.12.10';
-const BASE_JSDELIVR = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
-const BASE_UNPKG = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
+const CDN_BASES = [
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,   // UMD — works without SharedArrayBuffer
+  `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,   // ESM fallback
+  `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
+];
 
 async function toBlobURLWithTimeout(url: string, mimeType: string, timeoutMs = 30000): Promise<string> {
   return Promise.race([
@@ -25,28 +29,23 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     console.log('[FFmpeg]', message);
   });
 
-  // Cross-origin isolation check (informational only — single-thread mode works fine)
+  // Informational — single-thread mode is expected in preview / iframe environments
   if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) {
-    console.info('[VideoProcessor] ℹ️ Running in single-thread mode (crossOriginIsolated=false). This is normal in preview environments.');
+    console.info('[VideoProcessor] ℹ️ Running in single-thread mode (crossOriginIsolated=false). This is normal.');
   }
 
-  const strategies = [
-    { name: 'jsdelivr', base: BASE_JSDELIVR },
-    { name: 'unpkg', base: BASE_UNPKG },
-  ];
-
-  for (const { name, base } of strategies) {
+  for (const base of CDN_BASES) {
     try {
-      console.log(`[VideoProcessor] Trying CDN: ${name}...`);
+      console.log(`[VideoProcessor] Trying CDN: ${base}...`);
       const coreURL = await toBlobURLWithTimeout(`${base}/ffmpeg-core.js`, 'text/javascript');
       const wasmURL = await toBlobURLWithTimeout(`${base}/ffmpeg-core.wasm`, 'application/wasm');
       await instance.load({ coreURL, wasmURL });
       ffmpeg = instance;
       ffmpegLoaded = true;
-      console.log(`[VideoProcessor] ✅ FFmpeg loaded via ${name}`);
+      console.log(`[VideoProcessor] ✅ FFmpeg loaded successfully from ${base}`);
       return ffmpeg;
     } catch (err) {
-      console.warn(`[VideoProcessor] ❌ Failed ${name}:`, err);
+      console.warn(`[VideoProcessor] ❌ Failed from ${base}:`, err);
     }
   }
 
@@ -221,10 +220,9 @@ export async function concatenateVideos(
     if (pct > 0) onProgress?.(pct);
   };
   
-  // Also track via log messages for -c copy mode where progress events are sparse
+  // Track via log messages for -c copy mode where progress events are sparse
   let lastLogProgress = 0;
   const logHandler = ({ message }: { message: string }) => {
-    // Detect frame/time progress from FFmpeg log output
     const timeMatch = message.match(/time=(\d+):(\d+):(\d+)/);
     if (timeMatch) {
       lastLogProgress = Math.min(lastLogProgress + 5, 90);

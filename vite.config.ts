@@ -11,10 +11,9 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
+    // NOTE: COOP/COEP headers removed intentionally.
+    // They block CDN resources (ffmpeg-core) and break iframe previews.
+    // FFmpeg.wasm 0.12.x works fine in single-thread mode without SharedArrayBuffer.
   },
   optimizeDeps: {
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
