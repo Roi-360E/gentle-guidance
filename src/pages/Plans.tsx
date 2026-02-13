@@ -24,16 +24,16 @@ const plans = [
     name: 'Gratuito',
     price: 0,
     icon: Sparkles,
-    features: ['100 vídeos/mês', 'Processamento local', 'Suporte básico'],
+    features: ['100 vídeos somente no 1º mês', 'Processamento local', 'Suporte básico'],
     color: 'text-muted-foreground',
     bgColor: 'bg-muted/50',
   },
   {
     id: 'professional',
     name: 'Profissional',
-    price: 97,
+    price: 37.90,
     icon: Zap,
-    features: ['1.000 vídeos/mês', 'Processamento em nuvem', 'Legendas com IA', 'Suporte prioritário'],
+    features: ['100 vídeos/mês', 'Processamento local', 'Suporte prioritário'],
     color: 'text-primary',
     bgColor: 'bg-primary/10',
     popular: true,
@@ -41,7 +41,7 @@ const plans = [
   {
     id: 'enterprise',
     name: 'Empresarial',
-    price: 297,
+    price: 197,
     icon: Crown,
     features: ['Vídeos ilimitados', 'Processamento em nuvem', 'Legendas com IA', 'API dedicada', 'Suporte VIP'],
     color: 'text-accent',
@@ -279,7 +279,7 @@ export default function Plans() {
                   <div className="mt-2">
                     {plan.price > 0 ? (
                       <div>
-                        <span className="text-3xl font-bold">R$ {plan.price}</span>
+                        <span className="text-3xl font-bold">R$ {plan.price.toFixed(2).replace('.', ',')}</span>
                         <span className="text-muted-foreground text-sm">/mês</span>
                       </div>
                     ) : (
