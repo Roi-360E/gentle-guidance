@@ -65,15 +65,17 @@ serve(async (req) => {
       return jsonResponse({ error: "TRANSLOADIT_AUTH_SECRET not configured" }, 500);
     }
 
-    const { action } = await req.json();
+    const body = await req.json();
+    const { action, videoUrls, resolution, assemblyId, fileNames } = body as {
+      action: string;
+      videoUrls?: { hook: string; body: string; cta: string }[];
+      resolution?: string;
+      assemblyId?: string;
+      fileNames?: string[];
+    };
 
     // ── ACTION: create-assembly ──────────────────────────────────
     if (action === "create-assembly") {
-      const body = await req.clone().json();
-      const { videoUrls, resolution } = body as {
-        videoUrls: { hook: string; body: string; cta: string }[];
-        resolution: string;
-      };
 
       if (!videoUrls?.length) {
         return jsonResponse({ error: "No video URLs provided" }, 400);
@@ -171,8 +173,6 @@ serve(async (req) => {
 
     // ── ACTION: check-status ────────────────────────────────────
     if (action === "check-status") {
-      const body = await req.clone().json();
-      const { assemblyId } = body as { assemblyId: string };
 
       if (!assemblyId) {
         return jsonResponse({ error: "No assemblyId provided" }, 400);
@@ -211,8 +211,6 @@ serve(async (req) => {
 
     // ── ACTION: get-upload-urls ──────────────────────────────────
     if (action === "get-upload-urls") {
-      const body = await req.clone().json();
-      const { fileNames } = body as { fileNames: string[] };
 
       if (!fileNames?.length) {
         return jsonResponse({ error: "No file names provided" }, 400);
