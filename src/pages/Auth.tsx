@@ -50,7 +50,7 @@ const Auth = () => {
             </div>
           </div>
           <CardTitle className="text-2xl font-extrabold text-primary uppercase tracking-tight">
-            Escala de Criativo
+            EscalaX
           </CardTitle>
           <CardDescription>
             {isLogin ? 'Entre na sua conta' : 'Crie sua conta'}
