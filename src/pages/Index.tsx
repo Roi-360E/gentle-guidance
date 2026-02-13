@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { VideoUploadZone } from '@/components/VideoUploadZone';
 import { CombinationList } from '@/components/CombinationList';
@@ -19,8 +20,11 @@ import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut
 import { toast } from 'sonner';
 
 const Index = () => {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [currentPlan, setCurrentPlan] = useState<string>('free');
+  const [videoCount, setVideoCount] = useState(0);
+  const [isFirstMonth, setIsFirstMonth] = useState(true);
   const [hooks, setHooks] = useState<VideoFile[]>([]);
   const [bodies, setBodies] = useState<VideoFile[]>([]);
   const [ctas, setCtas] = useState<VideoFile[]>([]);
@@ -30,6 +34,37 @@ const Index = () => {
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
+
+  // Load user plan data
+  useEffect(() => {
+    if (!user) return;
+    const loadUsage = async () => {
+      const monthYear = new Date().toISOString().substring(0, 7);
+      const { data } = await supabase
+        .from('video_usage')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month_year', monthYear)
+        .single();
+      if (data) {
+        setCurrentPlan(data.plan);
+        setVideoCount(data.video_count);
+      }
+      // Check if first month by comparing account creation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('created_at')
+        .eq('user_id', user.id)
+        .single();
+      if (profile) {
+        const createdAt = new Date(profile.created_at);
+        const now = new Date();
+        const monthsDiff = (now.getFullYear() - createdAt.getFullYear()) * 12 + now.getMonth() - createdAt.getMonth();
+        setIsFirstMonth(monthsDiff === 0);
+      }
+    };
+    loadUsage();
+  }, [user]);
 
   // Revoke blob URLs when combinations change or on unmount to prevent memory leaks
   const prevCombosRef = useRef<Combination[]>([]);
@@ -44,6 +79,20 @@ const Index = () => {
 
   const handleProcess = useCallback(async () => {
     if (!canProcess) return;
+
+    // Check usage limits
+    if (currentPlan === 'free' && !isFirstMonth) {
+      toast.error('Seu período gratuito expirou. Faça upgrade para continuar.');
+      navigate('/plans');
+      return;
+    }
+    if (currentPlan !== 'enterprise') {
+      const remaining = 100 - videoCount;
+      if (totalCombinations > remaining) {
+        toast.error(`Você tem apenas ${remaining} vídeos restantes. Reduza as combinações ou faça upgrade.`);
+        return;
+      }
+    }
 
     // Revoke old blob URLs before starting new batch
     revokeBlobUrls(combinations);
@@ -94,7 +143,7 @@ const Index = () => {
         toast.info('Processamento cancelado.');
       }
     }
-  }, [canProcess, hooks, bodies, ctas, settings, combinations]);
+  }, [canProcess, hooks, bodies, ctas, settings, combinations, currentPlan, isFirstMonth, videoCount, totalCombinations, navigate]);
 
   const handleCancel = () => {
     if (!abortRef.current) return;
@@ -168,8 +217,17 @@ const Index = () => {
               <Zap className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <p className="font-bold text-foreground">Créditos Ilimitados</p>
-              <p className="text-xs text-primary">● Acesso Total</p>
+              <p className="font-bold text-foreground">
+                {currentPlan === 'enterprise' ? 'Empresarial' : currentPlan === 'professional' ? 'Profissional' : 'Gratuito'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {currentPlan === 'enterprise' 
+                  ? `● Vídeos ilimitados (${videoCount} usados)`
+                  : currentPlan === 'free' && !isFirstMonth
+                    ? '● Período gratuito expirado'
+                    : `● ${videoCount}/100 vídeos usados`
+                }
+              </p>
             </div>
           </div>
           <Button
@@ -178,7 +236,7 @@ const Index = () => {
             className="rounded-full border-primary/40 text-primary"
             onClick={() => navigate('/plans')}
           >
-            Gerenciar Plano
+            {currentPlan === 'free' ? 'Fazer Upgrade' : 'Gerenciar Plano'}
           </Button>
         </div>
 
