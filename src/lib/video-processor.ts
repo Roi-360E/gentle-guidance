@@ -75,6 +75,7 @@ export interface ProcessingSettings {
   resolution: ResolutionPreset;
   batchSize: number;
   preProcess: boolean;
+  useCloud?: boolean;
 }
 
 export const defaultSettings: ProcessingSettings = {
