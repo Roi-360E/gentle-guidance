@@ -8,9 +8,9 @@ const RESTART_EVERY = 25;
 
 const CORE_VERSION = '0.12.10';
 const CDN_BASES = [
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,   // UMD — works without SharedArrayBuffer
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
   `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,   // ESM fallback
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
   `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
 ];
 
@@ -31,7 +31,6 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     console.log('[FFmpeg]', message);
   });
 
-  // Informational — single-thread mode is expected in preview / iframe environments
   if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) {
     console.info('[VideoProcessor] ℹ️ Running in single-thread mode (crossOriginIsolated=false). This is normal.');
   }
@@ -144,6 +143,11 @@ export function generateCombinations(
   return combinations;
 }
 
+// ─── Abort helper ───────────────────────────────────────────────────────
+function checkAbort(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+}
+
 // ─── Pre-processing cache ───────────────────────────────────────────────
 const preProcessCache = new Map<File, string>();
 let cacheCounter = 0;
@@ -156,13 +160,16 @@ async function preProcessInputCached(
   ff: FFmpeg,
   file: File,
   rawName: string,
-  resolution: ResolutionPreset
+  resolution: ResolutionPreset,
+  abortSignal?: AbortSignal
 ): Promise<string> {
   const cached = preProcessCache.get(file);
   if (cached) {
     console.log(`[VideoProcessor] ⚡ Cache hit for "${file.name}" → ${cached}`);
     return cached;
   }
+
+  checkAbort(abortSignal);
 
   const outputName = getCacheKey(file);
   const data = await fetchFile(file);
@@ -189,6 +196,7 @@ async function preProcessInputCached(
   );
 
   let exitCode = await ff.exec(args);
+  checkAbort(abortSignal);
 
   if (exitCode !== 0) {
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
@@ -198,6 +206,7 @@ async function preProcessInputCached(
     }
     args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-r', '30', '-an', '-y', outputName);
     exitCode = await ff.exec(args2);
+    checkAbort(abortSignal);
     if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
   }
 
@@ -226,10 +235,10 @@ async function preProcessAllInputs(
   console.log(`[VideoProcessor] 🔄 Pre-processing ${files.length} unique files`);
 
   for (let i = 0; i < files.length; i++) {
-    if (abortSignal?.aborted) return;
+    checkAbort(abortSignal);
     const file = files[i];
     onProgress?.(`Normalizando ${i + 1}/${files.length}: ${file.name}`, Math.round((i / files.length) * 100));
-    await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings.resolution);
+    await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings.resolution, abortSignal);
   }
 
   onProgress?.('Pré-processamento concluído', 100);
@@ -238,17 +247,18 @@ async function preProcessAllInputs(
 export async function concatenateVideos(
   combination: Combination,
   settings: ProcessingSettings,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  abortSignal?: AbortSignal
 ): Promise<string> {
   const ff = await getFFmpeg();
+  checkAbort(abortSignal);
   console.log(`[VideoProcessor] Concatenating combo ${combination.id}: ${combination.outputName}`);
 
   const progressHandler = ({ progress }: { progress: number }) => {
     const pct = Math.min(Math.round(progress * 100), 100);
     if (pct > 0) onProgress?.(pct);
   };
-  
-  // Track via log messages for -c copy mode where progress events are sparse
+
   let lastLogProgress = 0;
   const logHandler = ({ message }: { message: string }) => {
     const timeMatch = message.match(/time=(\d+):(\d+):(\d+)/);
@@ -257,7 +267,7 @@ export async function concatenateVideos(
       onProgress?.(lastLogProgress);
     }
   };
-  
+
   ff.on('progress', progressHandler);
   ff.on('log', logHandler);
 
@@ -279,6 +289,7 @@ export async function concatenateVideos(
         '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
         '-c', 'copy', '-movflags', '+faststart', '-y', outputFile,
       ]);
+      checkAbort(abortSignal);
 
       if (exitCode !== 0) {
         console.warn('[VideoProcessor] Concat demuxer failed, trying filter concat...');
@@ -289,6 +300,7 @@ export async function concatenateVideos(
           '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac',
           '-y', outputFile,
         ]);
+        checkAbort(abortSignal);
       }
 
       if (exitCode !== 0) {
@@ -300,6 +312,7 @@ export async function concatenateVideos(
           '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an',
           '-y', outputFile,
         ]);
+        checkAbort(abortSignal);
       }
 
       if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
@@ -344,6 +357,7 @@ export async function concatenateVideos(
           '-y', outputFile,
         ]);
       }
+      checkAbort(abortSignal);
 
       if (exitCode !== 0) {
         console.warn('[VideoProcessor] Direct concat failed, trying video-only...');
@@ -368,6 +382,7 @@ export async function concatenateVideos(
             '-y', outputFile,
           ]);
         }
+        checkAbort(abortSignal);
       }
 
       if (exitCode !== 0) throw new Error(`Concatenation failed for combo ${combination.id}`);
@@ -406,7 +421,6 @@ export async function processQueue(
 ): Promise<void> {
   console.log(`[VideoProcessor] Starting queue: ${combinations.length} combinations`);
 
-  // Setup abort listener that force-terminates FFmpeg
   const onAbort = () => {
     console.log('[VideoProcessor] 🛑 Abort requested — terminating FFmpeg');
     terminateFFmpeg();
@@ -423,40 +437,43 @@ export async function processQueue(
       }, abortSignal);
     }
 
-    if (abortSignal?.aborted) return;
+    checkAbort(abortSignal);
 
     console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
     const queue = [...combinations];
 
     while (queue.length > 0) {
-      if (abortSignal?.aborted) break;
+      checkAbort(abortSignal);
 
       const combo = queue.shift()!;
       combo.status = 'processing';
       onUpdate([...combinations]);
 
       try {
-        // Recycle FFmpeg periodically to avoid OOM (only when NOT pre-processing, since cache would be lost)
         if (!settings.preProcess) {
           ff = await maybeRecycleFFmpeg();
         }
 
         onProgressItem(5);
-        const url = await concatenateVideos(combo, settings, onProgressItem);
-        if (abortSignal?.aborted) break;
+        const url = await concatenateVideos(combo, settings, onProgressItem, abortSignal);
+        checkAbort(abortSignal);
         if (!url) throw new Error('URL de saída vazia');
         onProgressItem(100);
         combo.status = 'done';
         combo.outputUrl = url;
         console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');
       } catch (err) {
-        if (abortSignal?.aborted) break;
+        // If aborted, mark remaining as pending and exit
+        if (abortSignal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+          combo.status = 'pending';
+          onUpdate([...combinations]);
+          break;
+        }
         combo.status = 'error';
         const errorMsg = err instanceof Error ? err.message : String(err);
         combo.errorMessage = errorMsg;
         console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
 
-        // If OOM, recycle FFmpeg and re-process pre-processing cache
         if (errorMsg.includes('memory') || errorMsg.includes('out of bounds')) {
           console.log('[VideoProcessor] ♻️ OOM detected — recycling FFmpeg');
           await terminateFFmpeg();
@@ -471,10 +488,21 @@ export async function processQueue(
       onProgressItem(0);
     }
 
-    await clearCache();
+    if (!abortSignal?.aborted) {
+      await clearCache();
+    }
   } finally {
     abortSignal?.removeEventListener('abort', onAbort);
   }
 
   console.log(`[VideoProcessor] Queue complete. Done: ${combinations.filter(c => c.status === 'done').length}, Errors: ${combinations.filter(c => c.status === 'error').length}`);
+}
+
+/** Revoke all blob URLs from completed combinations to free memory */
+export function revokeBlobUrls(combinations: Combination[]): void {
+  for (const c of combinations) {
+    if (c.outputUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(c.outputUrl);
+    }
+  }
 }
