@@ -3,6 +3,8 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
+let processedSinceRestart = 0;
+const RESTART_EVERY = 25;
 
 const CORE_VERSION = '0.12.10';
 const CDN_BASES = [
@@ -50,6 +52,29 @@ export async function getFFmpeg(): Promise<FFmpeg> {
   }
 
   throw new Error('Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente.');
+}
+
+/** Force-terminate the current FFmpeg instance (used for cancel & memory recycling) */
+export async function terminateFFmpeg(): Promise<void> {
+  if (ffmpeg) {
+    try { ffmpeg.terminate(); } catch {}
+    ffmpeg = null;
+    ffmpegLoaded = false;
+    processedSinceRestart = 0;
+    preProcessCache.clear();
+    cacheCounter = 0;
+    console.log('[VideoProcessor] 🔴 FFmpeg terminated');
+  }
+}
+
+/** Recycle FFmpeg instance to free memory (every N videos) */
+async function maybeRecycleFFmpeg(): Promise<FFmpeg> {
+  processedSinceRestart++;
+  if (processedSinceRestart >= RESTART_EVERY) {
+    console.log(`[VideoProcessor] ♻️ Recycling FFmpeg after ${processedSinceRestart} videos`);
+    await terminateFFmpeg();
+  }
+  return getFFmpeg();
 }
 
 export interface VideoFile {
@@ -187,7 +212,8 @@ async function preProcessAllInputs(
   ff: FFmpeg,
   combinations: Combination[],
   settings: ProcessingSettings,
-  onProgress?: (msg: string, pct: number) => void
+  onProgress?: (msg: string, pct: number) => void,
+  abortSignal?: AbortSignal
 ): Promise<void> {
   const uniqueFiles = new Set<File>();
   for (const c of combinations) {
@@ -200,6 +226,7 @@ async function preProcessAllInputs(
   console.log(`[VideoProcessor] 🔄 Pre-processing ${files.length} unique files`);
 
   for (let i = 0; i < files.length; i++) {
+    if (abortSignal?.aborted) return;
     const file = files[i];
     onProgress?.(`Normalizando ${i + 1}/${files.length}: ${file.name}`, Math.round((i / files.length) * 100));
     await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings.resolution);
@@ -379,45 +406,75 @@ export async function processQueue(
 ): Promise<void> {
   console.log(`[VideoProcessor] Starting queue: ${combinations.length} combinations`);
 
-  const ff = await getFFmpeg();
+  // Setup abort listener that force-terminates FFmpeg
+  const onAbort = () => {
+    console.log('[VideoProcessor] 🛑 Abort requested — terminating FFmpeg');
+    terminateFFmpeg();
+  };
+  abortSignal?.addEventListener('abort', onAbort, { once: true });
 
-  if (settings.preProcess) {
-    console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
-    await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
-      console.log(`[VideoProcessor] ${msg} (${pct}%)`);
-    });
-  }
+  try {
+    let ff = await getFFmpeg();
 
-  console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
-  const queue = [...combinations];
-
-  while (queue.length > 0) {
-    if (abortSignal?.aborted) break;
-
-    const combo = queue.shift()!;
-    combo.status = 'processing';
-    onUpdate([...combinations]);
-
-    try {
-      onProgressItem(5); // Immediately show activity
-      const url = await concatenateVideos(combo, settings, onProgressItem);
-      if (!url) throw new Error('URL de saída vazia');
-      onProgressItem(100); // Mark complete
-      combo.status = 'done';
-      combo.outputUrl = url;
-      console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');
-    } catch (err) {
-      combo.status = 'error';
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      combo.errorMessage = errorMsg;
-      console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
+    if (settings.preProcess) {
+      console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
+      await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
+        console.log(`[VideoProcessor] ${msg} (${pct}%)`);
+      }, abortSignal);
     }
 
-    onUpdate([...combinations]);
-    onProgressItem(0);
-  }
+    if (abortSignal?.aborted) return;
 
-  await clearCache();
+    console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
+    const queue = [...combinations];
+
+    while (queue.length > 0) {
+      if (abortSignal?.aborted) break;
+
+      const combo = queue.shift()!;
+      combo.status = 'processing';
+      onUpdate([...combinations]);
+
+      try {
+        // Recycle FFmpeg periodically to avoid OOM (only when NOT pre-processing, since cache would be lost)
+        if (!settings.preProcess) {
+          ff = await maybeRecycleFFmpeg();
+        }
+
+        onProgressItem(5);
+        const url = await concatenateVideos(combo, settings, onProgressItem);
+        if (abortSignal?.aborted) break;
+        if (!url) throw new Error('URL de saída vazia');
+        onProgressItem(100);
+        combo.status = 'done';
+        combo.outputUrl = url;
+        console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');
+      } catch (err) {
+        if (abortSignal?.aborted) break;
+        combo.status = 'error';
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        combo.errorMessage = errorMsg;
+        console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
+
+        // If OOM, recycle FFmpeg and re-process pre-processing cache
+        if (errorMsg.includes('memory') || errorMsg.includes('out of bounds')) {
+          console.log('[VideoProcessor] ♻️ OOM detected — recycling FFmpeg');
+          await terminateFFmpeg();
+          ff = await getFFmpeg();
+          if (settings.preProcess) {
+            await preProcessAllInputs(ff, combinations, settings, undefined, abortSignal);
+          }
+        }
+      }
+
+      onUpdate([...combinations]);
+      onProgressItem(0);
+    }
+
+    await clearCache();
+  } finally {
+    abortSignal?.removeEventListener('abort', onAbort);
+  }
 
   console.log(`[VideoProcessor] Queue complete. Done: ${combinations.filter(c => c.status === 'done').length}, Errors: ${combinations.filter(c => c.status === 'error').length}`);
 }
