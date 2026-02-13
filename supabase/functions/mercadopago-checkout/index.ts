@@ -48,8 +48,8 @@ serve(async (req) => {
     const { plan, paymentMethod } = body as { plan: string; paymentMethod?: string };
 
     const plans: Record<string, { title: string; price: number }> = {
-      professional: { title: "Plano Profissional - Escala de Criativo", price: 97.00 },
-      enterprise: { title: "Plano Empresarial - Escala de Criativo", price: 297.00 },
+      professional: { title: "Plano Profissional - Escala de Criativo", price: 37.90 },
+      enterprise: { title: "Plano Empresarial - Escala de Criativo", price: 197.00 },
     };
 
     const selectedPlan = plans[plan];
