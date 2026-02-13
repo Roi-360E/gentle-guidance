@@ -3,12 +3,16 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
+let videosSinceReset = 0;
+
+// Reset FFmpeg every N videos to prevent WASM heap exhaustion ("memory access out of bounds")
+const RESET_INTERVAL = 25;
 
 const CORE_VERSION = '0.12.10';
 const CDN_BASES = [
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,   // UMD — works without SharedArrayBuffer
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
   `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,   // ESM fallback
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
   `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
 ];
 
@@ -21,15 +25,19 @@ async function toBlobURLWithTimeout(url: string, mimeType: string, timeoutMs = 3
   ]);
 }
 
-export async function getFFmpeg(): Promise<FFmpeg> {
-  if (ffmpeg && ffmpegLoaded) return ffmpeg;
+async function loadFreshFFmpeg(): Promise<FFmpeg> {
+  // Terminate previous instance if it exists
+  if (ffmpeg) {
+    try { ffmpeg.terminate(); } catch {}
+    ffmpeg = null;
+    ffmpegLoaded = false;
+  }
 
   const instance = new FFmpeg();
   instance.on('log', ({ message }) => {
     console.log('[FFmpeg]', message);
   });
 
-  // Informational — single-thread mode is expected in preview / iframe environments
   if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) {
     console.info('[VideoProcessor] ℹ️ Running in single-thread mode (crossOriginIsolated=false). This is normal.');
   }
@@ -42,6 +50,7 @@ export async function getFFmpeg(): Promise<FFmpeg> {
       await instance.load({ coreURL, wasmURL });
       ffmpeg = instance;
       ffmpegLoaded = true;
+      videosSinceReset = 0;
       console.log(`[VideoProcessor] ✅ FFmpeg loaded successfully from ${base}`);
       return ffmpeg;
     } catch (err) {
@@ -50,6 +59,11 @@ export async function getFFmpeg(): Promise<FFmpeg> {
   }
 
   throw new Error('Falha ao carregar FFmpeg. Verifique sua conexão com a internet e tente novamente.');
+}
+
+export async function getFFmpeg(): Promise<FFmpeg> {
+  if (ffmpeg && ffmpegLoaded) return ffmpeg;
+  return loadFreshFFmpeg();
 }
 
 export interface VideoFile {
@@ -220,7 +234,6 @@ export async function concatenateVideos(
     if (pct > 0) onProgress?.(pct);
   };
   
-  // Track via log messages for -c copy mode where progress events are sparse
   let lastLogProgress = 0;
   const logHandler = ({ message }: { message: string }) => {
     const timeMatch = message.match(/time=(\d+):(\d+):(\d+)/);
@@ -369,6 +382,36 @@ async function clearCache(): Promise<void> {
   console.log('[VideoProcessor] Cache cleared');
 }
 
+/**
+ * Reset FFmpeg instance completely to reclaim WASM heap memory.
+ * Re-runs pre-processing for remaining combos.
+ */
+async function resetFFmpegForMemory(
+  remainingCombos: Combination[],
+  settings: ProcessingSettings
+): Promise<void> {
+  console.log(`%c[VideoProcessor] 🔄 Resetting FFmpeg to free WASM memory (processed ${videosSinceReset} videos)`, 'color: #f59e0b; font-weight: bold;');
+  
+  // Clear cache references (files will be gone after terminate)
+  preProcessCache.clear();
+  cacheCounter = 0;
+
+  // Terminate and reload
+  if (ffmpeg) {
+    try { ffmpeg.terminate(); } catch {}
+    ffmpeg = null;
+    ffmpegLoaded = false;
+  }
+
+  const ff = await loadFreshFFmpeg();
+
+  // Re-run pre-processing for files needed by remaining combos
+  if (settings.preProcess && remainingCombos.length > 0) {
+    console.log('[VideoProcessor] Re-pre-processing files for remaining combos...');
+    await preProcessAllInputs(ff, remainingCombos, settings);
+  }
+}
+
 export async function processQueue(
   combinations: Combination[],
   settings: ProcessingSettings,
@@ -393,23 +436,40 @@ export async function processQueue(
   while (queue.length > 0) {
     if (abortSignal?.aborted) break;
 
+    // Check if we need to reset FFmpeg to avoid memory overflow
+    if (videosSinceReset >= RESET_INTERVAL && queue.length > 0) {
+      const remaining = queue.filter(c => c.status === 'pending');
+      await resetFFmpegForMemory(remaining, settings);
+    }
+
     const combo = queue.shift()!;
     combo.status = 'processing';
     onUpdate([...combinations]);
 
     try {
-      onProgressItem(5); // Immediately show activity
+      onProgressItem(5);
       const url = await concatenateVideos(combo, settings, onProgressItem);
       if (!url) throw new Error('URL de saída vazia');
-      onProgressItem(100); // Mark complete
+      onProgressItem(100);
       combo.status = 'done';
       combo.outputUrl = url;
+      videosSinceReset++;
       console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');
     } catch (err) {
       combo.status = 'error';
       const errorMsg = err instanceof Error ? err.message : String(err);
       combo.errorMessage = errorMsg;
+      videosSinceReset++;
       console.error(`%c[VideoProcessor] ❌ ERRO no combo ${combo.id} (${combo.outputName}):`, 'color: #ef4444; font-weight: bold;', errorMsg);
+
+      // If it's a memory error, force reset immediately
+      if (errorMsg.includes('memory') || errorMsg.includes('out of bounds') || errorMsg.includes('OOM')) {
+        console.warn('[VideoProcessor] ⚠️ Memory error detected — forcing FFmpeg reset');
+        const remaining = queue.filter(c => c.status === 'pending');
+        if (remaining.length > 0) {
+          await resetFFmpegForMemory(remaining, settings);
+        }
+      }
     }
 
     onUpdate([...combinations]);
@@ -418,5 +478,7 @@ export async function processQueue(
 
   await clearCache();
 
-  console.log(`[VideoProcessor] Queue complete. Done: ${combinations.filter(c => c.status === 'done').length}, Errors: ${combinations.filter(c => c.status === 'error').length}`);
+  const doneCount = combinations.filter(c => c.status === 'done').length;
+  const errorCount = combinations.filter(c => c.status === 'error').length;
+  console.log(`[VideoProcessor] Queue complete. Done: ${doneCount}, Errors: ${errorCount}`);
 }
