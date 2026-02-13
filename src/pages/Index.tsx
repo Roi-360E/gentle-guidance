@@ -50,6 +50,24 @@ const Index = () => {
         setCurrentPlan(data.plan);
         setVideoCount(data.video_count);
       }
+      // Check for active testimonial access
+      const { data: testimonial } = await supabase
+        .from('testimonial_submissions')
+        .select('expires_at')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (testimonial && new Date(testimonial.expires_at) > new Date()) {
+        setCurrentPlan('enterprise');
+        // Also update video_usage if not already enterprise
+        if (data && data.plan !== 'enterprise') {
+          await supabase
+            .from('video_usage')
+            .update({ plan: 'enterprise' })
+            .eq('user_id', user.id)
+            .eq('month_year', monthYear);
+        }
+      }
       // Check if first month by comparing account creation
       const { data: profile } = await supabase
         .from('profiles')
@@ -424,19 +442,50 @@ const Index = () => {
           <ul className="text-left text-sm text-muted-foreground max-w-md mx-auto space-y-2">
             <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> Grave um vídeo curto contando como o EscalaX ajudou você</li>
             <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Envie pelo botão abaixo (upload via Google Drive)</li>
-            <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> Após aprovação, seus 6 meses serão ativados automaticamente</li>
+            <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> Seus 6 meses serão ativados automaticamente!</li>
           </ul>
-          <a
-            href="https://drive.google.com/drive/folders/YOUR_FOLDER_ID?usp=sharing"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Button
+            onClick={async () => {
+              if (!user) {
+                toast.error('Faça login para participar da oferta!');
+                return;
+              }
+              // Check if already submitted
+              const { data: existing } = await supabase
+                .from('testimonial_submissions')
+                .select('id, expires_at')
+                .eq('user_id', user.id)
+                .maybeSingle();
+              if (existing) {
+                toast.info(`Você já participou! Acesso gratuito até ${new Date(existing.expires_at).toLocaleDateString('pt-BR')}`);
+                window.open('https://drive.google.com/drive/folders/1Ji-Doeylr51hy_wLuMXBQ-rtgWq3ohN4?usp=sharing', '_blank');
+                return;
+              }
+              // Grant 6 months access
+              const expiresAt = new Date();
+              expiresAt.setMonth(expiresAt.getMonth() + 6);
+              const { error: subError } = await supabase
+                .from('testimonial_submissions')
+                .insert({ user_id: user.id, expires_at: expiresAt.toISOString() });
+              if (subError) {
+                toast.error('Erro ao registrar. Tente novamente.');
+                return;
+              }
+              // Update plan to enterprise for current month
+              const monthYear = new Date().toISOString().slice(0, 7);
+              await supabase
+                .from('video_usage')
+                .update({ plan: 'enterprise' })
+                .eq('user_id', user.id)
+                .eq('month_year', monthYear);
+              setCurrentPlan('enterprise');
+              toast.success('🎉 6 meses de acesso ilimitado ativados! Envie seu vídeo na pasta do Google Drive.');
+              window.open('https://drive.google.com/drive/folders/1Ji-Doeylr51hy_wLuMXBQ-rtgWq3ohN4?usp=sharing', '_blank');
+            }}
+            className="mt-2 px-6 py-3 text-sm font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full hover:opacity-90 uppercase tracking-wide"
           >
-            <Button
-              className="mt-2 px-6 py-3 text-sm font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full hover:opacity-90 uppercase tracking-wide"
-            >
-              🎬 Enviar feedback e ganhar 6 meses grátis!
-            </Button>
-          </a>
+            🎬 Enviar feedback e ganhar 6 meses grátis!
+          </Button>
         </div>
 
         {/* CTA banner */}

@@ -116,6 +116,30 @@ export type Database = {
         }
         Relationships: []
       }
+      testimonial_submissions: {
+        Row: {
+          expires_at: string
+          id: string
+          status: string
+          submitted_at: string
+          user_id: string
+        }
+        Insert: {
+          expires_at?: string
+          id?: string
+          status?: string
+          submitted_at?: string
+          user_id: string
+        }
+        Update: {
+          expires_at?: string
+          id?: string
+          status?: string
+          submitted_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       video_usage: {
         Row: {
           created_at: string
