@@ -432,10 +432,9 @@ const Index = () => {
             rel="noopener noreferrer"
           >
             <Button
-              size="lg"
-              className="mt-2 px-10 py-6 text-base font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full hover:opacity-90 uppercase tracking-wide"
+              className="mt-2 px-6 py-3 text-sm font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full hover:opacity-90 uppercase tracking-wide"
             >
-              🎬 Clique aqui para enviar seu feedback e ganhar 6 meses de acesso gratuito e ilimitado!
+              🎬 Enviar feedback e ganhar 6 meses grátis!
             </Button>
           </a>
         </div>
