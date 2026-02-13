@@ -177,7 +177,7 @@ const Index = () => {
             <Sparkles className="w-7 h-7 text-primary" />
             <div>
               <h1 className="text-2xl font-extrabold tracking-tight text-primary uppercase">
-                Escala de Criativo
+                EscalaX
               </h1>
               <p className="text-xs text-muted-foreground">
                 Feito para escalar seus criativos de vídeo
