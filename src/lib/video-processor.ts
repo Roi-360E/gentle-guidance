@@ -94,27 +94,52 @@ export interface Combination {
 }
 
 export type ResolutionPreset = 'original' | '1080p' | '720p' | '480p' | '360p';
+export type VideoFormat = '9:16' | '16:9' | '1:1';
 
 export interface ProcessingSettings {
   resolution: ResolutionPreset;
   batchSize: number;
   preProcess: boolean;
   useCloud?: boolean;
+  videoFormat: VideoFormat;
 }
 
 export const defaultSettings: ProcessingSettings = {
   resolution: '720p',
   batchSize: 3,
   preProcess: true,
+  videoFormat: '9:16',
 };
 
-const resolutionMap: Record<ResolutionPreset, string | null> = {
-  original: null,
-  '1080p': '1920:1080',
-  '720p': '1280:720',
-  '480p': '854:480',
-  '360p': '640:360',
+// Resolution map keyed by format then resolution preset → "width:height"
+const formatResolutionMap: Record<VideoFormat, Record<ResolutionPreset, string | null>> = {
+  '16:9': {
+    original: null,
+    '1080p': '1920:1080',
+    '720p': '1280:720',
+    '480p': '854:480',
+    '360p': '640:360',
+  },
+  '9:16': {
+    original: null,
+    '1080p': '1080:1920',
+    '720p': '720:1280',
+    '480p': '480:854',
+    '360p': '360:640',
+  },
+  '1:1': {
+    original: null,
+    '1080p': '1080:1080',
+    '720p': '720:720',
+    '480p': '480:480',
+    '360p': '360:360',
+  },
 };
+
+function getScale(settings: ProcessingSettings): string | null {
+  const format = settings.videoFormat || '9:16';
+  return formatResolutionMap[format]?.[settings.resolution] ?? null;
+}
 
 export function generateCombinations(
   hooks: VideoFile[],
@@ -160,7 +185,7 @@ async function preProcessInputCached(
   ff: FFmpeg,
   file: File,
   rawName: string,
-  resolution: ResolutionPreset,
+  settings: ProcessingSettings,
   abortSignal?: AbortSignal
 ): Promise<string> {
   const cached = preProcessCache.get(file);
@@ -175,8 +200,8 @@ async function preProcessInputCached(
   const data = await fetchFile(file);
   await ff.writeFile(rawName, data);
 
-  const scale = resolutionMap[resolution];
-  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${resolution})`);
+  const scale = getScale(settings);
+  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
 
   const args: string[] = ['-i', rawName];
   if (scale) {
@@ -238,7 +263,7 @@ async function preProcessAllInputs(
     checkAbort(abortSignal);
     const file = files[i];
     onProgress?.(`Normalizando ${i + 1}/${files.length}: ${file.name}`, Math.round((i / files.length) * 100));
-    await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings.resolution, abortSignal);
+    await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings, abortSignal);
   }
 
   onProgress?.('Pré-processamento concluído', 100);
@@ -332,7 +357,7 @@ export async function concatenateVideos(
       await ff.writeFile('body_raw.mp4', bodyData);
       await ff.writeFile('cta_raw.mp4', ctaData);
 
-      const scale = resolutionMap[settings.resolution];
+      const scale = getScale(settings);
       const outputFile = 'output.mp4';
       let exitCode: number;
 

@@ -14,6 +14,7 @@ import {
   getFFmpeg,
   type Combination,
   type ProcessingSettings,
+  type VideoFormat,
 } from '@/lib/video-processor';
 import { processQueueCloud } from '@/lib/cloud-processor';
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid } from 'lucide-react';
@@ -37,7 +38,7 @@ const Index = () => {
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
   const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
-  const [videoFormat, setVideoFormat] = useState<'9:16' | '16:9' | '1:1'>('9:16');
+  const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [processingPhase, setProcessingPhase] = useState<string>('');
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
@@ -113,6 +114,11 @@ const Index = () => {
     setCtasPreprocessed(false);
   }, [ctas.length]);
 
+  // Sync videoFormat into settings
+  useEffect(() => {
+    setSettings(prev => ({ ...prev, videoFormat }));
+  }, [videoFormat]);
+
   const totalCombinations = hooks.length * bodies.length * ctas.length;
   const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
   const preprocessingDone = hooksPreprocessed && bodiesPreprocessed && ctasPreprocessed;
@@ -153,8 +159,14 @@ const Index = () => {
             return updated;
           });
 
+          // Build scale based on format + resolution
+          const formatResMap: Record<string, Record<string, string>> = {
+            '16:9': { '1080p': '1920:1080', '720p': '1280:720', '480p': '854:480', '360p': '640:360' },
+            '9:16': { '1080p': '1080:1920', '720p': '720:1280', '480p': '480:854', '360p': '360:640' },
+            '1:1':  { '1080p': '1080:1080', '720p': '720:720', '480p': '480:480', '360p': '360:360' },
+          };
           const scale = settings.resolution !== 'original'
-            ? { '1080p': '1920:1080', '720p': '1280:720', '480p': '854:480', '360p': '640:360' }[settings.resolution]
+            ? formatResMap[settings.videoFormat]?.[settings.resolution] ?? null
             : null;
 
           const args: string[] = ['-i', rawName];
@@ -210,7 +222,7 @@ const Index = () => {
     } finally {
       setPreprocessingSection(null);
     }
-  }, [settings.resolution]);
+  }, [settings.resolution, settings.videoFormat]);
 
   const handleProcess = useCallback(async () => {
     if (!canProcess) return;
