@@ -1,11 +1,11 @@
 import { useCallback, useRef } from 'react';
-import { Upload, X, CheckCircle2, Loader2 } from 'lucide-react';
+import { Upload, X, CheckCircle2, Loader2, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { VideoFile } from '@/lib/video-processor';
 
 export interface VideoFileWithProgress extends VideoFile {
-  preprocessProgress?: number; // 0-100, undefined = not started
+  preprocessProgress?: number;
   preprocessStatus?: 'idle' | 'processing' | 'done' | 'error';
 }
 
@@ -16,6 +16,15 @@ interface VideoUploadZoneProps {
   files: VideoFileWithProgress[];
   onFilesChange: (files: VideoFileWithProgress[]) => void;
   accentColor: string;
+  isPreprocessing?: boolean;
+  onPreprocess?: () => void;
+  preprocessLabel?: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 export function VideoUploadZone({
@@ -25,6 +34,9 @@ export function VideoUploadZone({
   files,
   onFilesChange,
   accentColor,
+  isPreprocessing,
+  onPreprocess,
+  preprocessLabel,
 }: VideoUploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -51,6 +63,9 @@ export function VideoUploadZone({
     onFilesChange(updated);
   };
 
+  const allDone = files.length > 0 && files.every(f => f.preprocessStatus === 'done');
+  const hasFiles = files.length > 0;
+
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-4">
       <div className="flex items-center justify-between">
@@ -66,72 +81,56 @@ export function VideoUploadZone({
         </span>
       </div>
 
-      {/* Square video thumbnail grid */}
-      {files.length > 0 && (
+      {/* File cards grid */}
+      {hasFiles && (
         <div className="grid grid-cols-2 gap-3">
           {files.map((vf, i) => (
-            <div key={i} className="relative group">
-              <div className="aspect-square rounded-lg overflow-hidden bg-muted border border-border relative">
-                <video
-                  src={vf.url}
-                  className="w-full h-full object-cover"
-                  muted
-                  playsInline
-                  preload="metadata"
-                  onLoadedData={(e) => {
-                    // Seek to 1s for a better thumbnail
-                    const video = e.currentTarget;
-                    video.currentTime = 1;
-                  }}
-                />
-
-                {/* Overlay for status */}
-                {vf.preprocessStatus === 'processing' && (
-                  <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-2">
-                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
-                    <span className="text-xs font-medium text-primary">
-                      {vf.preprocessProgress != null ? `${vf.preprocessProgress}%` : 'Aguardando...'}
-                    </span>
-                  </div>
+            <div
+              key={i}
+              className="rounded-lg bg-muted/50 border border-border p-3 space-y-2 relative group"
+            >
+              {/* Top row: status icon + name + remove */}
+              <div className="flex items-start gap-2">
+                {vf.preprocessStatus === 'done' ? (
+                  <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                ) : vf.preprocessStatus === 'processing' ? (
+                  <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0 mt-0.5" />
+                ) : (
+                  <Film className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
                 )}
-
-                {vf.preprocessStatus === 'done' && (
-                  <div className="absolute top-2 right-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 drop-shadow-md" />
-                  </div>
-                )}
-
-                {vf.preprocessStatus === 'error' && (
-                  <div className="absolute inset-0 bg-destructive/20 flex items-center justify-center">
-                    <span className="text-xs font-bold text-destructive">Erro</span>
-                  </div>
-                )}
-
-                {/* Remove button */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{vf.name}</p>
+                  <p className="text-xs text-muted-foreground">{formatFileSize(vf.file.size)}</p>
+                </div>
                 <Button
-                  variant="destructive"
+                  variant="ghost"
                   size="icon"
-                  className="absolute top-1 left-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                   onClick={() => removeFile(i)}
                 >
                   <X className="w-3 h-3" />
                 </Button>
               </div>
 
-              {/* Individual progress bar */}
-              {vf.preprocessStatus === 'processing' && (
-                <Progress
-                  value={vf.preprocessProgress ?? 0}
-                  className="h-1.5 mt-1"
-                />
-              )}
+              {/* Position */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>#</span>
+                <span>Posição:</span>
+                <span className="inline-flex items-center justify-center bg-background border border-border rounded px-2 py-0.5 font-mono text-foreground min-w-[28px] text-center">
+                  {i + 1}
+                </span>
+              </div>
 
-              <p className="text-xs text-muted-foreground truncate mt-1">{vf.name}</p>
+              {/* Progress bar during preprocessing */}
+              {vf.preprocessStatus === 'processing' && (
+                <Progress value={vf.preprocessProgress ?? 0} className="h-1.5" />
+              )}
             </div>
           ))}
         </div>
       )}
 
+      {/* Upload button */}
       {files.length < maxFiles && (
         <button
           onClick={() => inputRef.current?.click()}
@@ -151,6 +150,34 @@ export function VideoUploadZone({
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
       />
+
+      {/* Preprocess button per section */}
+      {hasFiles && !allDone && onPreprocess && (
+        <Button
+          className="w-full rounded-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
+          disabled={isPreprocessing}
+          onClick={onPreprocess}
+        >
+          {isPreprocessing ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              {preprocessLabel || 'Pré-processando...'}
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4 mr-2" />
+              Iniciar pré-processamento
+            </>
+          )}
+        </Button>
+      )}
+
+      {allDone && (
+        <div className="flex items-center justify-center gap-2 text-sm text-green-500 font-medium">
+          <CheckCircle2 className="w-4 h-4" />
+          Pré-processamento concluído
+        </div>
+      )}
     </div>
   );
 }

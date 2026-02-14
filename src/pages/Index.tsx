@@ -16,7 +16,7 @@ import {
   type ProcessingSettings,
 } from '@/lib/video-processor';
 import { processQueueCloud } from '@/lib/cloud-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Upload } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
@@ -38,9 +38,10 @@ const Index = () => {
   const [showExtras, setShowExtras] = useState(false);
   const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
   const [processingPhase, setProcessingPhase] = useState<string>('');
-  const [isPreprocessing, setIsPreprocessing] = useState(false);
-  const [preprocessingDone, setPreprocessingDone] = useState(false);
-  const [preprocessPhaseLabel, setPreprocessPhaseLabel] = useState('');
+  const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
+  const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
+  const [bodiesPreprocessed, setBodiesPreprocessed] = useState(false);
+  const [ctasPreprocessed, setCtasPreprocessed] = useState(false);
 
   // Load user plan data
   useEffect(() => {
@@ -102,122 +103,113 @@ const Index = () => {
 
   // Reset preprocessing state when files change
   useEffect(() => {
-    setPreprocessingDone(false);
-  }, [hooks.length, bodies.length, ctas.length]);
+    setHooksPreprocessed(false);
+  }, [hooks.length]);
+  useEffect(() => {
+    setBodiesPreprocessed(false);
+  }, [bodies.length]);
+  useEffect(() => {
+    setCtasPreprocessed(false);
+  }, [ctas.length]);
 
   const totalCombinations = hooks.length * bodies.length * ctas.length;
   const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
-  const allFilesUploaded = hooks.length > 0 || bodies.length > 0 || ctas.length > 0;
+  const preprocessingDone = hooksPreprocessed && bodiesPreprocessed && ctasPreprocessed;
 
-  // Pre-process files section by section with individual progress
-  const handlePreprocess = useCallback(async () => {
-    if (!canProcess) return;
-    setIsPreprocessing(true);
-    setPreprocessingDone(false);
+  // Pre-process a single section
+  const handlePreprocessSection = useCallback(async (
+    sectionLabel: string,
+    files: VideoFileWithProgress[],
+    setter: React.Dispatch<React.SetStateAction<VideoFileWithProgress[]>>,
+    setDone: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    if (files.length === 0) return;
+    setPreprocessingSection(sectionLabel);
 
     try {
-      setPreprocessPhaseLabel('Carregando motor de vídeo...');
       const ff = await getFFmpeg();
 
-      const sections: { label: string; files: VideoFileWithProgress[]; setter: React.Dispatch<React.SetStateAction<VideoFileWithProgress[]>> }[] = [
-        { label: 'Gancho', files: hooks, setter: setHooks },
-        { label: 'Corpo', files: bodies, setter: setBodies },
-        { label: 'CTA', files: ctas, setter: setCtas },
-      ];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
 
-      for (const section of sections) {
-        setPreprocessPhaseLabel(`Pré-processando ${section.label}...`);
+        setter(prev => {
+          const updated = [...prev];
+          updated[i] = { ...updated[i], preprocessStatus: 'processing', preprocessProgress: 0 };
+          return updated;
+        });
 
-        for (let i = 0; i < section.files.length; i++) {
-          const file = section.files[i];
+        try {
+          const { fetchFile } = await import('@ffmpeg/util');
+          const rawName = `raw_preprocess_${i}.mp4`;
+          const outputName = `norm_${sectionLabel.toLowerCase()}_${i}_${file.file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
 
-          // Update status to processing
-          section.setter(prev => {
+          const data = await fetchFile(file.file);
+          await ff.writeFile(rawName, data);
+
+          setter(prev => {
             const updated = [...prev];
-            updated[i] = { ...updated[i], preprocessStatus: 'processing', preprocessProgress: 0 };
+            updated[i] = { ...updated[i], preprocessProgress: 30 };
             return updated;
           });
 
-          try {
-            // Simulate progress updates during pre-processing
-            const { fetchFile } = await import('@ffmpeg/util');
-            const rawName = `raw_preprocess_${i}.mp4`;
-            const outputName = `norm_${section.label.toLowerCase()}_${i}_${file.file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+          const scale = settings.resolution !== 'original'
+            ? { '1080p': '1920:1080', '720p': '1280:720', '480p': '854:480', '360p': '640:360' }[settings.resolution]
+            : null;
 
-            const data = await fetchFile(file.file);
-            await ff.writeFile(rawName, data);
-
-            // Update progress to 30%
-            section.setter(prev => {
-              const updated = [...prev];
-              updated[i] = { ...updated[i], preprocessProgress: 30 };
-              return updated;
-            });
-
-            const scale = settings.resolution !== 'original'
-              ? { '1080p': '1920:1080', '720p': '1280:720', '480p': '854:480', '360p': '640:360' }[settings.resolution]
-              : null;
-
-            const args: string[] = ['-i', rawName];
-            if (scale) {
-              args.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
-            }
-            args.push(
-              '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-              '-r', '30', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-              '-y', outputName
-            );
-
-            // Update progress to 60%
-            section.setter(prev => {
-              const updated = [...prev];
-              updated[i] = { ...updated[i], preprocessProgress: 60 };
-              return updated;
-            });
-
-            let exitCode = await ff.exec(args);
-
-            if (exitCode !== 0) {
-              // Retry without audio
-              const args2: string[] = ['-i', rawName];
-              if (scale) {
-                args2.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
-              }
-              args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-r', '30', '-an', '-y', outputName);
-              exitCode = await ff.exec(args2);
-              if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
-            }
-
-            try { await ff.deleteFile(rawName); } catch {}
-
-            // Update to done
-            section.setter(prev => {
-              const updated = [...prev];
-              updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
-              return updated;
-            });
-
-          } catch (err) {
-            console.error(`Error preprocessing ${file.name}:`, err);
-            section.setter(prev => {
-              const updated = [...prev];
-              updated[i] = { ...updated[i], preprocessStatus: 'error', preprocessProgress: 0 };
-              return updated;
-            });
+          const args: string[] = ['-i', rawName];
+          if (scale) {
+            args.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
           }
+          args.push(
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-r', '30', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+            '-y', outputName
+          );
+
+          setter(prev => {
+            const updated = [...prev];
+            updated[i] = { ...updated[i], preprocessProgress: 60 };
+            return updated;
+          });
+
+          let exitCode = await ff.exec(args);
+
+          if (exitCode !== 0) {
+            const args2: string[] = ['-i', rawName];
+            if (scale) {
+              args2.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
+            }
+            args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-r', '30', '-an', '-y', outputName);
+            exitCode = await ff.exec(args2);
+            if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
+          }
+
+          try { await ff.deleteFile(rawName); } catch {}
+
+          setter(prev => {
+            const updated = [...prev];
+            updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
+            return updated;
+          });
+        } catch (err) {
+          console.error(`Error preprocessing ${file.name}:`, err);
+          setter(prev => {
+            const updated = [...prev];
+            updated[i] = { ...updated[i], preprocessStatus: 'error', preprocessProgress: 0 };
+            return updated;
+          });
         }
       }
 
-      setPreprocessingDone(true);
-      setPreprocessPhaseLabel('');
-      toast.success('Todos os vídeos foram pré-processados com sucesso!');
+      setDone(true);
+      toast.success(`${sectionLabel}: pré-processamento concluído!`);
     } catch (err) {
       console.error('Preprocessing failed:', err);
       toast.error('Erro no pré-processamento: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
-      setIsPreprocessing(false);
+      setPreprocessingSection(null);
     }
-  }, [canProcess, hooks, bodies, ctas, settings.resolution]);
+  }, [settings.resolution]);
 
   const handleProcess = useCallback(async () => {
     if (!canProcess) return;
@@ -433,6 +425,9 @@ const Index = () => {
             files={hooks}
             onFilesChange={setHooks}
             accentColor="bg-primary"
+            isPreprocessing={preprocessingSection === 'Gancho'}
+            onPreprocess={() => handlePreprocessSection('Gancho', hooks, setHooks, setHooksPreprocessed)}
+            preprocessLabel="Pré-processando ganchos..."
           />
           <VideoUploadZone
             label="Corpo"
@@ -441,6 +436,9 @@ const Index = () => {
             files={bodies}
             onFilesChange={setBodies}
             accentColor="bg-accent"
+            isPreprocessing={preprocessingSection === 'Corpo'}
+            onPreprocess={() => handlePreprocessSection('Corpo', bodies, setBodies, setBodiesPreprocessed)}
+            preprocessLabel="Pré-processando corpos..."
           />
           <VideoUploadZone
             label="CTA"
@@ -449,38 +447,11 @@ const Index = () => {
             files={ctas}
             onFilesChange={setCtas}
             accentColor="bg-destructive"
+            isPreprocessing={preprocessingSection === 'CTA'}
+            onPreprocess={() => handlePreprocessSection('CTA', ctas, setCtas, setCtasPreprocessed)}
+            preprocessLabel="Pré-processando CTAs..."
           />
         </div>
-
-        {/* Pre-process button */}
-        {canProcess && !preprocessingDone && (
-          <div className="flex flex-col items-center gap-3">
-            {isPreprocessing && preprocessPhaseLabel && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="font-medium">{preprocessPhaseLabel}</span>
-              </div>
-            )}
-            <Button
-              size="lg"
-              className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
-              disabled={isPreprocessing}
-              onClick={handlePreprocess}
-            >
-              {isPreprocessing ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Pré-processando...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-5 h-5 mr-2" />
-                  Enviar vídeos para processamento
-                </>
-              )}
-            </Button>
-          </div>
-        )}
 
         {/* Processing Settings - show after preprocess */}
         {preprocessingDone && (
