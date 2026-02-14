@@ -100,7 +100,6 @@ export function VideoUploadZone({
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{vf.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatFileSize(vf.file.size)}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -112,12 +111,16 @@ export function VideoUploadZone({
                 </Button>
               </div>
 
-              {/* Position */}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>#</span>
-                <span>Posição:</span>
-                <span className="inline-flex items-center justify-center bg-background border border-border rounded px-2 py-0.5 font-mono text-foreground min-w-[28px] text-center">
-                  {i + 1}
+              {/* File size + Position row */}
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 bg-background border border-border rounded-md px-2.5 py-1 font-mono text-foreground">
+                  {formatFileSize(vf.file.size)}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  Posição:
+                  <span className="inline-flex items-center justify-center bg-background border border-border rounded-md px-2.5 py-1 font-mono text-foreground min-w-[28px] text-center">
+                    {i + 1}
+                  </span>
                 </span>
               </div>
 
