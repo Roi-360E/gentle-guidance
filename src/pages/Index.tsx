@@ -453,44 +453,68 @@ const Index = () => {
           />
         </div>
 
-        {/* Processing Settings - show after preprocess */}
-        {preprocessingDone && (
-          <ProcessingSettingsPanel
-            settings={settings}
-            onChange={setSettings}
-            disabled={isProcessing}
-          />
-        )}
+        {/* Generate section - always visible when files exist */}
+        {canProcess && (
+          <div className="max-w-md mx-auto space-y-5">
+            {/* Total card */}
+            <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">Total de Criativos que serão gerados:</p>
+              <p className="text-5xl font-extrabold text-primary">{totalCombinations}</p>
+              <p className="text-sm text-muted-foreground">
+                {hooks.length} gancho(s) × {bodies.length} corpo(s) × {ctas.length} CTA(s)
+              </p>
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-1">
+                <Loader2 className="w-3.5 h-3.5" />
+                <span>Tempo de espera: apenas 20 minutos</span>
+              </div>
+            </div>
 
-        {/* Generate / Cancel buttons - show after preprocess */}
-        {preprocessingDone && (
-          <div className="flex justify-center gap-3">
-            <Button
-              size="lg"
-              className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
-              disabled={!canProcess || isProcessing}
-              onClick={handleProcess}
-            >
-              {isProcessing ? (
-                <>Processando...</>
-              ) : (
-                <>
-                  <Zap className="w-5 h-5 mr-2" />
-                  Gerar {totalCombinations} Vídeos
-                </>
-              )}
-            </Button>
-            {isProcessing && (
+            {/* Processing Settings */}
+            {preprocessingDone && (
+              <ProcessingSettingsPanel
+                settings={settings}
+                onChange={setSettings}
+                disabled={isProcessing}
+              />
+            )}
+
+            {/* Generate / Cancel buttons */}
+            <div className="flex flex-col items-center gap-3">
               <Button
                 size="lg"
-                variant="destructive"
-                className="rounded-full"
-                onClick={handleCancel}
+                className="w-full px-12 py-6 text-base font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-xl gap-2 disabled:opacity-40"
+                disabled={!preprocessingDone || isProcessing}
+                onClick={handleProcess}
               >
-                <Square className="w-4 h-4 mr-2" />
-                Cancelar
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <Clapperboard className="w-5 h-5" />
+                    Gerar Criativos
+                  </>
+                )}
               </Button>
-            )}
+              {!preprocessingDone && canProcess && (
+                <p className="text-xs text-muted-foreground text-center">
+                  Pré-processe todas as seções acima para habilitar a geração
+                </p>
+              )}
+              {isProcessing && (
+                <Button
+                  size="lg"
+                  variant="destructive"
+                  className="rounded-xl w-full"
+                  onClick={handleCancel}
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Cancelar
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
