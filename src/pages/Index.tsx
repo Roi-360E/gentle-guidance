@@ -52,22 +52,23 @@ const Index = () => {
         setCurrentPlan(data.plan);
         setVideoCount(data.video_count);
       }
-      // Check for active testimonial access
-      const { data: testimonial } = await supabase
-        .from('testimonial_submissions')
-        .select('expires_at')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .maybeSingle();
-      if (testimonial && new Date(testimonial.expires_at) > new Date()) {
-        setCurrentPlan('enterprise');
-        // Also update video_usage if not already enterprise
-        if (data && data.plan !== 'enterprise') {
-          await supabase
-            .from('video_usage')
-            .update({ plan: 'enterprise' })
-            .eq('user_id', user.id)
-            .eq('month_year', monthYear);
+      // Check for active testimonial access (skip for admin to allow plan testing)
+      if (user.email !== 'matheuslaurindo900@gmail.com') {
+        const { data: testimonial } = await supabase
+          .from('testimonial_submissions')
+          .select('expires_at')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (testimonial && new Date(testimonial.expires_at) > new Date()) {
+          setCurrentPlan('enterprise');
+          if (data && data.plan !== 'enterprise') {
+            await supabase
+              .from('video_usage')
+              .update({ plan: 'enterprise' })
+              .eq('user_id', user.id)
+              .eq('month_year', monthYear);
+          }
         }
       }
       // Check if first month by comparing account creation
