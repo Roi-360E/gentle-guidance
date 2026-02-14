@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { VideoUploadZone } from '@/components/VideoUploadZone';
+import { VideoUploadZone, type VideoFileWithProgress } from '@/components/VideoUploadZone';
 import { CombinationList } from '@/components/CombinationList';
 import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
 import {
@@ -11,12 +11,12 @@ import {
   processQueue,
   defaultSettings,
   revokeBlobUrls,
-  type VideoFile,
+  getFFmpeg,
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
 import { processQueueCloud } from '@/lib/cloud-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2 } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
@@ -27,9 +27,9 @@ const Index = () => {
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [videoCount, setVideoCount] = useState(0);
   const [isFirstMonth, setIsFirstMonth] = useState(true);
-  const [hooks, setHooks] = useState<VideoFile[]>([]);
-  const [bodies, setBodies] = useState<VideoFile[]>([]);
-  const [ctas, setCtas] = useState<VideoFile[]>([]);
+  const [hooks, setHooks] = useState<VideoFileWithProgress[]>([]);
+  const [bodies, setBodies] = useState<VideoFileWithProgress[]>([]);
+  const [ctas, setCtas] = useState<VideoFileWithProgress[]>([]);
   const [combinations, setCombinations] = useState<Combination[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentProgress, setCurrentProgress] = useState(0);
@@ -38,6 +38,9 @@ const Index = () => {
   const [showExtras, setShowExtras] = useState(false);
   const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
   const [processingPhase, setProcessingPhase] = useState<string>('');
+  const [isPreprocessing, setIsPreprocessing] = useState(false);
+  const [preprocessingDone, setPreprocessingDone] = useState(false);
+  const [preprocessPhaseLabel, setPreprocessPhaseLabel] = useState('');
 
   // Load user plan data
   useEffect(() => {
@@ -97,8 +100,124 @@ const Index = () => {
     };
   }, []);
 
+  // Reset preprocessing state when files change
+  useEffect(() => {
+    setPreprocessingDone(false);
+  }, [hooks.length, bodies.length, ctas.length]);
+
   const totalCombinations = hooks.length * bodies.length * ctas.length;
   const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
+  const allFilesUploaded = hooks.length > 0 || bodies.length > 0 || ctas.length > 0;
+
+  // Pre-process files section by section with individual progress
+  const handlePreprocess = useCallback(async () => {
+    if (!canProcess) return;
+    setIsPreprocessing(true);
+    setPreprocessingDone(false);
+
+    try {
+      setPreprocessPhaseLabel('Carregando motor de vídeo...');
+      const ff = await getFFmpeg();
+
+      const sections: { label: string; files: VideoFileWithProgress[]; setter: React.Dispatch<React.SetStateAction<VideoFileWithProgress[]>> }[] = [
+        { label: 'Gancho', files: hooks, setter: setHooks },
+        { label: 'Corpo', files: bodies, setter: setBodies },
+        { label: 'CTA', files: ctas, setter: setCtas },
+      ];
+
+      for (const section of sections) {
+        setPreprocessPhaseLabel(`Pré-processando ${section.label}...`);
+
+        for (let i = 0; i < section.files.length; i++) {
+          const file = section.files[i];
+
+          // Update status to processing
+          section.setter(prev => {
+            const updated = [...prev];
+            updated[i] = { ...updated[i], preprocessStatus: 'processing', preprocessProgress: 0 };
+            return updated;
+          });
+
+          try {
+            // Simulate progress updates during pre-processing
+            const { fetchFile } = await import('@ffmpeg/util');
+            const rawName = `raw_preprocess_${i}.mp4`;
+            const outputName = `norm_${section.label.toLowerCase()}_${i}_${file.file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+
+            const data = await fetchFile(file.file);
+            await ff.writeFile(rawName, data);
+
+            // Update progress to 30%
+            section.setter(prev => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], preprocessProgress: 30 };
+              return updated;
+            });
+
+            const scale = settings.resolution !== 'original'
+              ? { '1080p': '1920:1080', '720p': '1280:720', '480p': '854:480', '360p': '640:360' }[settings.resolution]
+              : null;
+
+            const args: string[] = ['-i', rawName];
+            if (scale) {
+              args.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
+            }
+            args.push(
+              '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+              '-r', '30', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+              '-y', outputName
+            );
+
+            // Update progress to 60%
+            section.setter(prev => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], preprocessProgress: 60 };
+              return updated;
+            });
+
+            let exitCode = await ff.exec(args);
+
+            if (exitCode !== 0) {
+              // Retry without audio
+              const args2: string[] = ['-i', rawName];
+              if (scale) {
+                args2.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
+              }
+              args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-r', '30', '-an', '-y', outputName);
+              exitCode = await ff.exec(args2);
+              if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
+            }
+
+            try { await ff.deleteFile(rawName); } catch {}
+
+            // Update to done
+            section.setter(prev => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
+              return updated;
+            });
+
+          } catch (err) {
+            console.error(`Error preprocessing ${file.name}:`, err);
+            section.setter(prev => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], preprocessStatus: 'error', preprocessProgress: 0 };
+              return updated;
+            });
+          }
+        }
+      }
+
+      setPreprocessingDone(true);
+      setPreprocessPhaseLabel('');
+      toast.success('Todos os vídeos foram pré-processados com sucesso!');
+    } catch (err) {
+      console.error('Preprocessing failed:', err);
+      toast.error('Erro no pré-processamento: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsPreprocessing(false);
+    }
+  }, [canProcess, hooks, bodies, ctas, settings.resolution]);
 
   const handleProcess = useCallback(async () => {
     if (!canProcess) return;
@@ -124,7 +243,7 @@ const Index = () => {
     setCombinations(combos);
     prevCombosRef.current = combos;
     setIsProcessing(true);
-    setProcessingPhase('Carregando motor de vídeo...');
+    setProcessingPhase('Iniciando geração de combinações...');
     setCurrentProgress(0);
 
     const controller = new AbortController();
@@ -333,42 +452,87 @@ const Index = () => {
           />
         </div>
 
-        {/* Processing Settings */}
-        <ProcessingSettingsPanel
-          settings={settings}
-          onChange={setSettings}
-          disabled={isProcessing}
-        />
-
-        {/* Process / Cancel buttons */}
-        <div className="flex justify-center gap-3">
-          <Button
-            size="lg"
-            className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
-            disabled={!canProcess || isProcessing}
-            onClick={handleProcess}
-          >
-            {isProcessing ? (
-              <>Processando...</>
-            ) : (
-              <>
-                <Zap className="w-5 h-5 mr-2" />
-                Gerar {totalCombinations} Vídeos
-              </>
+        {/* Pre-process button */}
+        {canProcess && !preprocessingDone && (
+          <div className="flex flex-col items-center gap-3">
+            {isPreprocessing && preprocessPhaseLabel && (
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="font-medium">{preprocessPhaseLabel}</span>
+              </div>
             )}
-          </Button>
-          {isProcessing && (
             <Button
               size="lg"
-              variant="destructive"
-              className="rounded-full"
-              onClick={handleCancel}
+              className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
+              disabled={isPreprocessing}
+              onClick={handlePreprocess}
             >
-              <Square className="w-4 h-4 mr-2" />
-              Cancelar
+              {isPreprocessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Pré-processando...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 mr-2" />
+                  Enviar vídeos para processamento
+                </>
+              )}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Processing Settings - show after preprocess */}
+        {preprocessingDone && (
+          <ProcessingSettingsPanel
+            settings={settings}
+            onChange={setSettings}
+            disabled={isProcessing}
+          />
+        )}
+
+        {/* Generate / Cancel buttons - show after preprocess */}
+        {preprocessingDone && (
+          <div className="flex justify-center gap-3">
+            <Button
+              size="lg"
+              className="px-12 text-base font-semibold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full"
+              disabled={!canProcess || isProcessing}
+              onClick={handleProcess}
+            >
+              {isProcessing ? (
+                <>Processando...</>
+              ) : (
+                <>
+                  <Zap className="w-5 h-5 mr-2" />
+                  Gerar {totalCombinations} Vídeos
+                </>
+              )}
+            </Button>
+            {isProcessing && (
+              <Button
+                size="lg"
+                variant="destructive"
+                className="rounded-full"
+                onClick={handleCancel}
+              >
+                <Square className="w-4 h-4 mr-2" />
+                Cancelar
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Immediate processing phase indicator */}
+        {isProcessing && combinations.length > 0 && !combinations.some(c => c.status === 'processing') && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+              <span className="font-medium text-primary">{processingPhase || 'Preparando...'}</span>
+            </div>
+            <Progress value={undefined} className="h-2 animate-pulse" />
+          </div>
+        )}
 
         {/* Funcionalidades extras */}
         <div className="flex flex-col items-center gap-4">
@@ -413,17 +577,6 @@ const Index = () => {
             </div>
           )}
         </div>
-
-        {/* Immediate processing phase indicator */}
-        {isProcessing && combinations.length > 0 && !combinations.some(c => c.status === 'processing') && (
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3">
-            <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 text-primary animate-spin" />
-              <span className="font-medium text-primary">{processingPhase || 'Preparando...'}</span>
-            </div>
-            <Progress value={undefined} className="h-2 animate-pulse" />
-          </div>
-        )}
 
         {/* Results */}
         {combinations.length > 0 && (

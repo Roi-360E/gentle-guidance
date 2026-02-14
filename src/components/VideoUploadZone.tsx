@@ -1,14 +1,20 @@
 import { useCallback, useRef } from 'react';
-import { Upload, Film, X } from 'lucide-react';
+import { Upload, X, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import type { VideoFile } from '@/lib/video-processor';
+
+export interface VideoFileWithProgress extends VideoFile {
+  preprocessProgress?: number; // 0-100, undefined = not started
+  preprocessStatus?: 'idle' | 'processing' | 'done' | 'error';
+}
 
 interface VideoUploadZoneProps {
   label: string;
   description: string;
   maxFiles: number;
-  files: VideoFile[];
-  onFilesChange: (files: VideoFile[]) => void;
+  files: VideoFileWithProgress[];
+  onFilesChange: (files: VideoFileWithProgress[]) => void;
   accentColor: string;
 }
 
@@ -30,6 +36,8 @@ export function VideoUploadZone({
         file,
         name: file.name,
         url: URL.createObjectURL(file),
+        preprocessProgress: undefined,
+        preprocessStatus: 'idle' as const,
       }));
       onFilesChange([...files, ...toAdd]);
     },
@@ -58,12 +66,78 @@ export function VideoUploadZone({
         </span>
       </div>
 
+      {/* Square video thumbnail grid */}
+      {files.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          {files.map((vf, i) => (
+            <div key={i} className="relative group">
+              <div className="aspect-square rounded-lg overflow-hidden bg-muted border border-border relative">
+                <video
+                  src={vf.url}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                  onLoadedData={(e) => {
+                    // Seek to 1s for a better thumbnail
+                    const video = e.currentTarget;
+                    video.currentTime = 1;
+                  }}
+                />
+
+                {/* Overlay for status */}
+                {vf.preprocessStatus === 'processing' && (
+                  <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    <span className="text-xs font-medium text-primary">
+                      {vf.preprocessProgress != null ? `${vf.preprocessProgress}%` : 'Aguardando...'}
+                    </span>
+                  </div>
+                )}
+
+                {vf.preprocessStatus === 'done' && (
+                  <div className="absolute top-2 right-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-500 drop-shadow-md" />
+                  </div>
+                )}
+
+                {vf.preprocessStatus === 'error' && (
+                  <div className="absolute inset-0 bg-destructive/20 flex items-center justify-center">
+                    <span className="text-xs font-bold text-destructive">Erro</span>
+                  </div>
+                )}
+
+                {/* Remove button */}
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="absolute top-1 left-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => removeFile(i)}
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+
+              {/* Individual progress bar */}
+              {vf.preprocessStatus === 'processing' && (
+                <Progress
+                  value={vf.preprocessProgress ?? 0}
+                  className="h-1.5 mt-1"
+                />
+              )}
+
+              <p className="text-xs text-muted-foreground truncate mt-1">{vf.name}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {files.length < maxFiles && (
         <button
           onClick={() => inputRef.current?.click()}
-          className="w-full border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer"
+          className="w-full border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer"
         >
-          <Upload className="w-8 h-8" />
+          <Upload className="w-7 h-7" />
           <span className="text-sm font-medium">Clique para enviar vídeos</span>
           <span className="text-xs">MP4, MOV, WEBM</span>
         </button>
@@ -77,28 +151,6 @@ export function VideoUploadZone({
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
       />
-
-      {files.length > 0 && (
-        <div className="space-y-2">
-          {files.map((vf, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2"
-            >
-              <Film className="w-4 h-4 text-muted-foreground shrink-0" />
-              <span className="text-sm truncate flex-1">{vf.name}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => removeFile(i)}
-              >
-                <X className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
