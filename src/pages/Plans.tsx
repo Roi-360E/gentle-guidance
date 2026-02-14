@@ -309,29 +309,37 @@ export default function Plans() {
                           className="w-full"
                           variant="secondary"
                           onClick={async () => {
-                            const monthYear = new Date().toISOString().substring(0, 7);
-                            const { error } = await supabase
-                              .from('video_usage')
-                              .update({ plan: plan.id })
-                              .eq('user_id', user.id)
-                              .eq('month_year', monthYear);
-                            if (error) {
-                              console.error('Update error:', error);
-                              toast.error('Erro ao alterar plano: ' + error.message);
-                              return;
-                            }
-                            // Verify update was persisted
-                            const { data: verify } = await supabase
-                              .from('video_usage')
-                              .select('plan')
-                              .eq('user_id', user.id)
-                              .eq('month_year', monthYear)
-                              .single();
-                            if (verify?.plan === plan.id) {
+                            try {
+                              const monthYear = new Date().toISOString().substring(0, 7);
+                              console.log('[Admin] Tentando alterar plano para:', plan.id, 'user:', user.id, 'month:', monthYear);
+                              
+                              const { data: updateData, error, count } = await supabase
+                                .from('video_usage')
+                                .update({ plan: plan.id })
+                                .eq('user_id', user.id)
+                                .eq('month_year', monthYear)
+                                .select();
+                              
+                              console.log('[Admin] Resultado update:', { updateData, error, count });
+                              
+                              if (error) {
+                                console.error('[Admin] Erro no update:', error);
+                                toast.error('Erro ao alterar plano: ' + error.message);
+                                return;
+                              }
+                              
+                              if (!updateData || updateData.length === 0) {
+                                console.error('[Admin] Nenhuma linha atualizada! Verifique user_id e month_year.');
+                                toast.error('Nenhum registro encontrado para atualizar.');
+                                return;
+                              }
+                              
+                              console.log('[Admin] Plano atualizado com sucesso:', updateData[0]?.plan);
                               setCurrentPlan(plan.id);
                               toast.success(`Plano alterado para ${plan.name}!`);
-                            } else {
-                              toast.error('Falha ao persistir a alteração do plano.');
+                            } catch (err) {
+                              console.error('[Admin] Erro inesperado:', err);
+                              toast.error('Erro inesperado ao alterar plano.');
                             }
                           }}
                         >
