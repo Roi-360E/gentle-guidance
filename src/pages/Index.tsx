@@ -16,7 +16,8 @@ import {
   type ProcessingSettings,
 } from '@/lib/video-processor';
 import { processQueueCloud } from '@/lib/cloud-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
 
@@ -36,6 +37,7 @@ const Index = () => {
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
   const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
+  const [processingPhase, setProcessingPhase] = useState<string>('');
 
   // Load user plan data
   useEffect(() => {
@@ -122,6 +124,8 @@ const Index = () => {
     setCombinations(combos);
     prevCombosRef.current = combos;
     setIsProcessing(true);
+    setProcessingPhase('Carregando motor de vídeo...');
+    setCurrentProgress(0);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -150,6 +154,7 @@ const Index = () => {
     // Only update state if this controller is still active (not replaced by a new run)
     if (abortRef.current === controller) {
       setIsProcessing(false);
+      setProcessingPhase('');
       abortRef.current = null;
 
       if (!controller.signal.aborted) {
@@ -171,6 +176,7 @@ const Index = () => {
     abortRef.current.abort();
     abortRef.current = null;
     setIsProcessing(false);
+    setProcessingPhase('');
     setCurrentProgress(0);
     toast.info('Cancelamento solicitado...');
   };
@@ -407,6 +413,17 @@ const Index = () => {
             </div>
           )}
         </div>
+
+        {/* Immediate processing phase indicator */}
+        {isProcessing && combinations.length > 0 && !combinations.some(c => c.status === 'processing') && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+              <span className="font-medium text-primary">{processingPhase || 'Preparando...'}</span>
+            </div>
+            <Progress value={undefined} className="h-2 animate-pulse" />
+          </div>
+        )}
 
         {/* Results */}
         {combinations.length > 0 && (
