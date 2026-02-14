@@ -16,7 +16,7 @@ import {
   type ProcessingSettings,
 } from '@/lib/video-processor';
 import { processQueueCloud } from '@/lib/cloud-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2 } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
@@ -37,6 +37,7 @@ const Index = () => {
   const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
   const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
+  const [videoFormat, setVideoFormat] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [processingPhase, setProcessingPhase] = useState<string>('');
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
@@ -376,6 +377,36 @@ const Index = () => {
           >
             {currentPlan === 'free' ? 'Fazer Upgrade' : 'Gerenciar Plano'}
           </Button>
+        </div>
+
+        {/* Video Format Selector */}
+        <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-5 space-y-3">
+          <p className="font-bold text-foreground text-center">Formato do Vídeo</p>
+          <div className="grid grid-cols-3 gap-3">
+            {([
+              { value: '9:16' as const, label: 'Vertical', sub: '9:16', icon: Smartphone },
+              { value: '16:9' as const, label: 'Horizontal', sub: '16:9', icon: Monitor },
+              { value: '1:1' as const, label: 'Feed', sub: '1:1', icon: LayoutGrid },
+            ]).map((fmt) => {
+              const isActive = videoFormat === fmt.value;
+              const Icon = fmt.icon;
+              return (
+                <button
+                  key={fmt.value}
+                  onClick={() => setVideoFormat(fmt.value)}
+                  className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
+                    isActive
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                  }`}
+                >
+                  <Icon className="w-6 h-6" />
+                  <span className="text-sm font-semibold">{fmt.label}</span>
+                  <span className="text-xs opacity-70">{fmt.sub}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Stats */}
