@@ -310,13 +310,29 @@ export default function Plans() {
                           variant="secondary"
                           onClick={async () => {
                             const monthYear = new Date().toISOString().substring(0, 7);
-                            await supabase
+                            const { error } = await supabase
                               .from('video_usage')
                               .update({ plan: plan.id })
                               .eq('user_id', user.id)
                               .eq('month_year', monthYear);
-                            setCurrentPlan(plan.id);
-                            toast.success(`Plano alterado para ${plan.name}!`);
+                            if (error) {
+                              console.error('Update error:', error);
+                              toast.error('Erro ao alterar plano: ' + error.message);
+                              return;
+                            }
+                            // Verify update was persisted
+                            const { data: verify } = await supabase
+                              .from('video_usage')
+                              .select('plan')
+                              .eq('user_id', user.id)
+                              .eq('month_year', monthYear)
+                              .single();
+                            if (verify?.plan === plan.id) {
+                              setCurrentPlan(plan.id);
+                              toast.success(`Plano alterado para ${plan.name}!`);
+                            } else {
+                              toast.error('Falha ao persistir a alteração do plano.');
+                            }
                           }}
                         >
                           ⚡ Ativar {plan.name}
