@@ -444,7 +444,7 @@ export async function processQueue(
 
     console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
     const queue = [...combinations];
-
+    const retryCount = new Map<number, number>();
     while (queue.length > 0) {
       checkAbort(abortSignal);
 
@@ -494,11 +494,20 @@ export async function processQueue(
         console.groupEnd();
 
         if (errorMsg.includes('memory') || errorMsg.includes('out of bounds')) {
-          console.log('%c[VideoProcessor] ♻️ OOM detected — recycling FFmpeg', 'color: #f59e0b; font-weight: bold;');
-          await terminateFFmpeg();
-          ff = await getFFmpeg();
-          if (settings.preProcess) {
-            await preProcessAllInputs(ff, combinations, settings, undefined, abortSignal);
+          const retries = retryCount.get(combo.id) || 0;
+          if (retries < 2) {
+            console.log(`%c[VideoProcessor] ♻️ OOM detected — recycling FFmpeg and retrying combo ${combo.id} (attempt ${retries + 1}/2)`, 'color: #f59e0b; font-weight: bold;');
+            retryCount.set(combo.id, retries + 1);
+            await terminateFFmpeg();
+            ff = await getFFmpeg();
+            if (settings.preProcess) {
+              await preProcessAllInputs(ff, combinations, settings, undefined, abortSignal);
+            }
+            combo.status = 'pending';
+            combo.errorMessage = undefined;
+            queue.unshift(combo);
+          } else {
+            console.error(`[VideoProcessor] ❌ Combo ${combo.id} failed after 2 retries`);
           }
         }
       }
