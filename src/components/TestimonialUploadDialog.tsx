@@ -40,50 +40,39 @@ export function TestimonialUploadDialog({ open, onOpenChange, userId, onSuccess 
     setProgress(0);
 
     try {
-      const ext = file.name.split('.').pop();
-      const filePath = `${userId}/${Date.now()}.${ext}`;
-
-      // Simulate progress since supabase upload doesn't have progress callback
       const progressInterval = setInterval(() => {
-        setProgress(prev => Math.min(prev + Math.random() * 15, 90));
-      }, 300);
+        setProgress(prev => Math.min(prev + Math.random() * 10, 85));
+      }, 400);
 
-      const { error: uploadError } = await supabase.storage
-        .from('testimonials')
-        .upload(filePath, file, { cacheControl: '3600', upsert: false });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        clearInterval(progressInterval);
+        toast.error('Sessão expirada. Faça login novamente.');
+        setUploading(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('video', file);
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/upload-testimonial`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
 
       clearInterval(progressInterval);
 
-      if (uploadError) {
-        toast.error('Erro ao enviar o vídeo. Tente novamente.');
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result.error || 'Erro ao enviar o vídeo. Tente novamente.');
         setUploading(false);
         setProgress(0);
         return;
       }
-
-      setProgress(95);
-
-      // Grant 6 months access
-      const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + 6);
-
-      const { error: subError } = await supabase
-        .from('testimonial_submissions')
-        .insert({ user_id: userId, expires_at: expiresAt.toISOString() });
-
-      if (subError) {
-        toast.error('Erro ao ativar o acesso. Entre em contato com o suporte.');
-        setUploading(false);
-        return;
-      }
-
-      // Update plan
-      const monthYear = new Date().toISOString().slice(0, 7);
-      await supabase
-        .from('video_usage')
-        .update({ plan: 'enterprise' })
-        .eq('user_id', userId)
-        .eq('month_year', monthYear);
 
       setProgress(100);
       setDone(true);
