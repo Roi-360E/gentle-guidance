@@ -131,7 +131,7 @@ serve(async (req) => {
 
     // Initiate resumable upload
     const initRes = await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
       {
         method: "POST",
         headers: {
