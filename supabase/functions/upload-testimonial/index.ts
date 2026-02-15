@@ -7,71 +7,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_DRIVE_FOLDER_ID = "1Ji-Doeylr51hy_wLuMXBQ-rtgWq3ohN4";
-
-async function getGoogleAccessToken(serviceAccountKey: any): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: "RS256", typ: "JWT" };
-  const payload = {
-    iss: serviceAccountKey.client_email,
-    scope: "https://www.googleapis.com/auth/drive.file",
-    aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
-  };
-
-  const encoder = new TextEncoder();
-  const toBase64Url = (data: Uint8Array) =>
-    btoa(String.fromCharCode(...data))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-
-  const headerB64 = toBase64Url(encoder.encode(JSON.stringify(header)));
-  const payloadB64 = toBase64Url(encoder.encode(JSON.stringify(payload)));
-  const signInput = `${headerB64}.${payloadB64}`;
-
-  // Import the private key
-  const pemContent = serviceAccountKey.private_key
-    .replace(/-----BEGIN PRIVATE KEY-----/, "")
-    .replace(/-----END PRIVATE KEY-----/, "")
-    .replace(/\n/g, "");
-  const binaryKey = Uint8Array.from(atob(pemContent), (c) => c.charCodeAt(0));
-
-  const cryptoKey = await crypto.subtle.importKey(
-    "pkcs8",
-    binaryKey,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-
-  const signature = new Uint8Array(
-    await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, encoder.encode(signInput))
-  );
-  const signatureB64 = toBase64Url(signature);
-  const jwt = `${signInput}.${signatureB64}`;
-
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
-  });
-
-  const tokenData = await tokenRes.json();
-  if (!tokenRes.ok) {
-    throw new Error(`Google token error: ${JSON.stringify(tokenData)}`);
-  }
-  return tokenData.access_token;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify user auth
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -94,7 +35,6 @@ serve(async (req) => {
       });
     }
 
-    // Parse multipart form data
     const formData = await req.formData();
     const file = formData.get("video") as File;
     if (!file) {
@@ -104,78 +44,29 @@ serve(async (req) => {
       });
     }
 
-    // Get Google access token
-    const serviceAccountKeyRaw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-    if (!serviceAccountKeyRaw) {
-      throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not configured");
-    }
-    console.log("Service account key starts with:", serviceAccountKeyRaw.substring(0, 30));
-    console.log("Service account key length:", serviceAccountKeyRaw.length);
-    let serviceAccountKey;
-    try {
-      serviceAccountKey = JSON.parse(serviceAccountKeyRaw);
-    } catch (parseErr) {
-      throw new Error(`GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON. Starts with: "${serviceAccountKeyRaw.substring(0, 20)}...". Make sure you pasted the FULL content of the .json key file.`);
-    }
-    if (!serviceAccountKey.client_email || !serviceAccountKey.private_key) {
-      throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is missing client_email or private_key fields. Make sure it's the complete service account JSON.");
-    }
-    const accessToken = await getGoogleAccessToken(serviceAccountKey);
-
-    // Upload to Google Drive using resumable upload
-    const fileName = `testimonial_${user.id}_${Date.now()}_${file.name}`;
-    const metadata = {
-      name: fileName,
-      parents: [GOOGLE_DRIVE_FOLDER_ID],
-    };
-
-    // Initiate resumable upload
-    const initRes = await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(metadata),
-      }
-    );
-
-    if (!initRes.ok) {
-      const errText = await initRes.text();
-      throw new Error(`Drive init error [${initRes.status}]: ${errText}`);
-    }
-
-    const uploadUrl = initRes.headers.get("Location");
-    if (!uploadUrl) throw new Error("No upload URL returned from Drive");
-
-    // Upload file content
+    // Upload to Supabase Storage (testimonials bucket)
+    const fileName = `${user.id}/testimonial_${Date.now()}_${file.name}`;
     const fileBytes = await file.arrayBuffer();
-    const uploadRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type || "video/mp4",
-        "Content-Length": fileBytes.byteLength.toString(),
-      },
-      body: fileBytes,
-    });
-
-    if (!uploadRes.ok) {
-      const errText = await uploadRes.text();
-      throw new Error(`Drive upload error [${uploadRes.status}]: ${errText}`);
-    }
-
-    const driveFile = await uploadRes.json();
-
-    // Grant 6 months enterprise access
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 6);
 
     const supabaseAdmin = createClient(
       supabaseUrl,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from("testimonials")
+      .upload(fileName, fileBytes, {
+        contentType: file.type || "video/mp4",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`Storage upload error: ${uploadError.message}`);
+    }
+
+    // Grant 6 months enterprise access
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + 6);
 
     await supabaseAdmin
       .from("testimonial_submissions")
@@ -189,7 +80,7 @@ serve(async (req) => {
       .eq("month_year", monthYear);
 
     return new Response(
-      JSON.stringify({ success: true, fileId: driveFile.id }),
+      JSON.stringify({ success: true, path: uploadData.path }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
