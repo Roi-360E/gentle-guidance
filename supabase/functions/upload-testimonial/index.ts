@@ -109,7 +109,17 @@ serve(async (req) => {
     if (!serviceAccountKeyRaw) {
       throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not configured");
     }
-    const serviceAccountKey = JSON.parse(serviceAccountKeyRaw);
+    console.log("Service account key starts with:", serviceAccountKeyRaw.substring(0, 30));
+    console.log("Service account key length:", serviceAccountKeyRaw.length);
+    let serviceAccountKey;
+    try {
+      serviceAccountKey = JSON.parse(serviceAccountKeyRaw);
+    } catch (parseErr) {
+      throw new Error(`GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON. Starts with: "${serviceAccountKeyRaw.substring(0, 20)}...". Make sure you pasted the FULL content of the .json key file.`);
+    }
+    if (!serviceAccountKey.client_email || !serviceAccountKey.private_key) {
+      throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is missing client_email or private_key fields. Make sure it's the complete service account JSON.");
+    }
     const accessToken = await getGoogleAccessToken(serviceAccountKey);
 
     // Upload to Google Drive using resumable upload
