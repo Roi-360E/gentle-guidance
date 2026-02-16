@@ -10,7 +10,6 @@ import Auth from "./pages/Auth";
 import SubtitleEditor from "./pages/SubtitleEditor";
 import Plans from "./pages/Plans";
 import NotFound from "./pages/NotFound";
-import GuiaDeploy from "./pages/GuiaDeploy";
 
 const queryClient = new QueryClient();
 
@@ -26,7 +25,6 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
             <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
-            <Route path="/guia-deploy" element={<GuiaDeploy />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
