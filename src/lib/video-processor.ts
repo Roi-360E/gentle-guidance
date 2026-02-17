@@ -4,7 +4,23 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 let processedSinceRestart = 0;
-const RESTART_EVERY = 25;
+const RESTART_EVERY = 50;
+
+// ─── fetchFile cache (avoids re-reading the same source file multiple times) ──
+const fetchFileCache = new Map<File, Uint8Array>();
+
+async function fetchFileCached(file: File): Promise<Uint8Array> {
+  const cached = fetchFileCache.get(file);
+  if (cached) return cached;
+  const data = await fetchFile(file);
+  const arr = new Uint8Array(data);
+  fetchFileCache.set(file, arr);
+  return arr;
+}
+
+function clearFetchFileCache(): void {
+  fetchFileCache.clear();
+}
 
 const CORE_VERSION = '0.12.10';
 const CDN_BASES = [
@@ -62,6 +78,7 @@ export async function terminateFFmpeg(): Promise<void> {
     processedSinceRestart = 0;
     preProcessCache.clear();
     cacheCounter = 0;
+    clearFetchFileCache();
     console.log('[VideoProcessor] 🔴 FFmpeg terminated');
   }
 }
@@ -197,7 +214,7 @@ async function preProcessInputCached(
   checkAbort(abortSignal);
 
   const outputName = getCacheKey(file);
-  const data = await fetchFile(file);
+  const data = await fetchFileCached(file);
   await ff.writeFile(rawName, data);
 
   const scale = getScale(settings);
@@ -205,12 +222,13 @@ async function preProcessInputCached(
 
   const args: string[] = ['-i', rawName];
   if (scale) {
-    args.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
+    args.push('-vf', `scale=${scale}`);
   }
   args.push(
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
-    '-crf', '28',
+    '-tune', 'fastdecode',
+    '-crf', '30',
     '-r', '30',
     '-c:a', 'aac',
     '-b:a', '128k',
@@ -227,9 +245,9 @@ async function preProcessInputCached(
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
     const args2: string[] = ['-i', rawName];
     if (scale) {
-      args2.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
+      args2.push('-vf', `scale=${scale}`);
     }
-    args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-r', '30', '-an', '-y', outputName);
+    args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-r', '30', '-an', '-y', outputName);
     exitCode = await ff.exec(args2);
     checkAbort(abortSignal);
     if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
@@ -322,7 +340,7 @@ export async function concatenateVideos(
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
           '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
           '-y', outputFile,
         ]);
         checkAbort(abortSignal);
@@ -334,7 +352,7 @@ export async function concatenateVideos(
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
           '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
           '-map', '[outv]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
           '-y', outputFile,
         ]);
         checkAbort(abortSignal);
@@ -350,9 +368,9 @@ export async function concatenateVideos(
       return URL.createObjectURL(blob);
 
     } else {
-      const hookData = await fetchFile(combination.hook.file);
-      const bodyData = await fetchFile(combination.body.file);
-      const ctaData = await fetchFile(combination.cta.file);
+      const hookData = await fetchFileCached(combination.hook.file);
+      const bodyData = await fetchFileCached(combination.body.file);
+      const ctaData = await fetchFileCached(combination.cta.file);
       await ff.writeFile('hook_raw.mp4', hookData);
       await ff.writeFile('body_raw.mp4', bodyData);
       await ff.writeFile('cta_raw.mp4', ctaData);
@@ -365,12 +383,12 @@ export async function concatenateVideos(
         exitCode = await ff.exec([
           '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
           '-filter_complex',
-          `[0:v]scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0];` +
-          `[1:v]scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2,setsar=1[v1];` +
-          `[2:v]scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2,setsar=1[v2];` +
+          `[0:v]scale=${scale},setsar=1[v0];` +
+          `[1:v]scale=${scale},setsar=1[v1];` +
+          `[2:v]scale=${scale},setsar=1[v2];` +
           `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
           '-y', outputFile,
         ]);
       } else {
@@ -378,7 +396,7 @@ export async function concatenateVideos(
           '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
           '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
           '-y', outputFile,
         ]);
       }
@@ -390,12 +408,12 @@ export async function concatenateVideos(
           exitCode = await ff.exec([
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex',
-            `[0:v]scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0];` +
-            `[1:v]scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2,setsar=1[v1];` +
-            `[2:v]scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2,setsar=1[v2];` +
+            `[0:v]scale=${scale},setsar=1[v0];` +
+            `[1:v]scale=${scale},setsar=1[v1];` +
+            `[2:v]scale=${scale},setsar=1[v2];` +
             `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
             '-y', outputFile,
           ]);
         } else {
@@ -403,7 +421,7 @@ export async function concatenateVideos(
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
             '-y', outputFile,
           ]);
         }
@@ -456,6 +474,17 @@ export async function processQueue(
   abortSignal?.addEventListener('abort', onAbort, { once: true });
 
   try {
+    // Phase 0: Pre-load all unique source files into memory cache
+    const uniqueFiles = new Set<File>();
+    for (const c of combinations) {
+      uniqueFiles.add(c.hook.file);
+      uniqueFiles.add(c.body.file);
+      uniqueFiles.add(c.cta.file);
+    }
+    console.log(`[VideoProcessor] 📦 Pre-loading ${uniqueFiles.size} unique files into memory...`);
+    await Promise.all(Array.from(uniqueFiles).map(f => fetchFileCached(f)));
+    console.log('[VideoProcessor] ✅ All files pre-loaded');
+
     let ff = await getFFmpeg();
 
     if (settings.preProcess) {
@@ -543,6 +572,7 @@ export async function processQueue(
 
     if (!abortSignal?.aborted) {
       await clearCache();
+      clearFetchFileCache();
     }
   } finally {
     abortSignal?.removeEventListener('abort', onAbort);
