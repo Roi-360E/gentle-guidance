@@ -12,6 +12,7 @@ import {
   defaultSettings,
   revokeBlobUrls,
   getFFmpeg,
+  preProcessInputCached,
   type Combination,
   type ProcessingSettings,
   type VideoFormat,
@@ -146,58 +147,22 @@ const Index = () => {
         });
 
         try {
-          const { fetchFile } = await import('@ffmpeg/util');
-          const rawName = `raw_preprocess_${i}.mp4`;
-          const outputName = `norm_${sectionLabel.toLowerCase()}_${i}_${file.file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-
-          const data = await fetchFile(file.file);
-          await ff.writeFile(rawName, data);
-
           setter(prev => {
             const updated = [...prev];
             updated[i] = { ...updated[i], preprocessProgress: 30 };
             return updated;
           });
 
-          // Build scale based on format + resolution
-          const formatResMap: Record<string, Record<string, string>> = {
-            '16:9': { '1080p': '1920:1080', '720p': '1280:720', '480p': '854:480', '360p': '640:360' },
-            '9:16': { '1080p': '1080:1920', '720p': '720:1280', '480p': '480:854', '360p': '360:640' },
-            '1:1':  { '1080p': '1080:1080', '720p': '720:720', '480p': '480:480', '360p': '360:360' },
-          };
-          const scale = settings.resolution !== 'original'
-            ? formatResMap[settings.videoFormat]?.[settings.resolution] ?? null
-            : null;
-
-          const args: string[] = ['-i', rawName];
-          if (scale) {
-            args.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
-          }
-          args.push(
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-            '-r', '30', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-            '-y', outputName
-          );
+          // Use the shared preProcessInputCached so the cache is populated
+          // for the concatenation phase
+          const rawName = `raw_section_${sectionLabel.toLowerCase()}_${i}.mp4`;
+          await preProcessInputCached(ff, file.file, rawName, settings);
 
           setter(prev => {
             const updated = [...prev];
-            updated[i] = { ...updated[i], preprocessProgress: 60 };
+            updated[i] = { ...updated[i], preprocessProgress: 80 };
             return updated;
           });
-
-          let exitCode = await ff.exec(args);
-
-          if (exitCode !== 0) {
-            const args2: string[] = ['-i', rawName];
-            if (scale) {
-              args2.push('-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`);
-            }
-            args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-r', '30', '-an', '-y', outputName);
-            exitCode = await ff.exec(args2);
-            if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
-          }
-
-          try { await ff.deleteFile(rawName); } catch {}
 
           setter(prev => {
             const updated = [...prev];
@@ -214,15 +179,28 @@ const Index = () => {
         }
       }
 
-      setDone(true);
-      toast.success(`${sectionLabel}: pré-processamento concluído!`);
+      // Only mark done if all files succeeded
+      const allSucceeded = files.every((_, idx) => {
+        // We need to check the latest state
+        return true; // We'll check via setter
+      });
+      setter(prev => {
+        const hasFailed = prev.some(f => f.preprocessStatus === 'error');
+        if (!hasFailed) {
+          setDone(true);
+          toast.success(`${sectionLabel}: pré-processamento concluído!`);
+        } else {
+          toast.error(`${sectionLabel}: alguns vídeos falharam no pré-processamento.`);
+        }
+        return prev;
+      });
     } catch (err) {
       console.error('Preprocessing failed:', err);
       toast.error('Erro no pré-processamento: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setPreprocessingSection(null);
     }
-  }, [settings.resolution, settings.videoFormat]);
+  }, [settings]);
 
   const handleProcess = useCallback(async () => {
     if (!canProcess) return;
@@ -486,7 +464,7 @@ const Index = () => {
             maxFiles={2}
             files={ctas}
             onFilesChange={setCtas}
-            accentColor="bg-destructive"
+            accentColor="bg-primary"
             isPreprocessing={preprocessingSection === 'CTA'}
             onPreprocess={() => handlePreprocessSection('CTA', ctas, setCtas, setCtasPreprocessed)}
             preprocessLabel="Pré-processando CTAs..."

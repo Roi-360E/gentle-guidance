@@ -198,7 +198,7 @@ function getCacheKey(file: File): string {
   return `norm_${cacheCounter++}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
 }
 
-async function preProcessInputCached(
+export async function preProcessInputCached(
   ff: FFmpeg,
   file: File,
   rawName: string,
