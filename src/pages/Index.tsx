@@ -255,6 +255,12 @@ const Index = () => {
     revokeBlobUrls(combinations);
 
     const combos = generateCombinations(hooks, bodies, ctas);
+    const expectedTotal = hooks.length * bodies.length * ctas.length;
+    console.log(`%c[EscalaX] 🎯 Gerando ${combos.length} combinações (esperado: ${expectedTotal} = ${hooks.length}H × ${bodies.length}B × ${ctas.length}C)`, 'color: #3b82f6; font-weight: bold; font-size: 14px;');
+    if (combos.length !== expectedTotal) {
+      toast.error(`Erro: esperado ${expectedTotal} combinações mas gerou ${combos.length}. Tente novamente.`);
+      return;
+    }
     setCombinations(combos);
     prevCombosRef.current = combos;
     setIsProcessing(true);

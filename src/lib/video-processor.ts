@@ -496,15 +496,30 @@ export async function processQueue(
 
     checkAbort(abortSignal);
 
-    console.log('[VideoProcessor] ═══ Phase 2: Concatenating combinations ═══');
-    const queue = [...combinations];
+    // Validate: log expected combination count
+    const expectedCount = combinations.length;
+    console.log(
+      `%c[VideoProcessor] ═══ Phase 2: Concatenating ${expectedCount} combinations (ALL must succeed) ═══`,
+      'color: #3b82f6; font-weight: bold; font-size: 14px;'
+    );
+
+    const MAX_RETRIES = 5;
     const retryCount = new Map<number, number>();
-    while (queue.length > 0) {
+
+    // Process ALL combinations, retrying failures until all succeed or max retries hit
+    for (let i = 0; i < combinations.length; i++) {
       checkAbort(abortSignal);
 
-      const combo = queue.shift()!;
+      const combo = combinations[i];
+      // Skip already done combos (from previous retry rounds)
+      if (combo.status === 'done') continue;
+
       combo.status = 'processing';
+      combo.errorMessage = undefined;
       onUpdate([...combinations]);
+
+      const attempt = (retryCount.get(combo.id) || 0) + 1;
+      const attemptLabel = attempt > 1 ? ` (tentativa ${attempt}/${MAX_RETRIES})` : '';
 
       try {
         if (!settings.preProcess) {
@@ -512,6 +527,7 @@ export async function processQueue(
         }
 
         onProgressItem(5);
+        console.log(`[VideoProcessor] 🎬 Processando combo ${combo.id}/${expectedCount}: ${combo.outputName}${attemptLabel}`);
         const url = await concatenateVideos(combo, settings, onProgressItem, abortSignal);
         checkAbort(abortSignal);
         if (!url) throw new Error('URL de saída vazia');
@@ -524,51 +540,43 @@ export async function processQueue(
         if (abortSignal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
           combo.status = 'pending';
           onUpdate([...combinations]);
-          break;
+          return; // exit entirely on abort
         }
-        combo.status = 'error';
+
         const errorMsg = err instanceof Error ? err.message : String(err);
-        const errorStack = err instanceof Error ? err.stack : '';
-        combo.errorMessage = errorMsg;
+        console.error(`[VideoProcessor] ❌ Combo ${combo.id} falhou${attemptLabel}: ${errorMsg}`);
 
-        console.group(`%c❌ ERRO — Combo ${combo.id} / ${combo.outputName}`, 'color: #ef4444; font-weight: bold; font-size: 13px;');
-        console.error('Mensagem:', errorMsg);
-        if (errorStack) console.error('Stack trace:', errorStack);
-        console.error('Detalhes do combo:', JSON.stringify({
-          id: combo.id,
-          hook: combo.hook.file.name,
-          body: combo.body.file.name,
-          cta: combo.cta.file.name,
-          hookSize: `${(combo.hook.file.size / 1024 / 1024).toFixed(1)}MB`,
-          bodySize: `${(combo.body.file.size / 1024 / 1024).toFixed(1)}MB`,
-          ctaSize: `${(combo.cta.file.size / 1024 / 1024).toFixed(1)}MB`,
-        }, null, 2));
-        console.error('Settings:', JSON.stringify(settings, null, 2));
-        console.error('Progresso da fila:', `${combinations.filter(c => c.status === 'done').length} concluídos, ${combinations.filter(c => c.status === 'error').length} erros, ${combinations.filter(c => c.status === 'pending').length} pendentes`);
-        console.groupEnd();
-
-        if (errorMsg.includes('memory') || errorMsg.includes('out of bounds')) {
-          const retries = retryCount.get(combo.id) || 0;
-          if (retries < 2) {
-            console.log(`%c[VideoProcessor] ♻️ OOM detected — recycling FFmpeg and retrying combo ${combo.id} (attempt ${retries + 1}/2)`, 'color: #f59e0b; font-weight: bold;');
-            retryCount.set(combo.id, retries + 1);
-            await terminateFFmpeg();
-            ff = await getFFmpeg();
-            if (settings.preProcess) {
-              await preProcessAllInputs(ff, combinations, settings, undefined, abortSignal);
-            }
-            combo.status = 'pending';
-            combo.errorMessage = undefined;
-            queue.unshift(combo);
-          } else {
-            console.error(`[VideoProcessor] ❌ Combo ${combo.id} failed after 2 retries`);
+        const retries = retryCount.get(combo.id) || 0;
+        if (retries < MAX_RETRIES - 1) {
+          // Retry: recycle FFmpeg and rebuild cache if needed
+          console.log(`%c[VideoProcessor] ♻️ Reciclando FFmpeg e retentando combo ${combo.id} (${retries + 2}/${MAX_RETRIES})`, 'color: #f59e0b; font-weight: bold;');
+          retryCount.set(combo.id, retries + 1);
+          await terminateFFmpeg();
+          ff = await getFFmpeg();
+          if (settings.preProcess) {
+            await preProcessAllInputs(ff, combinations, settings, undefined, abortSignal);
           }
+          combo.status = 'pending';
+          combo.errorMessage = undefined;
+          i--; // retry same index
+        } else {
+          combo.status = 'error';
+          combo.errorMessage = errorMsg;
+          console.error(`[VideoProcessor] ❌ Combo ${combo.id} falhou após ${MAX_RETRIES} tentativas`);
         }
       }
 
       onUpdate([...combinations]);
       onProgressItem(0);
     }
+
+    // Final validation: check all combos are done
+    const doneCount = combinations.filter(c => c.status === 'done').length;
+    const errorCount = combinations.filter(c => c.status === 'error').length;
+    console.log(
+      `%c[VideoProcessor] 📊 Resultado final: ${doneCount}/${expectedCount} concluídos, ${errorCount} erros`,
+      doneCount === expectedCount ? 'color: #22c55e; font-weight: bold; font-size: 14px;' : 'color: #ef4444; font-weight: bold; font-size: 14px;'
+    );
 
     if (!abortSignal?.aborted) {
       await clearCache();
