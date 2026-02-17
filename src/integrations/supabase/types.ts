@@ -146,6 +146,7 @@ export type Database = {
           id: string
           month_year: string
           plan: string
+          token_balance: number
           updated_at: string
           user_id: string
           video_count: number
@@ -155,6 +156,7 @@ export type Database = {
           id?: string
           month_year: string
           plan?: string
+          token_balance?: number
           updated_at?: string
           user_id: string
           video_count?: number
@@ -164,6 +166,7 @@ export type Database = {
           id?: string
           month_year?: string
           plan?: string
+          token_balance?: number
           updated_at?: string
           user_id?: string
           video_count?: number

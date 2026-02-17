@@ -23,8 +23,9 @@ const plans = [
     id: 'free',
     name: 'Gratuito',
     price: 0,
+    tokens: 50,
     icon: Sparkles,
-    features: ['100 vídeos somente no 1º mês', 'Processamento local', 'Suporte básico'],
+    features: ['50 tokens iniciais', 'Processamento local', 'Suporte básico'],
     color: 'text-muted-foreground',
     bgColor: 'bg-muted/50',
   },
@@ -32,8 +33,9 @@ const plans = [
     id: 'professional',
     name: 'Profissional',
     price: 37.90,
+    tokens: 200,
     icon: Zap,
-    features: ['100 vídeos/mês', 'Processamento local', 'Suporte prioritário'],
+    features: ['200 tokens/mês', 'Rollover de tokens', 'Processamento local', 'Suporte prioritário'],
     color: 'text-primary',
     bgColor: 'bg-primary/10',
     popular: true,
@@ -42,8 +44,9 @@ const plans = [
     id: 'enterprise',
     name: 'Empresarial',
     price: 197,
+    tokens: Infinity,
     icon: Crown,
-    features: ['Vídeos ilimitados', 'Processamento em nuvem', 'Legendas com IA', 'API dedicada', 'Suporte VIP'],
+    features: ['Tokens ilimitados', 'Processamento em nuvem', 'Legendas com IA', 'API dedicada', 'Suporte VIP'],
     color: 'text-accent',
     bgColor: 'bg-accent/10',
   },
@@ -285,6 +288,9 @@ export default function Plans() {
                     ) : (
                       <span className="text-3xl font-bold">Grátis</span>
                     )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {plan.tokens === Infinity ? '∞ tokens' : `${plan.tokens} tokens`}
+                    </p>
                   </div>
                 </CardHeader>
 
