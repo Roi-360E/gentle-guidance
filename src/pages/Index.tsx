@@ -20,7 +20,8 @@ import {
 } from '@/lib/video-processor';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import { processQueueCloud } from '@/lib/cloud-processor';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid } from 'lucide-react';
+import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
@@ -43,6 +44,7 @@ const Index = () => {
   const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [processingPhase, setProcessingPhase] = useState<string>('');
+  const [tokenBalance, setTokenBalance] = useState<number>(50);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
   const [bodiesPreprocessed, setBodiesPreprocessed] = useState(false);
@@ -66,6 +68,7 @@ const Index = () => {
       if (data) {
         setCurrentPlan(data.plan);
         setVideoCount(data.video_count);
+        setTokenBalance((data as any).token_balance ?? 50);
       }
       // Check for active testimonial access (skip for admin to allow plan testing)
       if (user.email !== 'matheuslaurindo900@gmail.com') {
@@ -237,18 +240,12 @@ const Index = () => {
   const handleProcess = useCallback(async () => {
     if (!canProcess) return;
 
-    // Check usage limits
-    if (currentPlan === 'free' && !isFirstMonth) {
-      toast.error('Seu período gratuito expirou. Faça upgrade para continuar.');
+    // Check token balance
+    const cost = calculateTokenCost(totalCombinations, settings);
+    if (!hasEnoughTokens(currentPlan, tokenBalance, cost.total)) {
+      toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Faça upgrade ou reduza as combinações.`);
       navigate('/plans');
       return;
-    }
-    if (currentPlan !== 'enterprise') {
-      const remaining = 100 - videoCount;
-      if (totalCombinations > remaining) {
-        toast.error(`Você tem apenas ${remaining} vídeos restantes. Reduza as combinações ou faça upgrade.`);
-        return;
-      }
     }
 
     // Revoke old blob URLs before starting new batch
@@ -300,6 +297,24 @@ const Index = () => {
       if (!controller.signal.aborted) {
         const doneCount = combos.filter(c => c.status === 'done').length;
         const errorCount = combos.filter(c => c.status === 'error').length;
+        
+        // Debit tokens based on actually completed videos
+        if (doneCount > 0 && currentPlan !== 'enterprise') {
+          const actualCost = calculateTokenCost(doneCount, settings);
+          const newBalance = Math.max(0, tokenBalance - actualCost.total);
+          setTokenBalance(newBalance);
+          const monthYear = new Date().toISOString().substring(0, 7);
+          await supabase
+            .from('video_usage')
+            .update({ 
+              token_balance: newBalance, 
+              video_count: videoCount + doneCount 
+            })
+            .eq('user_id', user!.id)
+            .eq('month_year', monthYear);
+          setVideoCount(prev => prev + doneCount);
+        }
+        
         if (errorCount > 0) {
           toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s).`);
         } else {
@@ -381,7 +396,7 @@ const Index = () => {
         <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="bg-primary/20 rounded-xl p-3">
-              <Zap className="w-6 h-6 text-primary" />
+              <Coins className="w-6 h-6 text-primary" />
             </div>
             <div>
               <p className="font-bold text-foreground">
@@ -389,10 +404,8 @@ const Index = () => {
               </p>
               <p className="text-xs text-muted-foreground">
                 {currentPlan === 'enterprise' 
-                  ? `● Vídeos ilimitados (${videoCount} usados)`
-                  : currentPlan === 'free' && !isFirstMonth
-                    ? '● Período gratuito expirado'
-                    : `● ${videoCount}/100 vídeos usados`
+                  ? '● Tokens ilimitados'
+                  : `● ${tokenBalance} tokens restantes`
                 }
               </p>
             </div>
@@ -522,10 +535,20 @@ const Index = () => {
               <p className="text-sm text-muted-foreground">
                 {hooks.length} gancho(s) × {bodies.length} corpo(s) × {ctas.length} CTA(s)
               </p>
-              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-1">
-                <Loader2 className="w-3.5 h-3.5" />
-                <span>Tempo de espera: apenas 20 minutos</span>
-              </div>
+              {(() => {
+                const cost = calculateTokenCost(totalCombinations, settings);
+                const enough = hasEnoughTokens(currentPlan, tokenBalance, cost.total);
+                return (
+                  <div className={`flex items-center justify-center gap-2 text-xs pt-1 ${enough ? 'text-muted-foreground' : 'text-destructive'}`}>
+                    <Coins className="w-3.5 h-3.5" />
+                    <span>
+                      Custo: {cost.total} tokens
+                      {currentPlan !== 'enterprise' && ` · Saldo: ${tokenBalance}`}
+                      {!enough && ' · Insuficiente!'}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Processing Settings */}
