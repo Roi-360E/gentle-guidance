@@ -176,9 +176,9 @@ export function VideoUploadZone({
       )}
 
       {allDone && (
-        <div className="flex items-center justify-center gap-2 text-sm text-green-500 font-medium">
-          <CheckCircle2 className="w-4 h-4" />
-          Pré-processamento concluído
+        <div className="flex items-center justify-center gap-2 text-sm font-semibold text-green-500 bg-green-500/10 border border-green-500/20 rounded-full py-2 px-4">
+          <CheckCircle2 className="w-5 h-5" />
+          Todos os vídeos processados com sucesso!
         </div>
       )}
     </div>

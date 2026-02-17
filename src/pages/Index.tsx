@@ -124,7 +124,7 @@ const Index = () => {
   const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
   const preprocessingDone = hooksPreprocessed && bodiesPreprocessed && ctasPreprocessed;
 
-  // Pre-process a single section
+  // Pre-process a single section (one-click, forces all videos)
   const handlePreprocessSection = useCallback(async (
     sectionLabel: string,
     files: VideoFileWithProgress[],
@@ -134,66 +134,66 @@ const Index = () => {
     if (files.length === 0) return;
     setPreprocessingSection(sectionLabel);
 
+    let allSuccess = true;
+
     try {
       const ff = await getFFmpeg();
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
+        // Mark as processing
         setter(prev => {
           const updated = [...prev];
-          updated[i] = { ...updated[i], preprocessStatus: 'processing', preprocessProgress: 0 };
+          updated[i] = { ...updated[i], preprocessStatus: 'processing', preprocessProgress: 10 };
           return updated;
         });
 
-        try {
-          setter(prev => {
-            const updated = [...prev];
-            updated[i] = { ...updated[i], preprocessProgress: 30 };
-            return updated;
-          });
+        // Retry up to 2 times per video to force all to process
+        let success = false;
+        for (let attempt = 0; attempt < 3 && !success; attempt++) {
+          try {
+            if (attempt > 0) {
+              console.log(`[Preprocess] Retrying ${file.name} (attempt ${attempt + 1}/3)`);
+            }
 
-          // Use the shared preProcessInputCached so the cache is populated
-          // for the concatenation phase
-          const rawName = `raw_section_${sectionLabel.toLowerCase()}_${i}.mp4`;
-          await preProcessInputCached(ff, file.file, rawName, settings);
+            setter(prev => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], preprocessProgress: 30 };
+              return updated;
+            });
 
-          setter(prev => {
-            const updated = [...prev];
-            updated[i] = { ...updated[i], preprocessProgress: 80 };
-            return updated;
-          });
+            const rawName = `raw_section_${sectionLabel.toLowerCase()}_${i}_a${attempt}.mp4`;
+            await preProcessInputCached(ff, file.file, rawName, settings);
 
-          setter(prev => {
-            const updated = [...prev];
-            updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
-            return updated;
-          });
-        } catch (err) {
-          console.error(`Error preprocessing ${file.name}:`, err);
-          setter(prev => {
-            const updated = [...prev];
-            updated[i] = { ...updated[i], preprocessStatus: 'error', preprocessProgress: 0 };
-            return updated;
-          });
+            setter(prev => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
+              return updated;
+            });
+
+            success = true;
+          } catch (err) {
+            console.error(`[Preprocess] Error on ${file.name} attempt ${attempt + 1}:`, err);
+            if (attempt === 2) {
+              // Final attempt failed
+              setter(prev => {
+                const updated = [...prev];
+                updated[i] = { ...updated[i], preprocessStatus: 'error', preprocessProgress: 0 };
+                return updated;
+              });
+              allSuccess = false;
+            }
+          }
         }
       }
 
-      // Only mark done if all files succeeded
-      const allSucceeded = files.every((_, idx) => {
-        // We need to check the latest state
-        return true; // We'll check via setter
-      });
-      setter(prev => {
-        const hasFailed = prev.some(f => f.preprocessStatus === 'error');
-        if (!hasFailed) {
-          setDone(true);
-          toast.success(`${sectionLabel}: pré-processamento concluído!`);
-        } else {
-          toast.error(`${sectionLabel}: alguns vídeos falharam no pré-processamento.`);
-        }
-        return prev;
-      });
+      if (allSuccess) {
+        setDone(true);
+        toast.success(`${sectionLabel}: todos os vídeos processados com sucesso! ✅`);
+      } else {
+        toast.error(`${sectionLabel}: alguns vídeos falharam após múltiplas tentativas.`);
+      }
     } catch (err) {
       console.error('Preprocessing failed:', err);
       toast.error('Erro no pré-processamento: ' + (err instanceof Error ? err.message : String(err)));
