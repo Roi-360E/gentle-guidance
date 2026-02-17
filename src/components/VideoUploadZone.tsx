@@ -17,6 +17,7 @@ interface VideoUploadZoneProps {
   onFilesChange: (files: VideoFileWithProgress[]) => void;
   accentColor: string;
   isPreprocessing?: boolean;
+  preprocessStarted?: boolean;
   onPreprocess?: () => void;
   preprocessLabel?: string;
 }
@@ -35,6 +36,7 @@ export function VideoUploadZone({
   onFilesChange,
   accentColor,
   isPreprocessing,
+  preprocessStarted,
   onPreprocess,
   preprocessLabel,
 }: VideoUploadZoneProps) {
@@ -154,14 +156,14 @@ export function VideoUploadZone({
         onChange={(e) => handleFiles(e.target.files)}
       />
 
-      {/* Preprocess button per section */}
+      {/* Preprocess button per section — hidden once all done, disabled permanently after first click */}
       {hasFiles && !allDone && onPreprocess && (
         <Button
           className="w-full rounded-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
-          disabled={isPreprocessing}
+          disabled={isPreprocessing || preprocessStarted}
           onClick={onPreprocess}
         >
-          {isPreprocessing ? (
+          {isPreprocessing || preprocessStarted ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               {preprocessLabel || 'Pré-processando...'}
