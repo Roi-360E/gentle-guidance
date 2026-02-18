@@ -24,7 +24,7 @@ import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-ca
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
+
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -38,7 +38,7 @@ const Index = () => {
   const [ctas, setCtas] = useState<VideoFileWithProgress[]>([]);
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
   const [showExtras, setShowExtras] = useState(false);
-  const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
+  
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [tokenBalance, setTokenBalance] = useState<number>(50);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
@@ -642,54 +642,6 @@ const Index = () => {
         )}
 
 
-        {/* Feedback offer banner */}
-        <div className="max-w-2xl mx-auto rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 p-8 text-center space-y-4">
-          <div className="inline-flex items-center gap-2 bg-primary/10 rounded-full px-4 py-1.5 mx-auto">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-xs font-bold text-primary uppercase tracking-wide">Oferta Exclusiva</span>
-          </div>
-          <h3 className="text-xl font-extrabold text-foreground">
-            🎁 Ganhe 6 meses de acesso gratuito e ilimitado!
-          </h3>
-          <p className="text-muted-foreground text-sm max-w-lg mx-auto">
-            Compartilhe sua experiência com o EscalaX enviando um vídeo depoimento e desbloqueie <strong className="text-foreground">6 meses de acesso gratuito</strong> a todas as funcionalidades do aplicativo!
-          </p>
-          <ul className="text-left text-sm text-muted-foreground max-w-md mx-auto space-y-2">
-            <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> Grave um vídeo curto contando como o EscalaX ajudou você</li>
-            <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Clique no botão abaixo e envie seu vídeo</li>
-            <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> Seus 6 meses serão ativados automaticamente!</li>
-          </ul>
-          <Button
-            onClick={async () => {
-              if (!user) {
-                toast.error('Faça login para participar da oferta!');
-                return;
-              }
-              const { data: existing } = await supabase
-                .from('testimonial_submissions')
-                .select('id, expires_at')
-                .eq('user_id', user.id)
-                .maybeSingle();
-              if (existing) {
-                toast.info(`Você já participou! Acesso gratuito até ${new Date(existing.expires_at).toLocaleDateString('pt-BR')}`);
-                return;
-              }
-              setShowTestimonialDialog(true);
-            }}
-            className="mt-2 px-6 py-3 text-sm font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full hover:opacity-90 uppercase tracking-wide"
-          >
-            🎬 Enviar feedback e ganhar 6 meses grátis!
-          </Button>
-        </div>
-
-        {user && (
-          <TestimonialUploadDialog
-            open={showTestimonialDialog}
-            onOpenChange={setShowTestimonialDialog}
-            userId={user.id}
-            onSuccess={() => setCurrentPlan('enterprise')}
-          />
-        )}
 
         {/* CTA banner */}
         <div className="flex justify-center pb-8">
