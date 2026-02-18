@@ -161,10 +161,22 @@ async function processApprovedPayment(
     .eq("month_year", monthYear)
     .single();
 
+  // Define token allocation per plan
+  const planTokens: Record<string, number> = {
+    professional: 200,
+    enterprise: 999999, // unlimited
+  };
+  const newTokens = planTokens[payment.plan] || 50;
+
   if (existing) {
+    // Renew: reset token balance + video count for the new billing cycle
     await supabase
       .from("video_usage")
-      .update({ plan: payment.plan })
+      .update({
+        plan: payment.plan,
+        token_balance: newTokens,
+        video_count: 0,
+      })
       .eq("id", existing.id);
   } else {
     await supabase
@@ -174,6 +186,7 @@ async function processApprovedPayment(
         month_year: monthYear,
         plan: payment.plan,
         video_count: 0,
+        token_balance: newTokens,
       });
   }
 
