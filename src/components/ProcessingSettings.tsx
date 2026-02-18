@@ -1,4 +1,4 @@
-import { Settings2, Cloud, Monitor } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -55,48 +55,22 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
           </Select>
         </div>
 
-        {/* Cloud processing toggle */}
+        {/* Pre-process toggle */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Modo de processamento</Label>
+          <Label className="text-sm font-medium">Pré-processamento</Label>
           <div className="flex items-center gap-3 pt-1">
             <Switch
-              checked={settings.useCloud ?? false}
-              onCheckedChange={(v) => onChange({ ...settings, useCloud: v })}
+              checked={settings.preProcess}
+              onCheckedChange={(v) => onChange({ ...settings, preProcess: v })}
               disabled={disabled}
             />
-            <div className="flex items-center gap-2">
-              {settings.useCloud ? (
-                <Cloud className="w-4 h-4 text-primary" />
-              ) : (
-                <Monitor className="w-4 h-4 text-muted-foreground" />
-              )}
-              <span className="text-sm text-muted-foreground">
-                {settings.useCloud
-                  ? 'Nuvem — pré-processamento na VPS (muito mais rápido) ⚡'
-                  : 'Local (navegador) — sem dependência externa'}
-              </span>
-            </div>
+            <span className="text-sm text-muted-foreground">
+              {settings.preProcess
+                ? 'Normalizar vídeos antes de concatenar (recomendado)'
+                : 'Concatenação direta (pode falhar com formatos diferentes)'}
+            </span>
           </div>
         </div>
-
-        {/* Pre-process toggle (only for local mode) */}
-        {!settings.useCloud && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Pré-processamento</Label>
-            <div className="flex items-center gap-3 pt-1">
-              <Switch
-                checked={settings.preProcess}
-                onCheckedChange={(v) => onChange({ ...settings, preProcess: v })}
-                disabled={disabled}
-              />
-              <span className="text-sm text-muted-foreground">
-                {settings.preProcess
-                  ? 'Normalizar vídeos antes de concatenar (recomendado)'
-                  : 'Concatenação direta (pode falhar com formatos diferentes)'}
-              </span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
