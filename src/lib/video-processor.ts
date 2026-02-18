@@ -221,24 +221,21 @@ export async function preProcessInputCached(
   const startTime = performance.now();
   console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
 
-  // ─── FAST PATH: stream copy (remux only, ~0.1-0.3s) ───
-  // Try stream copy first — no re-encoding, just repackage container
-  if (!scale || settings.resolution === 'original') {
-    const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
-    let exitCode = await ff.exec(copyArgs);
-    checkAbort(abortSignal);
+  // ─── ALWAYS try stream copy first (remux ~0.05-0.3s) ───
+  const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
+  let exitCode = await ff.exec(copyArgs);
+  checkAbort(abortSignal);
 
-    if (exitCode === 0) {
-      try { await ff.deleteFile(rawName); } catch {}
-      preProcessCache.set(file, outputName);
-      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-      console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
-      return outputName;
-    }
-    console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to re-encode...`);
+  if (exitCode === 0) {
+    try { await ff.deleteFile(rawName); } catch {}
+    preProcessCache.set(file, outputName);
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+    console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
+    return outputName;
   }
+  console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to ultra-fast re-encode...`);
 
-  // ─── FALLBACK: ultrafast re-encode ───
+  // ─── FALLBACK: minimal re-encode with shortest duration limit ───
   const args: string[] = ['-i', rawName];
   if (scale) {
     args.push('-vf', `scale=${scale}`);
@@ -247,17 +244,18 @@ export async function preProcessInputCached(
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-tune', 'fastdecode',
-    '-crf', '30',
-    '-r', '30',
+    '-crf', '32',
+    '-r', '24',
     '-c:a', 'aac',
-    '-b:a', '128k',
+    '-b:a', '96k',
     '-ar', '44100',
     '-ac', '2',
+    '-threads', '0',
     '-y',
     outputName
   );
 
-  let exitCode = await ff.exec(args);
+  exitCode = await ff.exec(args);
   checkAbort(abortSignal);
 
   if (exitCode !== 0) {
@@ -266,7 +264,7 @@ export async function preProcessInputCached(
     if (scale) {
       args2.push('-vf', `scale=${scale}`);
     }
-    args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-r', '30', '-an', '-y', outputName);
+    args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '32', '-r', '24', '-an', '-threads', '0', '-y', outputName);
     exitCode = await ff.exec(args2);
     checkAbort(abortSignal);
     if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
@@ -278,6 +276,45 @@ export async function preProcessInputCached(
   const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
   console.log(`[VideoProcessor] ✅ Cached "${file.name}" as ${outputName} in ${elapsed}s`);
   return outputName;
+}
+
+/**
+ * Pre-process multiple files in parallel using a single FFmpeg instance.
+ * Files are read into memory concurrently, then processed sequentially on FFmpeg
+ * (since wasm is single-threaded) but with pre-fetched data to eliminate I/O waits.
+ */
+export async function preProcessBatch(
+  files: File[],
+  sectionLabel: string,
+  settings: ProcessingSettings,
+  onFileProgress?: (fileIndex: number, status: 'loading' | 'processing' | 'done', pct: number) => void,
+  abortSignal?: AbortSignal
+): Promise<void> {
+  if (files.length === 0) return;
+
+  const totalStart = performance.now();
+  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${files.length} files for "${sectionLabel}"`);
+
+  // Pre-fetch ALL files into memory in parallel (eliminates sequential I/O)
+  const fetchPromises = files.map((file, i) => {
+    onFileProgress?.(i, 'loading', 0);
+    return fetchFileCached(file);
+  });
+  await Promise.all(fetchPromises);
+  console.log(`[VideoProcessor] 📦 All ${files.length} files loaded into memory in ${((performance.now() - totalStart) / 1000).toFixed(2)}s`);
+
+  // Now process sequentially on FFmpeg (wasm is single-threaded)
+  const ff = await getFFmpeg();
+  for (let i = 0; i < files.length; i++) {
+    checkAbort(abortSignal);
+    onFileProgress?.(i, 'processing', 30);
+    const rawName = `raw_batch_${sectionLabel.toLowerCase()}_${i}.mp4`;
+    await preProcessInputCached(ff, files[i], rawName, settings, abortSignal);
+    onFileProgress?.(i, 'done', 100);
+  }
+
+  const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
+  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s`);
 }
 
 async function preProcessAllInputs(
