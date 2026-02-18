@@ -28,30 +28,30 @@ const Downloads = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-2">
-              <ArrowLeft className="w-4 h-4" /> Voltar
+      <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1 sm:gap-2 shrink-0 px-2 sm:px-3">
+              <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Voltar</span>
             </Button>
-            <h1 className="text-xl font-extrabold tracking-tight text-primary uppercase">
+            <h1 className="text-base sm:text-xl font-extrabold tracking-tight text-primary uppercase truncate">
               Meus Downloads
             </h1>
           </div>
           {downloadedVideos.length > 0 && (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="gap-2 rounded-full" onClick={handleDownloadAll}>
-                <Download className="w-4 h-4" /> Baixar Todos
+            <div className="flex gap-1 sm:gap-2 shrink-0">
+              <Button variant="outline" size="sm" className="gap-1 sm:gap-2 rounded-full text-xs sm:text-sm px-2 sm:px-3" onClick={handleDownloadAll}>
+                <Download className="w-3 h-3 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Baixar Todos</span><span className="sm:hidden">Todos</span>
               </Button>
-              <Button variant="ghost" size="sm" className="gap-2 text-destructive" onClick={clearAllDownloads}>
-                <Trash2 className="w-4 h-4" /> Limpar
+              <Button variant="ghost" size="sm" className="gap-1 text-destructive px-2 sm:px-3" onClick={clearAllDownloads}>
+                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Limpar</span>
               </Button>
             </div>
           )}
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6">
         {/* Active processing banner */}
         {isProcessing && (
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3">
@@ -79,7 +79,7 @@ const Downloads = () => {
         )}
 
         {downloadedVideos.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {downloadedVideos.map((video) => (
               <div key={video.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
                 <div
