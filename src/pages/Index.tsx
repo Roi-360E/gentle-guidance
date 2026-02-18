@@ -40,6 +40,7 @@ const Index = () => {
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [tokenBalance, setTokenBalance] = useState<number>(50);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
   const [bodiesPreprocessed, setBodiesPreprocessed] = useState(false);
   const [ctasPreprocessed, setCtasPreprocessed] = useState(false);
@@ -47,7 +48,7 @@ const Index = () => {
   const [bodiesStarted, setBodiesStarted] = useState(false);
   const [ctasStarted, setCtasStarted] = useState(false);
 
-  // Load user plan data
+  // Load user plan data and profile name
   useEffect(() => {
     if (!user) return;
     const loadUsage = async () => {
@@ -82,17 +83,20 @@ const Index = () => {
           }
         }
       }
-      // Check if first month by comparing account creation
+      // Load profile name and check if first month
       const { data: profile } = await supabase
         .from('profiles')
-        .select('created_at')
+        .select('created_at, name')
         .eq('user_id', user.id)
         .single();
       if (profile) {
+        setUserName(profile.name || user.email?.split('@')[0] || 'Usuário');
         const createdAt = new Date(profile.created_at);
         const now = new Date();
         const monthsDiff = (now.getFullYear() - createdAt.getFullYear()) * 12 + now.getMonth() - createdAt.getMonth();
         setIsFirstMonth(monthsDiff === 0);
+      } else {
+        setUserName(user.email?.split('@')[0] || 'Usuário');
       }
     };
     loadUsage();
@@ -297,6 +301,25 @@ const Index = () => {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+        {/* Welcome message */}
+        {userName && (
+          <div className="max-w-2xl mx-auto rounded-2xl border border-primary/30 bg-primary/5 p-5 flex items-center gap-4">
+            <div className="bg-primary/20 rounded-full p-3">
+              <span className="text-2xl font-bold text-primary uppercase">
+                {userName.charAt(0)}
+              </span>
+            </div>
+            <div>
+              <p className="font-bold text-foreground text-lg">
+                Olá, {userName}! 👋
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Bem-vindo(a) de volta ao EscalaX. Pronto(a) para escalar seus criativos?
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Hero text */}
         <div className="text-center space-y-2">
           <p className="text-muted-foreground max-w-2xl mx-auto">
