@@ -74,6 +74,122 @@ serve(async (req) => {
       fileNames?: string[];
     };
 
+    // ── ACTION: preprocess (normalize individual videos server-side) ──
+    if (action === "preprocess") {
+      const { fileUrls, resolution: preRes, videoFormat: preFormat } = body as {
+        fileUrls?: string[];
+        resolution?: string;
+        videoFormat?: string;
+      };
+
+      if (!fileUrls?.length) {
+        return jsonResponse({ error: "No file URLs provided" }, 400);
+      }
+
+      const formatResMap: Record<string, Record<string, string>> = {
+        "9:16": { "1080p": "1080x1920", "720p": "720x1280", "480p": "480x854", "360p": "360x640" },
+        "16:9": { "1080p": "1920x1080", "720p": "1280x720", "480p": "854x480", "360p": "640x360" },
+        "1:1": { "1080p": "1080x1080", "720p": "720x720", "480p": "480x480", "360p": "360x360" },
+      };
+
+      const fmt = preFormat || "9:16";
+      const res = formatResMap[fmt]?.[preRes || "720p"] || "720x1280";
+      const [width, height] = res.split("x");
+
+      const assemblies: { assemblyId: string; fileIndex: number }[] = [];
+
+      for (let i = 0; i < fileUrls.length; i++) {
+        const steps: Record<string, unknown> = {
+          "import-file": {
+            robot: "/http/import",
+            url: fileUrls[i],
+          },
+          "normalize": {
+            use: "import-file",
+            robot: "/video/encode",
+            ffmpeg_stack: "v6",
+            preset: "android",
+            width: parseInt(width),
+            height: parseInt(height),
+            resize_strategy: "pad",
+            ffmpeg: {
+              r: 30,
+              crf: 28,
+              preset: "fast",
+              tune: "fastdecode",
+              "b:a": "128k",
+              ar: 44100,
+              ac: 2,
+            },
+          },
+        };
+
+        const expires = new Date(Date.now() + 2 * 60 * 60 * 1000)
+          .toISOString()
+          .replace("T", " ")
+          .substring(0, 19) + "+00:00";
+
+        const params = JSON.stringify({
+          auth: { key: TRANSLOADIT_AUTH_KEY, expires },
+          steps,
+        });
+
+        const signature = await signParams(params, TRANSLOADIT_AUTH_SECRET);
+        const formData = new FormData();
+        formData.append("params", params);
+        formData.append("signature", signature);
+
+        const assemblyRes = await fetch("https://api2.transloadit.com/assemblies", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!assemblyRes.ok) {
+          const errText = await assemblyRes.text();
+          console.error(`Transloadit preprocess assembly failed [${assemblyRes.status}]:`, errText);
+          return jsonResponse({ error: `Transloadit error: ${assemblyRes.status}`, details: errText }, 500);
+        }
+
+        const assemblyData = await assemblyRes.json();
+        assemblies.push({ assemblyId: assemblyData.assembly_id, fileIndex: i });
+      }
+
+      return jsonResponse({ assemblies });
+    }
+
+    // ── ACTION: check-preprocess-status ──────────────────────────
+    if (action === "check-preprocess-status") {
+      if (!assemblyId) {
+        return jsonResponse({ error: "No assemblyId provided" }, 400);
+      }
+
+      const statusRes = await fetch(`https://api2.transloadit.com/assemblies/${assemblyId}`);
+      if (!statusRes.ok) {
+        const errText = await statusRes.text();
+        return jsonResponse({ error: `Status check failed: ${statusRes.status}`, details: errText }, 500);
+      }
+
+      const statusData = await statusRes.json();
+      let resultUrl: string | null = null;
+
+      if (statusData.ok === "ASSEMBLY_COMPLETED" && statusData.results) {
+        const normalizeResults = statusData.results["normalize"];
+        if (normalizeResults?.length > 0) {
+          resultUrl = normalizeResults[0].ssl_url || normalizeResults[0].url;
+        }
+      }
+
+      return jsonResponse({
+        status: statusData.ok,
+        error: statusData.error || null,
+        message: statusData.message || null,
+        resultUrl,
+        progress: statusData.bytes_expected
+          ? Math.round((statusData.bytes_received / statusData.bytes_expected) * 100)
+          : null,
+      });
+    }
+
     // ── ACTION: create-assembly ──────────────────────────────────
     if (action === "create-assembly") {
 

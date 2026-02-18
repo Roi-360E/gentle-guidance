@@ -61,7 +61,7 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
           <div className="flex items-center gap-3 pt-1">
             <Switch
               checked={settings.useCloud ?? false}
-              onCheckedChange={(v) => onChange({ ...settings, useCloud: v, preProcess: v ? false : settings.preProcess })}
+              onCheckedChange={(v) => onChange({ ...settings, useCloud: v })}
               disabled={disabled}
             />
             <div className="flex items-center gap-2">
@@ -72,7 +72,7 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
               )}
               <span className="text-sm text-muted-foreground">
                 {settings.useCloud
-                  ? 'Nuvem (Transloadit) — mais rápido e estável'
+                  ? 'Nuvem — pré-processamento na VPS (muito mais rápido) ⚡'
                   : 'Local (navegador) — sem dependência externa'}
               </span>
             </div>
