@@ -641,17 +641,6 @@ const Index = () => {
           </div>
         )}
 
-        {/* Info footer */}
-        <div className="rounded-xl border border-border bg-muted/30 p-5 space-y-2 text-center">
-          <p className="text-sm text-muted-foreground">
-            <strong>Legendas automáticas:</strong> Para gerar legendas sincronizadas, ative o Lovable Cloud
-            para utilizar transcrição por IA.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            <strong>Processamento no servidor:</strong> Para produções com muitos vídeos, considere migrar
-            para processamento em nuvem com FFmpeg nativo para maior velocidade.
-          </p>
-        </div>
 
         {/* Feedback offer banner */}
         <div className="max-w-2xl mx-auto rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 p-8 text-center space-y-4">
