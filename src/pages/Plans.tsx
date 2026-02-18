@@ -180,23 +180,23 @@ export default function Plans() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 py-5 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
+      <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-5 flex items-center gap-2 sm:gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="shrink-0 px-2 sm:px-3">
+            <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">Voltar</span>
           </Button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Planos e Pagamento</h1>
-            <p className="text-sm text-muted-foreground">Escolha o melhor plano para você</p>
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-bold text-foreground truncate">Planos e Pagamento</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Escolha o melhor plano para você</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Pix payment modal */}
         {pixData && (
-          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-            <Card className="w-full max-w-md">
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <Card className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto">
               <CardHeader className="text-center">
                 <CardTitle className="text-lg">Pagamento via Pix</CardTitle>
                 <p className="text-sm text-muted-foreground">Escaneie o QR Code ou copie o código</p>

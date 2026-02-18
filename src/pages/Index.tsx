@@ -19,7 +19,7 @@ import {
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
@@ -41,6 +41,7 @@ const Index = () => {
   const [tokenBalance, setTokenBalance] = useState<number>(50);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
   const [bodiesPreprocessed, setBodiesPreprocessed] = useState(false);
   const [ctasPreprocessed, setCtasPreprocessed] = useState(false);
@@ -269,19 +270,21 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border">
-        <div className="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Sparkles className="w-7 h-7 text-primary" />
+      <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
             <div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-primary uppercase">
+              <h1 className="text-lg sm:text-2xl font-extrabold tracking-tight text-primary uppercase">
                 EscalaX
               </h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
                 Feito para escalar seus criativos de vídeo
               </p>
             </div>
           </div>
+
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Home className="w-4 h-4" /> Home
@@ -297,23 +300,52 @@ const Index = () => {
               <LogOut className="w-4 h-4" /> Sair
             </Button>
           </nav>
+
+          {/* Mobile hamburger */}
+          <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </Button>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-border bg-background px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200">
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setMobileMenuOpen(false)}>
+              <Home className="w-4 h-4" /> Home
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/plans'); setMobileMenuOpen(false); }}>
+              <Zap className="w-4 h-4" /> Planos
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/downloads'); setMobileMenuOpen(false); }}>
+              <Download className="w-4 h-4" /> Meus Downloads
+              {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/subtitles'); setMobileMenuOpen(false); }}>
+              <Type className="w-4 h-4" /> Legendas IA
+            </Button>
+            <div className="border-t border-border pt-1 mt-1">
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
+                <LogOut className="w-4 h-4" /> Sair
+              </Button>
+            </div>
+          </div>
+        )}
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Welcome message */}
         {userName && (
-          <div className="max-w-2xl mx-auto rounded-2xl border border-primary/30 bg-primary/5 p-5 flex items-center gap-4">
-            <div className="bg-primary/20 rounded-full p-3">
-              <span className="text-2xl font-bold text-primary uppercase">
+          <div className="max-w-2xl mx-auto rounded-2xl border border-primary/30 bg-primary/5 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+            <div className="bg-primary/20 rounded-full p-2.5 sm:p-3 shrink-0">
+              <span className="text-xl sm:text-2xl font-bold text-primary uppercase">
                 {userName.charAt(0)}
               </span>
             </div>
-            <div>
-              <p className="font-bold text-foreground text-lg">
+            <div className="min-w-0">
+              <p className="font-bold text-foreground text-base sm:text-lg truncate">
                 Olá, {userName}! 👋
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Bem-vindo(a) de volta ao EscalaX. Pronto(a) para escalar seus criativos?
               </p>
             </div>
@@ -329,10 +361,10 @@ const Index = () => {
         </div>
 
         {/* Plan card */}
-        <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="bg-primary/20 rounded-xl p-3">
-              <Coins className="w-6 h-6 text-primary" />
+        <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-4 sm:p-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="bg-primary/20 rounded-xl p-2.5 sm:p-3 shrink-0">
+              <Coins className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             </div>
             <div>
               <p className="font-bold text-foreground">
@@ -559,32 +591,38 @@ const Index = () => {
           </button>
 
           {showExtras && (
-            <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
               <h3 className="text-lg font-bold text-foreground text-center">Funcionalidades Extras</h3>
               <ul className="space-y-3">
-                <li className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                  <Type className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-foreground">Editor de Legendas com IA</p>
-                    <p className="text-sm text-muted-foreground">Geração automática de legendas usando IA, com personalização de estilo e formato.</p>
+                <li className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-start gap-2 sm:gap-3 w-full">
+                    <Type className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground text-sm">Editor de Legendas com IA</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Geração automática de legendas usando IA, com personalização de estilo e formato.</p>
+                    </div>
                   </div>
-                  <Button size="sm" variant="outline" className="shrink-0 rounded-full" onClick={() => navigate('/subtitles')}>Acessar</Button>
+                  <Button size="sm" variant="outline" className="shrink-0 rounded-full w-full sm:w-auto" onClick={() => navigate('/subtitles')}>Acessar</Button>
                 </li>
-                <li className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                  <Clapperboard className="w-5 h-5 text-accent mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-foreground">Dashboard de Resultados</p>
-                    <p className="text-sm text-muted-foreground">Painel com métricas, gráficos e análise de ROI dos criativos.</p>
+                <li className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-start gap-2 sm:gap-3 w-full">
+                    <Clapperboard className="w-5 h-5 text-accent mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground text-sm">Dashboard de Resultados</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Painel com métricas, gráficos e análise de ROI dos criativos.</p>
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1 shrink-0">Em breve</span>
+                  <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1 shrink-0 self-start sm:self-auto">Em breve</span>
                 </li>
-                <li className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                  <Zap className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-foreground">Andromeda META ADS</p>
-                    <p className="text-sm text-muted-foreground">Integração com Meta Ads para upload e gestão de criativos publicitários.</p>
+                <li className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-start gap-2 sm:gap-3 w-full">
+                    <Zap className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground text-sm">Andromeda META ADS</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Integração com Meta Ads para upload e gestão de criativos publicitários.</p>
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1 shrink-0">Em breve</span>
+                  <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1 shrink-0 self-start sm:self-auto">Em breve</span>
                 </li>
               </ul>
             </div>
