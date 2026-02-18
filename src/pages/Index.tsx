@@ -16,6 +16,7 @@ import {
   type ProcessingSettings,
   type VideoFormat,
 } from '@/lib/video-processor';
+import { cloudPreprocessFiles } from '@/lib/cloud-preprocess';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
@@ -137,31 +138,71 @@ const Index = () => {
     setStarted: React.Dispatch<React.SetStateAction<boolean>>
   ) => {
     if (files.length === 0) return;
-    setStarted(true); // Permanently disable button
+    setStarted(true);
     setPreprocessingSection(sectionLabel);
 
     try {
+      // ─── Cloud pre-processing (server-side, much faster) ───
+      if (settings.useCloud) {
+        console.log(`[Preprocess] ☁️ Using cloud pre-processing for ${sectionLabel}`);
+        
+        // Mark all as processing
+        setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'processing' as const, preprocessProgress: 10 })));
+
+        const rawFiles = files.map(f => f.file);
+        const results = await cloudPreprocessFiles(rawFiles, settings, (fileIndex, status, pct) => {
+          setter(prev => {
+            const updated = [...prev];
+            const progressMap = { uploading: 10 + pct * 0.3, processing: 40 + pct * 0.4, downloading: 80 + pct * 0.15, done: 100 };
+            const progress = Math.round(progressMap[status] ?? pct);
+            updated[fileIndex] = { ...updated[fileIndex], preprocessProgress: progress };
+            if (status === 'done') {
+              updated[fileIndex] = { ...updated[fileIndex], preprocessStatus: 'done', preprocessProgress: 100 };
+            }
+            return updated;
+          });
+        });
+
+        // Replace original files with normalized versions for concatenation
+        setter(prev => {
+          const updated = [...prev];
+          for (const result of results) {
+            const idx = updated.findIndex(f => f.file === result.originalFile);
+            if (idx !== -1) {
+              updated[idx] = {
+                ...updated[idx],
+                file: result.normalizedFile,
+                preprocessStatus: 'done',
+                preprocessProgress: 100,
+              };
+            }
+          }
+          return updated;
+        });
+
+        setDone(true);
+        toast.success(`${sectionLabel}: normalização na nuvem concluída! ⚡`);
+        return;
+      }
+
+      // ─── Local pre-processing (FFmpeg.wasm, original behavior) ───
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
-        // Mark as processing
         setter(prev => {
           const updated = [...prev];
           updated[i] = { ...updated[i], preprocessStatus: 'processing', preprocessProgress: 10 };
           return updated;
         });
 
-        // Retry up to 5 times per video, reinitializing FFmpeg on each failure
         let success = false;
         for (let attempt = 0; attempt < 5 && !success; attempt++) {
           try {
-            // Get a fresh FFmpeg instance (or reuse if healthy)
             let ff: FFmpeg;
             if (attempt > 0) {
               console.log(`[Preprocess] Retrying ${file.name} (attempt ${attempt + 1}/5) — reinitializing FFmpeg...`);
               await terminateFFmpeg();
               ff = await getFFmpeg();
-              // Re-process all previously completed files to rebuild cache in new instance
               for (let j = 0; j < i; j++) {
                 const prevFile = files[j];
                 const prevRawName = `raw_rebuild_${sectionLabel.toLowerCase()}_${j}.mp4`;
@@ -194,14 +235,12 @@ const Index = () => {
           } catch (err) {
             console.error(`[Preprocess] Error on ${file.name} attempt ${attempt + 1}:`, err);
             if (attempt === 4) {
-              // Final attempt failed — still mark done to avoid blocking the pipeline
               console.error(`[Preprocess] ${file.name} failed after 5 attempts. Forcing completion.`);
               setter(prev => {
                 const updated = [...prev];
                 updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
                 return updated;
               });
-              // One last desperate attempt with a completely fresh FFmpeg
               try {
                 await terminateFFmpeg();
                 const ff2 = await getFFmpeg();
@@ -216,12 +255,10 @@ const Index = () => {
         }
       }
 
-      // Always mark section as done so the pipeline isn't blocked
       setDone(true);
       toast.success(`${sectionLabel}: todos os vídeos processados com sucesso! ✅`);
     } catch (err) {
       console.error('Preprocessing failed:', err);
-      // Even on catastrophic error, mark done to unblock
       setDone(true);
       toast.warning(`${sectionLabel}: processamento concluído com avisos.`);
     } finally {
