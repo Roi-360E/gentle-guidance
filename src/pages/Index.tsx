@@ -1,16 +1,14 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useProcessing } from '@/hooks/useProcessing';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { VideoUploadZone, type VideoFileWithProgress } from '@/components/VideoUploadZone';
 import { CombinationList } from '@/components/CombinationList';
 import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
 import {
-  generateCombinations,
-  processQueue,
   defaultSettings,
-  revokeBlobUrls,
   getFFmpeg,
   terminateFFmpeg,
   preProcessInputCached,
@@ -19,7 +17,7 @@ import {
   type VideoFormat,
 } from '@/lib/video-processor';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
-import { processQueueCloud } from '@/lib/cloud-processor';
+
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
@@ -29,27 +27,22 @@ import { TestimonialUploadDialog } from '@/components/TestimonialUploadDialog';
 const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { isProcessing, currentProgress, processingPhase, combinations, startProcessing, cancelProcessing, setCombinations } = useProcessing();
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [videoCount, setVideoCount] = useState(0);
   const [isFirstMonth, setIsFirstMonth] = useState(true);
   const [hooks, setHooks] = useState<VideoFileWithProgress[]>([]);
   const [bodies, setBodies] = useState<VideoFileWithProgress[]>([]);
   const [ctas, setCtas] = useState<VideoFileWithProgress[]>([]);
-  const [combinations, setCombinations] = useState<Combination[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [currentProgress, setCurrentProgress] = useState(0);
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
-  const abortRef = useRef<AbortController | null>(null);
   const [showExtras, setShowExtras] = useState(false);
   const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
-  const [processingPhase, setProcessingPhase] = useState<string>('');
   const [tokenBalance, setTokenBalance] = useState<number>(50);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
   const [bodiesPreprocessed, setBodiesPreprocessed] = useState(false);
   const [ctasPreprocessed, setCtasPreprocessed] = useState(false);
-  // Track if button was already clicked (disables permanently)
   const [hooksStarted, setHooksStarted] = useState(false);
   const [bodiesStarted, setBodiesStarted] = useState(false);
   const [ctasStarted, setCtasStarted] = useState(false);
@@ -105,13 +98,7 @@ const Index = () => {
     loadUsage();
   }, [user]);
 
-  // Revoke blob URLs when combinations change or on unmount to prevent memory leaks
-  const prevCombosRef = useRef<Combination[]>([]);
-  useEffect(() => {
-    return () => {
-      revokeBlobUrls(prevCombosRef.current);
-    };
-  }, []);
+  // Note: blob URL cleanup is handled by the ProcessingProvider
 
   // Reset preprocessing state when files change
   useEffect(() => {
@@ -237,10 +224,9 @@ const Index = () => {
     }
   }, [settings]);
 
-  const handleProcess = useCallback(async () => {
-    if (!canProcess) return;
+  const handleProcess = useCallback(() => {
+    if (!canProcess || !user) return;
 
-    // Check token balance
     const cost = calculateTokenCost(totalCombinations, settings);
     if (!hasEnoughTokens(currentPlan, tokenBalance, cost.total)) {
       toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Faça upgrade ou reduza as combinações.`);
@@ -248,92 +234,18 @@ const Index = () => {
       return;
     }
 
-    // Revoke old blob URLs before starting new batch
-    revokeBlobUrls(combinations);
-
-    const combos = generateCombinations(hooks, bodies, ctas);
-    const expectedTotal = hooks.length * bodies.length * ctas.length;
-    console.log(`%c[EscalaX] 🎯 Gerando ${combos.length} combinações (esperado: ${expectedTotal} = ${hooks.length}H × ${bodies.length}B × ${ctas.length}C)`, 'color: #3b82f6; font-weight: bold; font-size: 14px;');
-    if (combos.length !== expectedTotal) {
-      toast.error(`Erro: esperado ${expectedTotal} combinações mas gerou ${combos.length}. Tente novamente.`);
-      return;
-    }
-    setCombinations(combos);
-    prevCombosRef.current = combos;
-    setIsProcessing(true);
-    setProcessingPhase('Iniciando geração de combinações...');
-    setCurrentProgress(0);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const processFn = settings.useCloud ? processQueueCloud : processQueue;
-
-    try {
-      await processFn(
-        combos,
-        settings,
-        (updated) => setCombinations([...updated]),
-        (p) => setCurrentProgress(p),
-        controller.signal
-      );
-    } catch (err) {
-      console.group('%c❌ ERRO GERAL NO PROCESSAMENTO', 'color: #ef4444; font-weight: bold; font-size: 14px;');
-      console.error('Tipo:', settings.useCloud ? 'Cloud' : 'Local');
-      console.error('Mensagem:', err instanceof Error ? err.message : String(err));
-      console.error('Stack:', err instanceof Error ? err.stack : 'N/A');
-      console.error('Total combinações:', combos.length);
-      console.error('Concluídos:', combos.filter(c => c.status === 'done').length);
-      console.error('Com erro:', combos.filter(c => c.status === 'error').length);
-      console.groupEnd();
-    }
-
-    // Only update state if this controller is still active (not replaced by a new run)
-    if (abortRef.current === controller) {
-      setIsProcessing(false);
-      setProcessingPhase('');
-      abortRef.current = null;
-
-      if (!controller.signal.aborted) {
-        const doneCount = combos.filter(c => c.status === 'done').length;
-        const errorCount = combos.filter(c => c.status === 'error').length;
-        
-        // Debit tokens based on actually completed videos
-        if (doneCount > 0 && currentPlan !== 'enterprise') {
-          const actualCost = calculateTokenCost(doneCount, settings);
-          const newBalance = Math.max(0, tokenBalance - actualCost.total);
-          setTokenBalance(newBalance);
-          const monthYear = new Date().toISOString().substring(0, 7);
-          await supabase
-            .from('video_usage')
-            .update({ 
-              token_balance: newBalance, 
-              video_count: videoCount + doneCount 
-            })
-            .eq('user_id', user!.id)
-            .eq('month_year', monthYear);
-          setVideoCount(prev => prev + doneCount);
-        }
-        
-        if (errorCount > 0) {
-          toast.error(`Processamento concluído com ${errorCount} erro(s). ${doneCount} vídeo(s) gerado(s).`);
-        } else {
-          toast.success(`Todos os ${doneCount} vídeos foram gerados com sucesso!`);
-        }
-      } else {
-        toast.info('Processamento cancelado.');
-      }
-    }
-  }, [canProcess, hooks, bodies, ctas, settings, combinations, currentPlan, isFirstMonth, videoCount, totalCombinations, navigate]);
+    startProcessing({
+      hooks, bodies, ctas, settings, currentPlan, tokenBalance, videoCount,
+      userId: user.id,
+      onTokenUpdate: (newBalance, newCount) => {
+        setTokenBalance(newBalance);
+        setVideoCount(newCount);
+      },
+    });
+  }, [canProcess, hooks, bodies, ctas, settings, currentPlan, tokenBalance, videoCount, totalCombinations, navigate, user, startProcessing]);
 
   const handleCancel = () => {
-    if (!abortRef.current) return;
-    abortRef.current.abort();
-    abortRef.current = null;
-    setIsProcessing(false);
-    setProcessingPhase('');
-    setCurrentProgress(0);
-    toast.info('Cancelamento solicitado...');
+    cancelProcessing();
   };
 
   const handleDownload = (combo: Combination) => {
@@ -373,8 +285,9 @@ const Index = () => {
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
               <Zap className="w-4 h-4" /> Planos
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/downloads')}>
               <Download className="w-4 h-4" /> Meus Downloads
+              {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair
