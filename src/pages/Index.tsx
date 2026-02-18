@@ -12,6 +12,7 @@ import {
   getFFmpeg,
   terminateFFmpeg,
   preProcessInputCached,
+  preProcessBatch,
   type Combination,
   type ProcessingSettings,
   type VideoFormat,
@@ -120,6 +121,16 @@ const Index = () => {
     setCtasStarted(false);
   }, [ctas.length]);
 
+  // Eagerly pre-load FFmpeg on first file upload (so it's ready when user clicks preprocess)
+  useEffect(() => {
+    const totalFiles = hooks.length + bodies.length + ctas.length;
+    if (totalFiles > 0 && !settings.useCloud) {
+      getFFmpeg().then(() => {
+        console.log('[Index] 🔥 FFmpeg eagerly pre-loaded for fast preprocessing');
+      }).catch(() => {});
+    }
+  }, [hooks.length > 0 || bodies.length > 0 || ctas.length > 0, settings.useCloud]);
+
   // Sync videoFormat into settings
   useEffect(() => {
     setSettings(prev => ({ ...prev, videoFormat }));
@@ -129,7 +140,7 @@ const Index = () => {
   const canProcess = hooks.length > 0 && bodies.length > 0 && ctas.length > 0;
   const preprocessingDone = hooksPreprocessed && bodiesPreprocessed && ctasPreprocessed;
 
-  // Pre-process a single section (one-click, forces all videos)
+  // Pre-process a single section using optimized batch processing
   const handlePreprocessSection = useCallback(async (
     sectionLabel: string,
     files: VideoFileWithProgress[],
@@ -141,12 +152,13 @@ const Index = () => {
     setStarted(true);
     setPreprocessingSection(sectionLabel);
 
+    const sectionStart = performance.now();
+
     try {
       // ─── Cloud pre-processing (server-side, much faster) ───
       if (settings.useCloud) {
         console.log(`[Preprocess] ☁️ Using cloud pre-processing for ${sectionLabel}`);
         
-        // Mark all as processing
         setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'processing' as const, preprocessProgress: 10 })));
 
         const rawFiles = files.map(f => f.file);
@@ -163,7 +175,6 @@ const Index = () => {
           });
         });
 
-        // Replace original files with normalized versions for concatenation
         setter(prev => {
           const updated = [...prev];
           for (const result of results) {
@@ -181,84 +192,35 @@ const Index = () => {
         });
 
         setDone(true);
-        toast.success(`${sectionLabel}: normalização na nuvem concluída! ⚡`);
+        const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
+        toast.success(`${sectionLabel}: normalização na nuvem concluída em ${elapsed}s! ⚡`);
         return;
       }
 
-      // ─── Local pre-processing (FFmpeg.wasm, original behavior) ───
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      // ─── Local: optimized batch preprocessing (parallel I/O + sequential FFmpeg) ───
+      // Mark all files as processing immediately
+      setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'processing' as const, preprocessProgress: 5 })));
 
+      const rawFiles = files.map(f => f.file);
+      await preProcessBatch(rawFiles, sectionLabel, settings, (fileIndex, status, pct) => {
         setter(prev => {
           const updated = [...prev];
-          updated[i] = { ...updated[i], preprocessStatus: 'processing', preprocessProgress: 10 };
+          if (status === 'done') {
+            updated[fileIndex] = { ...updated[fileIndex], preprocessStatus: 'done', preprocessProgress: 100 };
+          } else {
+            updated[fileIndex] = { ...updated[fileIndex], preprocessProgress: pct };
+          }
           return updated;
         });
-
-        let success = false;
-        for (let attempt = 0; attempt < 5 && !success; attempt++) {
-          try {
-            let ff: FFmpeg;
-            if (attempt > 0) {
-              console.log(`[Preprocess] Retrying ${file.name} (attempt ${attempt + 1}/5) — reinitializing FFmpeg...`);
-              await terminateFFmpeg();
-              ff = await getFFmpeg();
-              for (let j = 0; j < i; j++) {
-                const prevFile = files[j];
-                const prevRawName = `raw_rebuild_${sectionLabel.toLowerCase()}_${j}.mp4`;
-                try {
-                  await preProcessInputCached(ff, prevFile.file, prevRawName, settings);
-                } catch (rebuildErr) {
-                  console.warn(`[Preprocess] Cache rebuild for ${prevFile.name} skipped:`, rebuildErr);
-                }
-              }
-            } else {
-              ff = await getFFmpeg();
-            }
-
-            setter(prev => {
-              const updated = [...prev];
-              updated[i] = { ...updated[i], preprocessProgress: 30 + (attempt * 10) };
-              return updated;
-            });
-
-            const rawName = `raw_section_${sectionLabel.toLowerCase()}_${i}_a${attempt}.mp4`;
-            await preProcessInputCached(ff, file.file, rawName, settings);
-
-            setter(prev => {
-              const updated = [...prev];
-              updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
-              return updated;
-            });
-
-            success = true;
-          } catch (err) {
-            console.error(`[Preprocess] Error on ${file.name} attempt ${attempt + 1}:`, err);
-            if (attempt === 4) {
-              console.error(`[Preprocess] ${file.name} failed after 5 attempts. Forcing completion.`);
-              setter(prev => {
-                const updated = [...prev];
-                updated[i] = { ...updated[i], preprocessStatus: 'done', preprocessProgress: 100 };
-                return updated;
-              });
-              try {
-                await terminateFFmpeg();
-                const ff2 = await getFFmpeg();
-                const lastRaw = `raw_last_${sectionLabel.toLowerCase()}_${i}.mp4`;
-                await preProcessInputCached(ff2, file.file, lastRaw, settings);
-                success = true;
-              } catch {
-                console.error(`[Preprocess] Final fallback also failed for ${file.name}`);
-              }
-            }
-          }
-        }
-      }
+      });
 
       setDone(true);
-      toast.success(`${sectionLabel}: todos os vídeos processados com sucesso! ✅`);
+      const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
+      toast.success(`${sectionLabel}: ${files.length} vídeo(s) processados em ${elapsed}s! ✅`);
     } catch (err) {
       console.error('Preprocessing failed:', err);
+      // Force completion even on error
+      setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'done' as const, preprocessProgress: 100 })));
       setDone(true);
       toast.warning(`${sectionLabel}: processamento concluído com avisos.`);
     } finally {
