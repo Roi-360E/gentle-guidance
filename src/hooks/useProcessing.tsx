@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import {
   generateCombinations,
   processQueue,
@@ -11,6 +11,13 @@ import { calculateTokenCost, hasEnoughTokens } from '@/lib/token-calculator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { VideoFileWithProgress } from '@/components/VideoUploadZone';
+import {
+  saveVideoToDB,
+  getAllVideosFromDB,
+  deleteVideoFromDB,
+  clearAllVideosFromDB,
+  type PersistedVideo,
+} from '@/lib/downloads-db';
 
 export interface DownloadedVideo {
   id: string;
@@ -52,6 +59,44 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
   const [combinations, setCombinations] = useState<Combination[]>([]);
   const [downloadedVideos, setDownloadedVideos] = useState<DownloadedVideo[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const processingRef = useRef(false); // Track processing state for beforeunload
+
+  // ─── Load persisted downloads from IndexedDB on mount ───
+  useEffect(() => {
+    (async () => {
+      try {
+        const persisted = await getAllVideosFromDB();
+        if (persisted.length > 0) {
+          const restored: DownloadedVideo[] = persisted.map(p => ({
+            id: p.id,
+            name: p.name,
+            url: URL.createObjectURL(p.blob),
+            createdAt: new Date(p.createdAt),
+            batchId: p.batchId,
+          }));
+          // Sort newest first
+          restored.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          setDownloadedVideos(restored);
+          console.log(`[Downloads] ✅ Restored ${restored.length} videos from IndexedDB`);
+        }
+      } catch (err) {
+        console.warn('[Downloads] Failed to restore from IndexedDB:', err);
+      }
+    })();
+  }, []);
+
+  // ─── Warn user before closing tab during processing ───
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (processingRef.current) {
+        e.preventDefault();
+        e.returnValue = 'Vídeos estão sendo processados. Tem certeza que deseja sair?';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const startProcessing = useCallback(({
     hooks, bodies, ctas, settings, currentPlan, tokenBalance, videoCount, userId, onTokenUpdate
@@ -75,6 +120,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
     setCombinations(combos);
     setIsProcessing(true);
+    processingRef.current = true;
     setProcessingPhase('Iniciando geração de combinações...');
     setCurrentProgress(0);
 
@@ -99,6 +145,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
       if (abortRef.current === controller) {
         setIsProcessing(false);
+        processingRef.current = false;
         setProcessingPhase('');
         abortRef.current = null;
 
@@ -106,16 +153,36 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
           const doneCount = combos.filter(c => c.status === 'done').length;
           const errorCount = combos.filter(c => c.status === 'error').length;
 
-          // Save completed videos to downloads
-          const newDownloads: DownloadedVideo[] = combos
-            .filter(c => c.status === 'done' && c.outputUrl)
-            .map(c => ({
-              id: `${batchId}_${c.outputName}`,
-              name: c.outputName,
-              url: c.outputUrl!,
-              createdAt: new Date(),
-              batchId,
-            }));
+          // Save completed videos to downloads + IndexedDB
+          const newDownloads: DownloadedVideo[] = [];
+
+          for (const c of combos) {
+            if (c.status === 'done' && c.outputUrl) {
+              const vid: DownloadedVideo = {
+                id: `${batchId}_${c.outputName}`,
+                name: c.outputName,
+                url: c.outputUrl,
+                createdAt: new Date(),
+                batchId,
+              };
+              newDownloads.push(vid);
+
+              // Persist blob to IndexedDB
+              try {
+                const response = await fetch(c.outputUrl);
+                const blob = await response.blob();
+                await saveVideoToDB({
+                  id: vid.id,
+                  name: vid.name,
+                  blob,
+                  createdAt: vid.createdAt.toISOString(),
+                  batchId: vid.batchId,
+                });
+              } catch (err) {
+                console.warn(`[Downloads] Failed to persist ${c.outputName} to IndexedDB:`, err);
+              }
+            }
+          }
           
           if (newDownloads.length > 0) {
             setDownloadedVideos(prev => [...newDownloads, ...prev]);
@@ -152,17 +219,29 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
     abortRef.current.abort();
     abortRef.current = null;
     setIsProcessing(false);
+    processingRef.current = false;
     setProcessingPhase('');
     setCurrentProgress(0);
     toast.info('Cancelamento solicitado...');
   }, []);
 
   const clearDownload = useCallback((id: string) => {
-    setDownloadedVideos(prev => prev.filter(d => d.id !== id));
+    setDownloadedVideos(prev => {
+      const video = prev.find(d => d.id === id);
+      if (video?.url?.startsWith('blob:')) {
+        URL.revokeObjectURL(video.url);
+      }
+      return prev.filter(d => d.id !== id);
+    });
+    deleteVideoFromDB(id).catch(err => console.warn('[Downloads] Failed to delete from IndexedDB:', err));
   }, []);
 
   const clearAllDownloads = useCallback(() => {
-    setDownloadedVideos([]);
+    setDownloadedVideos(prev => {
+      prev.forEach(v => { if (v.url?.startsWith('blob:')) URL.revokeObjectURL(v.url); });
+      return [];
+    });
+    clearAllVideosFromDB().catch(err => console.warn('[Downloads] Failed to clear IndexedDB:', err));
   }, []);
 
   return (

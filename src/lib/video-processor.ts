@@ -218,8 +218,27 @@ export async function preProcessInputCached(
   await ff.writeFile(rawName, data);
 
   const scale = getScale(settings);
+  const startTime = performance.now();
   console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
 
+  // ─── FAST PATH: stream copy (remux only, ~0.1-0.3s) ───
+  // Try stream copy first — no re-encoding, just repackage container
+  if (!scale || settings.resolution === 'original') {
+    const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
+    let exitCode = await ff.exec(copyArgs);
+    checkAbort(abortSignal);
+
+    if (exitCode === 0) {
+      try { await ff.deleteFile(rawName); } catch {}
+      preProcessCache.set(file, outputName);
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
+      return outputName;
+    }
+    console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to re-encode...`);
+  }
+
+  // ─── FALLBACK: ultrafast re-encode ───
   const args: string[] = ['-i', rawName];
   if (scale) {
     args.push('-vf', `scale=${scale}`);
@@ -256,7 +275,8 @@ export async function preProcessInputCached(
   try { await ff.deleteFile(rawName); } catch {}
 
   preProcessCache.set(file, outputName);
-  console.log(`[VideoProcessor] ✅ Cached "${file.name}" as ${outputName}`);
+  const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+  console.log(`[VideoProcessor] ✅ Cached "${file.name}" as ${outputName} in ${elapsed}s`);
   return outputName;
 }
 
