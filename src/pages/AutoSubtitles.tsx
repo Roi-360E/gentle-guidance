@@ -128,10 +128,11 @@ const AutoSubtitles = () => {
         segments: transcription.segments,
         style: {
           fontColor: style.colors.primary,
+          highlightColor: style.colors.highlight,
           borderColor: style.colors.outline,
           bgColor: style.colors.bg,
-          borderW: selectedStyle === 'minimal' ? 0 : selectedStyle === 'neon' ? 4 : 3,
-          bold: selectedStyle === 'bold',
+          borderW: selectedStyle === 'minimal' ? 0 : selectedStyle === 'neon' ? 5 : 4,
+          bold: true,
         },
         fontSize,
         position: subtitlePosition,
@@ -388,37 +389,55 @@ const AutoSubtitles = () => {
                   </div>
                 </div>
 
-                {/* Style preview */}
+                {/* Animated CapCut-style preview */}
                 {selectedStyleObj && (
                   <div
-                    className="rounded-xl bg-black/90 p-6 text-center relative overflow-hidden"
-                    style={{ minHeight: '140px' }}
+                    className="rounded-xl bg-black/95 relative overflow-hidden"
+                    style={{ minHeight: '180px' }}
                   >
-                    <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-4' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-4'} px-4`}>
-                      <span
-                        className="inline-block px-4 py-2 font-extrabold"
+                    {/* Simulated video background gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-gray-800/30 via-transparent to-black/60" />
+                    
+                    <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-6' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-6'} px-4 text-center`}>
+                      <div
+                        className="inline-flex gap-2 items-center justify-center flex-wrap px-4 py-3"
                         style={{
-                          color: selectedStyleObj.colors.primary,
-                          fontSize: `${Math.min(fontSize / 2, 32)}px`,
-                          WebkitTextStroke: selectedStyleObj.id === 'minimal'
-                            ? 'none'
-                            : `${selectedStyleObj.id === 'neon' ? 2 : 1.5}px ${selectedStyleObj.colors.outline}`,
-                          textShadow: selectedStyleObj.id === 'neon'
-                            ? `0 0 10px ${selectedStyleObj.colors.primary}, 0 0 20px ${selectedStyleObj.colors.outline}, 0 0 40px ${selectedStyleObj.colors.outline}`
-                            : selectedStyleObj.id === 'fire'
-                            ? `0 0 8px ${selectedStyleObj.colors.outline}, 2px 2px 4px #000`
-                            : selectedStyleObj.id === 'minimal'
-                            ? 'none'
-                            : `2px 2px 4px rgba(0,0,0,0.8)`,
                           backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
                             ? selectedStyleObj.colors.bg
                             : 'transparent',
-                          borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '6px' : '0',
-                          letterSpacing: '0.5px',
+                          borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '8px' : '0',
                         }}
                       >
-                        Exemplo de legenda
-                      </span>
+                        {['EXEMPLO', 'DE', 'LEGENDA'].map((word, i) => (
+                          <span
+                            key={word}
+                            className="inline-block font-black uppercase"
+                            style={{
+                              color: i === 1 ? selectedStyleObj.colors.highlight : selectedStyleObj.colors.primary,
+                              fontSize: `${Math.min(fontSize / 1.8, 36)}px`,
+                              WebkitTextStroke: selectedStyleObj.id === 'minimal'
+                                ? 'none'
+                                : `${selectedStyleObj.id === 'neon' ? 2.5 : 2}px ${selectedStyleObj.colors.outline}`,
+                              textShadow: selectedStyleObj.id === 'neon'
+                                ? `0 0 12px ${selectedStyleObj.colors.primary}, 0 0 24px ${selectedStyleObj.colors.highlight}, 0 0 48px ${selectedStyleObj.colors.outline}`
+                                : selectedStyleObj.id === 'fire'
+                                ? `0 0 10px ${selectedStyleObj.colors.highlight}, 0 2px 6px #000, 0 0 20px ${selectedStyleObj.colors.outline}`
+                                : selectedStyleObj.id === 'minimal'
+                                ? '0 2px 8px rgba(0,0,0,0.5)'
+                                : `3px 3px 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.5)`,
+                              transform: i === 1 ? 'scale(1.15)' : 'scale(1)',
+                              transition: 'all 0.2s ease',
+                              letterSpacing: '1px',
+                              animation: `fade-in 0.3s ease-out ${i * 0.15}s both`,
+                            }}
+                          >
+                            {word}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-white/40 mt-3">
+                        Palavra destacada muda em tempo real no vídeo
+                      </p>
                     </div>
                   </div>
                 )}

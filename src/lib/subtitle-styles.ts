@@ -1,6 +1,6 @@
 /**
- * ASS Subtitle Styles — CapCut-like styled subtitles
- * Each style generates a complete .ASS file with formatted dialogue lines
+ * Subtitle Styles — CapCut-inspired styled subtitles
+ * Each style is designed for maximum visual impact with word-by-word display
  */
 
 import { msToAss, type TranscriptionSegment } from './whisper-transcriber';
@@ -9,9 +9,10 @@ export interface SubtitleStyle {
   id: string;
   name: string;
   description: string;
-  preview: string; // emoji/icon preview
+  preview: string;
   colors: {
     primary: string;
+    highlight: string;
     outline: string;
     bg: string;
   };
@@ -21,45 +22,102 @@ export const SUBTITLE_STYLES: SubtitleStyle[] = [
   {
     id: 'classic',
     name: 'Clássico',
-    description: 'Branco com contorno preto — universal',
+    description: 'Branco forte com contorno — universal',
     preview: '🎬',
-    colors: { primary: '#FFFFFF', outline: '#000000', bg: 'transparent' },
+    colors: { primary: '#FFFFFF', highlight: '#FFD700', outline: '#000000', bg: 'transparent' },
   },
   {
     id: 'neon',
     name: 'Neon',
-    description: 'Roxo brilhante com glow — estilo TikTok',
+    description: 'Glow roxo vibrante — estilo TikTok',
     preview: '💜',
-    colors: { primary: '#B366FF', outline: '#6600CC', bg: 'transparent' },
+    colors: { primary: '#E0B0FF', highlight: '#FF00FF', outline: '#6600CC', bg: 'transparent' },
   },
   {
     id: 'bold',
     name: 'Negrito',
-    description: 'Amarelo forte com fundo escuro — alto contraste',
+    description: 'Amarelo pop com fundo — alto contraste',
     preview: '⚡',
-    colors: { primary: '#FFD700', outline: '#000000', bg: '#000000B0' },
+    colors: { primary: '#FFFFFF', highlight: '#FFD700', outline: '#000000', bg: '#000000CC' },
   },
   {
     id: 'minimal',
     name: 'Minimalista',
-    description: 'Branco limpo sem contorno — elegante',
+    description: 'Clean sem contorno — elegante',
     preview: '✨',
-    colors: { primary: '#FFFFFF', outline: '#00000000', bg: 'transparent' },
+    colors: { primary: '#FFFFFF', highlight: '#00E5FF', outline: '#00000000', bg: 'transparent' },
   },
   {
     id: 'fire',
     name: 'Fogo',
     description: 'Laranja e vermelho — impacto máximo',
     preview: '🔥',
-    colors: { primary: '#FF6600', outline: '#CC0000', bg: 'transparent' },
+    colors: { primary: '#FFAA00', highlight: '#FF3300', outline: '#990000', bg: 'transparent' },
+  },
+  {
+    id: 'karaoke',
+    name: 'Karaokê',
+    description: 'Palavra por palavra com destaque — CapCut',
+    preview: '🎤',
+    colors: { primary: '#FFFFFF', highlight: '#00FF88', outline: '#000000', bg: 'transparent' },
   },
 ];
+
+/**
+ * Split transcription segments into word-level timing.
+ * Each word gets an even slice of its parent segment's duration.
+ * Words are grouped into chunks of 2-4 for display.
+ */
+export interface WordGroup {
+  words: string[];
+  highlightIndex: number; // which word in the group is currently highlighted
+  fromMs: number;
+  toMs: number;
+  fullText: string;
+}
+
+export function splitSegmentsIntoWordGroups(
+  segments: TranscriptionSegment[],
+  wordsPerGroup: number = 3
+): WordGroup[] {
+  const groups: WordGroup[] = [];
+
+  for (const seg of segments) {
+    const words = seg.text.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) continue;
+
+    const segDuration = seg.toMs - seg.fromMs;
+    const wordDuration = segDuration / words.length;
+
+    // Create groups of N words
+    for (let gi = 0; gi < words.length; gi += wordsPerGroup) {
+      const groupWords = words.slice(gi, gi + wordsPerGroup);
+      const groupStartMs = seg.fromMs + gi * wordDuration;
+      const groupEndMs = seg.fromMs + Math.min(gi + wordsPerGroup, words.length) * wordDuration;
+
+      // Within each group, create a sub-entry for each word highlight
+      for (let wi = 0; wi < groupWords.length; wi++) {
+        const wordStartMs = groupStartMs + wi * wordDuration;
+        const wordEndMs = groupStartMs + (wi + 1) * wordDuration;
+
+        groups.push({
+          words: groupWords,
+          highlightIndex: wi,
+          fromMs: wordStartMs,
+          toMs: wordEndMs,
+          fullText: groupWords.join(' '),
+        });
+      }
+    }
+  }
+
+  return groups;
+}
 
 // Convert hex color to ASS color format (&HBBGGRR&)
 function hexToAss(hex: string): string {
   const clean = hex.replace('#', '');
   if (clean.length === 8) {
-    // Has alpha: RRGGBBAA -> &HAABBGGRR
     const r = clean.substring(0, 2);
     const g = clean.substring(2, 4);
     const b = clean.substring(4, 6);
@@ -95,15 +153,13 @@ export function generateAssFile({
   const outlineColor = hexToAss(style.colors.outline);
   const bgColor = style.colors.bg === 'transparent' ? '&H00000000' : hexToAss(style.colors.bg);
 
-  // Position: alignment in ASS (2=bottom-center, 5=center, 8=top-center)
   const alignment = position === 'top' ? 8 : position === 'center' ? 5 : 2;
   const marginV = position === 'bottom' ? 80 : position === 'top' ? 80 : 0;
 
-  // Style-specific tweaks
-  const bold = styleId === 'bold' ? -1 : 0;
-  const outlineSize = styleId === 'minimal' ? 0 : styleId === 'neon' ? 4 : 3;
-  const shadow = styleId === 'neon' ? 3 : styleId === 'minimal' ? 0 : 1;
-  const borderStyle = style.colors.bg !== 'transparent' ? 3 : 1; // 3 = opaque box bg
+  const bold = -1; // always bold for impact
+  const outlineSize = styleId === 'minimal' ? 0 : styleId === 'neon' ? 5 : 4;
+  const shadow = styleId === 'neon' ? 4 : styleId === 'minimal' ? 0 : 2;
+  const borderStyle = style.colors.bg !== 'transparent' ? 3 : 1;
 
   const header = `[Script Info]
 ScriptType: v4.00+
