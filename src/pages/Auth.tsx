@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sparkles, Mail, Lock, User, Shield } from 'lucide-react';
+import { Sparkles, Mail, Lock, User, Shield, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { validateEmailDomain } from '@/lib/email-validator';
 import { generateFingerprint } from '@/lib/device-fingerprint';
+import { validateCPF, formatCPF, hashCPF } from '@/lib/cpf-validator';
 import { supabase } from '@/integrations/supabase/client';
 
 const Auth = () => {
@@ -16,6 +17,7 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [cpf, setCpf] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
@@ -41,12 +43,21 @@ const Auth = () => {
         return;
       }
 
-      // --- Server-side validation (fingerprint + IP + domain) ---
+      // --- CPF validation ---
+      if (!validateCPF(cpf)) {
+        toast.error('CPF inválido. Verifique os números digitados.');
+        setLoading(false);
+        return;
+      }
+
+      const cpfHashed = await hashCPF(cpf);
+
+      // --- Server-side validation (fingerprint + IP + domain + CPF) ---
       try {
         const fingerprint = await generateFingerprint();
 
         const { data, error: fnError } = await supabase.functions.invoke('signup-guard', {
-          body: { email, fingerprint },
+          body: { email, fingerprint, cpfHash: cpfHashed },
         });
 
         if (fnError) {
@@ -71,6 +82,14 @@ const Auth = () => {
       if (error) {
         toast.error(error.message);
       } else {
+        // Save CPF hash to profile
+        const { data: { user: newUser } } = await supabase.auth.getUser();
+        if (newUser) {
+          await supabase
+            .from('profiles')
+            .update({ cpf_hash: cpfHashed } as any)
+            .eq('user_id', newUser.id);
+        }
         toast.success('Conta criada! Verifique seu email para confirmar.');
       }
     }
@@ -96,19 +115,36 @@ const Auth = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="name"
-                    placeholder="Seu nome"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="pl-10"
-                  />
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="name"
+                      placeholder="Seu nome"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cpf">CPF</Label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="cpf"
+                      placeholder="000.000.000-00"
+                      value={cpf}
+                      onChange={(e) => setCpf(formatCPF(e.target.value))}
+                      required
+                      maxLength={14}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

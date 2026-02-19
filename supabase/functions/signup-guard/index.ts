@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { email, fingerprint } = body;
+    const { email, fingerprint, cpfHash } = body;
 
     if (!email) {
       return new Response(
@@ -108,6 +108,22 @@ Deno.serve(async (req) => {
         JSON.stringify({ allowed: false, reason: "Muitos cadastros recentes deste endereço. Tente novamente em 24 horas." }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // 5. Check CPF uniqueness
+    if (cpfHash) {
+      const { data: existingCpf } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("cpf_hash", cpfHash)
+        .maybeSingle();
+
+      if (existingCpf) {
+        return new Response(
+          JSON.stringify({ allowed: false, reason: "Este CPF já está vinculado a uma conta existente." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // All checks passed — record the signup attempt
