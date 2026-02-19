@@ -22,6 +22,7 @@ import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X } from 'lucide-react';
+import { ScriptChatFloat } from '@/components/ScriptChat';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 
@@ -650,6 +651,7 @@ const Index = () => {
           </Button>
         </div>
       </main>
+      <ScriptChatFloat />
     </div>
   );
 };
