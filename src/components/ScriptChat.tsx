@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ type Conversation = {
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-roteiros`;
 
 export function ScriptChatFloat() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -287,7 +289,7 @@ export function ScriptChatFloat() {
                 O RoteiroPRO IA está disponível apenas para o plano <strong>Empresarial</strong>.
               </p>
               <Button
-                onClick={() => { setOpen(false); window.location.href = '/plans'; }}
+                onClick={() => { setOpen(false); setTimeout(() => navigate('/plans'), 300); }}
                 className="bg-gradient-to-r from-primary to-accent text-primary-foreground"
               >
                 Ver Planos
