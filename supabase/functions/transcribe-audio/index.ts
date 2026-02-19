@@ -1,5 +1,5 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,12 +22,8 @@ serve(async (req) => {
       });
     }
 
-    // Convert audio to base64
-    const audioBytes = await audioFile.arrayBuffer();
-    const base64Audio = btoa(
-      String.fromCharCode(...new Uint8Array(audioBytes))
-    );
-
+    const audioBytes = new Uint8Array(await audioFile.arrayBuffer());
+    const base64Audio = base64Encode(audioBytes);
     const mimeType = audioFile.type || "audio/wav";
 
     // Call Gemini for transcription with timestamps
