@@ -353,18 +353,29 @@ export function ScriptChatFloat() {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {messages.map((msg, idx) => (
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+                        className={`rounded-2xl text-sm ${
                           msg.role === 'user'
-                            ? 'bg-primary text-primary-foreground rounded-br-md'
-                            : 'bg-muted text-foreground rounded-bl-md'
+                            ? 'max-w-[85%] bg-primary text-primary-foreground rounded-br-md px-4 py-2.5'
+                            : 'max-w-[95%] bg-muted/60 text-foreground rounded-bl-md px-4 py-3'
                         }`}
                       >
                         {msg.role === 'assistant' ? (
-                          <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                          <div className="prose prose-sm dark:prose-invert max-w-none
+                            [&>*:first-child]:mt-0 [&>*:last-child]:mb-0
+                            [&>h3]:text-base [&>h3]:font-bold [&>h3]:mt-4 [&>h3]:mb-2 [&>h3]:text-primary
+                            [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:mt-3 [&>h4]:mb-1.5
+                            [&>hr]:my-3 [&>hr]:border-border/50
+                            [&>blockquote]:border-l-2 [&>blockquote]:border-primary/40 [&>blockquote]:pl-3 [&>blockquote]:italic [&>blockquote]:text-foreground/80 [&>blockquote]:my-2
+                            [&>ul]:space-y-1 [&>ol]:space-y-1
+                            [&>table]:text-xs [&>table]:w-full [&>table_th]:text-left [&>table_th]:pb-1 [&>table_th]:border-b [&>table_td]:py-1 [&>table_td]:border-b [&>table_td]:border-border/30
+                            [&>p]:leading-relaxed
+                            [&_strong]:text-foreground
+                            [&_em]:text-muted-foreground
+                          ">
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
                           </div>
                         ) : (
