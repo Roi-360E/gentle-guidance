@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractAudioAsFile, transcribeAudio, type TranscriptionResult } from '@/lib/whisper-transcriber';
-import { SUBTITLE_STYLES, generateAssFile } from '@/lib/subtitle-styles';
+import { SUBTITLE_STYLES } from '@/lib/subtitle-styles';
 import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
 
 type Step = 'upload' | 'transcribing' | 'style' | 'burning' | 'done';
@@ -102,14 +102,22 @@ const AutoSubtitles = () => {
     setStatusText('Preparando legendas...');
 
     try {
-      const assContent = generateAssFile({
+      const style = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
+
+      const burnOptions = {
         segments: transcription.segments,
-        styleId: selectedStyle,
+        style: {
+          fontColor: style.colors.primary,
+          borderColor: style.colors.outline,
+          bgColor: style.colors.bg,
+          borderW: selectedStyle === 'minimal' ? 0 : selectedStyle === 'neon' ? 4 : 3,
+          bold: selectedStyle === 'bold',
+        },
         fontSize,
         position: subtitlePosition,
-      });
+      };
 
-      const outputBlob = await burnSubtitlesIntoVideo(videoFile, assContent, (pct, status) => {
+      const outputBlob = await burnSubtitlesIntoVideo(videoFile, burnOptions, (pct, status) => {
         setProgress(pct);
         setStatusText(status);
       });
