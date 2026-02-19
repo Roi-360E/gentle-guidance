@@ -28,6 +28,7 @@ export function ScriptChatFloat() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -189,6 +190,7 @@ export function ScriptChatFloat() {
       let textBuffer = '';
       let assistantSoFar = '';
       let streamDone = false;
+      setIsStreaming(true);
 
       while (!streamDone) {
         const { done, value } = await reader.read();
@@ -243,6 +245,7 @@ export function ScriptChatFloat() {
         toast.error('Erro na conexão com a IA');
       }
     } finally {
+      setIsStreaming(false);
       setIsLoading(false);
       abortRef.current = null;
     }
@@ -379,6 +382,9 @@ export function ScriptChatFloat() {
                             [&_em]:text-muted-foreground
                           ">
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            {isStreaming && idx === messages.length - 1 && (
+                              <span className="inline-block w-[2px] h-[1em] bg-primary ml-0.5 align-middle animate-[pulse_0.8s_ease-in-out_infinite]" />
+                            )}
                           </div>
                         ) : (
                           msg.content
