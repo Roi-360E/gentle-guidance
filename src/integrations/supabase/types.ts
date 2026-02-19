@@ -77,6 +77,30 @@ export type Database = {
         }
         Relationships: []
       }
+      signup_guards: {
+        Row: {
+          created_at: string
+          device_fingerprint: string | null
+          email_domain: string
+          id: string
+          ip_address: string
+        }
+        Insert: {
+          created_at?: string
+          device_fingerprint?: string | null
+          email_domain: string
+          id?: string
+          ip_address: string
+        }
+        Update: {
+          created_at?: string
+          device_fingerprint?: string | null
+          email_domain?: string
+          id?: string
+          ip_address?: string
+        }
+        Relationships: []
+      }
       subtitles: {
         Row: {
           created_at: string
