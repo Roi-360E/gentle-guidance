@@ -319,7 +319,7 @@ const Index = () => {
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/subtitles'); setMobileMenuOpen(false); }}>
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 hidden sm:flex" onClick={() => { navigate('/subtitles'); setMobileMenuOpen(false); }}>
               <Type className="w-4 h-4" /> Legendas IA
             </Button>
             <div className="border-t border-border pt-1 mt-1">
