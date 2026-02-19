@@ -407,24 +407,25 @@ const AutoSubtitles = () => {
                           borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '6px' : '0',
                         }}
                       >
-                        {['template', 'desse', 'robozinho', 'de'].map((word, i) => (
+                        {['TEMPLATE', 'DESSE', 'ROBOZINHO'].map((word, i) => (
                           <span
                             key={i}
-                            className="font-bold"
+                            className="font-extrabold uppercase tracking-wide"
                             style={{
                               color: i === 1 ? selectedStyleObj.colors.highlight : selectedStyleObj.colors.primary,
-                              fontSize: `${Math.min(fontSize / 1.5, 40)}px`,
+                              fontSize: `${Math.min(fontSize / 1.2, 44)}px`,
                               WebkitTextStroke: selectedStyleObj.id === 'minimal'
                                 ? 'none'
-                                : `${selectedStyleObj.id === 'neon' ? 2 : 1.5}px ${selectedStyleObj.colors.outline}`,
+                                : `${selectedStyleObj.id === 'neon' ? 2.5 : 2}px ${selectedStyleObj.colors.outline}`,
                               textShadow: selectedStyleObj.id === 'neon'
-                                ? `0 0 10px ${selectedStyleObj.colors.primary}, 0 0 20px ${selectedStyleObj.colors.outline}`
+                                ? `0 0 12px ${selectedStyleObj.colors.primary}, 0 0 24px ${selectedStyleObj.colors.outline}`
                                 : selectedStyleObj.id === 'fire'
-                                ? `0 0 8px ${selectedStyleObj.colors.highlight}, 2px 2px 4px #000`
+                                ? `0 0 10px ${selectedStyleObj.colors.highlight}, 3px 3px 6px #000`
                                 : selectedStyleObj.id === 'minimal'
-                                ? '0 2px 8px rgba(0,0,0,0.6)'
-                                : `2px 2px 4px rgba(0,0,0,0.95)`,
-                              marginRight: '6px',
+                                ? '0 3px 10px rgba(0,0,0,0.7)'
+                                : `3px 3px 6px rgba(0,0,0,0.95)`,
+                              marginRight: '8px',
+                              letterSpacing: '0.05em',
                             }}
                           >
                             {word}
