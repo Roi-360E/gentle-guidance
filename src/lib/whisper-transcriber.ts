@@ -1,7 +1,8 @@
 /**
- * Whisper WASM Transcriber — runs entirely in the browser
- * Uses @transcribe/transcriber + @transcribe/shout (whisper.cpp compiled to WASM)
+ * Audio Transcriber — uses Gemini via edge function for fast, accurate transcription
  */
+
+import { supabase } from '@/integrations/supabase/client';
 
 export interface TranscriptionSegment {
   text: string;
@@ -17,11 +18,13 @@ export interface TranscriptionResult {
   fullText: string;
 }
 
-// Parse timestamp string "HH:MM:SS,mmm" to milliseconds
-function timestampToMs(ts: string): number {
-  const [time, ms] = ts.split(',');
-  const [h, m, s] = time.split(':').map(Number);
-  return (h * 3600 + m * 60 + s) * 1000 + Number(ms || 0);
+// Format seconds to SRT timestamp "HH:MM:SS,mmm"
+function secondsToSrt(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const ms = Math.round((seconds % 1) * 1000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
 }
 
 // Format ms to ASS timestamp "H:MM:SS.cc" (centiseconds)
@@ -47,11 +50,12 @@ export async function extractAudioAsFile(videoFile: File): Promise<File> {
 
   await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-  // Extract mono 16kHz WAV (required by Whisper)
+  // Extract mono 16kHz WAV
   await ffmpeg.exec([
     '-i', inputName,
     '-ar', '16000',
     '-ac', '1',
+    '-t', '120',
     '-f', 'wav',
     '-y', outputName,
   ]);
@@ -68,53 +72,63 @@ export async function extractAudioAsFile(videoFile: File): Promise<File> {
   return new File([new Uint8Array(wavBytes).buffer as ArrayBuffer], 'audio.wav', { type: 'audio/wav' });
 }
 
-const MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin';
-
 /**
- * Transcribe audio using @transcribe/transcriber (Whisper WASM)
+ * Transcribe audio using Gemini via edge function
  */
 export async function transcribeAudio(
   audioFile: File,
   onProgress?: (pct: number, status: string) => void,
 ): Promise<TranscriptionResult> {
-  onProgress?.(10, 'Carregando modelo Whisper...');
+  onProgress?.(30, 'Enviando áudio para transcrição...');
 
-  // Dynamic imports
-  const { FileTranscriber } = await import('@transcribe/transcriber');
-  const createModule = (await import('@transcribe/shout')).default;
+  const formData = new FormData();
+  formData.append('audio', audioFile);
 
-  const transcriber = new FileTranscriber({
-    createModule,
-    model: MODEL_URL,
-    onProgress: (progress: number) => {
-      onProgress?.(10 + progress * 0.8, 'Transcrevendo...');
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: formData,
     },
+  );
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error('Transcription API error:', errText);
+    throw new Error(`Transcription failed: ${response.status}`);
+  }
+
+  onProgress?.(80, 'Processando resultado...');
+
+  const result = await response.json();
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  const segments: TranscriptionSegment[] = (result.segments || []).map((seg: any) => {
+    const fromMs = Math.round((seg.start || 0) * 1000);
+    const toMs = Math.round((seg.end || 0) * 1000);
+    return {
+      text: (seg.text || '').trim(),
+      from: secondsToSrt(seg.start || 0),
+      to: secondsToSrt(seg.end || 0),
+      fromMs,
+      toMs,
+    };
   });
-
-  await transcriber.init();
-  onProgress?.(15, 'Modelo carregado. Transcrevendo...');
-
-  const result = await transcriber.transcribe(audioFile, {
-    lang: 'auto',
-    suppress_non_speech: true,
-    token_timestamps: true,
-  });
-
-  onProgress?.(95, 'Transcrição concluída!');
-
-  const segments: TranscriptionSegment[] = (result.transcription || []).map((seg: any) => ({
-    text: (seg.text || '').trim(),
-    from: seg.timestamps?.from || '00:00:00,000',
-    to: seg.timestamps?.to || '00:00:00,000',
-    fromMs: timestampToMs(seg.timestamps?.from || '00:00:00,000'),
-    toMs: timestampToMs(seg.timestamps?.to || '00:00:00,000'),
-  }));
 
   const fullText = segments.map(s => s.text).join(' ');
-  onProgress?.(100, 'Pronto!');
+  onProgress?.(100, 'Transcrição concluída!');
 
   return {
-    language: result.result?.language || 'pt',
+    language: result.language || 'pt',
     segments,
     fullText,
   };
