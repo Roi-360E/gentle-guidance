@@ -38,6 +38,10 @@ export function ScriptChatFloat() {
   const [plan, setPlan] = useState('free');
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const charQueueRef = useRef<string[]>([]);
+  const fullTextRef = useRef('');
+  const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [displayedText, setDisplayedText] = useState('');
 
   // Load plan
   useEffect(() => {
@@ -191,6 +195,30 @@ export function ScriptChatFloat() {
       let assistantSoFar = '';
       let streamDone = false;
       setIsStreaming(true);
+      charQueueRef.current = [];
+      fullTextRef.current = '';
+      setDisplayedText('');
+
+      // Start typewriter interval — reveals chars from queue
+      const CHAR_DELAY = 12; // ms per character
+      const CHARS_PER_TICK = 2;
+      typingTimerRef.current = setInterval(() => {
+        if (charQueueRef.current.length > 0) {
+          const chunk = charQueueRef.current.splice(0, CHARS_PER_TICK).join('');
+          setDisplayedText((prev) => {
+            const next = prev + chunk;
+            // Update messages state to keep in sync
+            setMessages((msgs) => {
+              const last = msgs[msgs.length - 1];
+              if (last?.role === 'assistant') {
+                return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: next } : m));
+              }
+              return [...msgs, { role: 'assistant', content: next }];
+            });
+            return next;
+          });
+        }
+      }, CHAR_DELAY);
 
       while (!streamDone) {
         const { done, value } = await reader.read();
@@ -216,19 +244,44 @@ export function ScriptChatFloat() {
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               assistantSoFar += content;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.role === 'assistant') {
-                  return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
-                }
-                return [...prev, { role: 'assistant', content: assistantSoFar }];
-              });
+              fullTextRef.current = assistantSoFar;
+              // Push chars to queue for typewriter effect
+              for (const ch of content) {
+                charQueueRef.current.push(ch);
+              }
             }
           } catch {
             textBuffer = line + '\n' + textBuffer;
             break;
           }
         }
+      }
+
+      // Drain remaining queue
+      await new Promise<void>((resolve) => {
+        const drainInterval = setInterval(() => {
+          if (charQueueRef.current.length === 0) {
+            clearInterval(drainInterval);
+            resolve();
+          }
+        }, 50);
+      });
+
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+
+      // Ensure final text is fully displayed
+      if (assistantSoFar) {
+        setDisplayedText(assistantSoFar);
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant') {
+            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+          }
+          return [...prev, { role: 'assistant', content: assistantSoFar }];
+        });
       }
 
       // Save assistant message
@@ -245,6 +298,10 @@ export function ScriptChatFloat() {
         toast.error('Erro na conexão com a IA');
       }
     } finally {
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
       setIsStreaming(false);
       setIsLoading(false);
       abortRef.current = null;
