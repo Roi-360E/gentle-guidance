@@ -85,7 +85,7 @@ export function ScriptChatFloat() {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const isPaid = plan === 'professional' || plan === 'enterprise';
+  const isPaid = plan === 'enterprise';
 
   const createConversation = async () => {
     if (!user) return;
@@ -284,7 +284,7 @@ export function ScriptChatFloat() {
               </div>
               <h3 className="text-lg font-bold text-foreground">Recurso Exclusivo</h3>
               <p className="text-sm text-muted-foreground">
-                O RoteiroPRO IA está disponível apenas para planos <strong>Profissional</strong> e <strong>Empresarial</strong>.
+                O RoteiroPRO IA está disponível apenas para o plano <strong>Empresarial</strong>.
               </p>
               <Button
                 onClick={() => { setOpen(false); window.location.href = '/plans'; }}
