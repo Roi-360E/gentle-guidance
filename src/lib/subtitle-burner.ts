@@ -1,5 +1,6 @@
 /**
  * Burn subtitles into video using FFmpeg.wasm drawtext filter
+ * Uses a bundled font file to ensure text renders correctly in the browser.
  */
 
 import { getFFmpeg } from '@/lib/video-processor';
@@ -19,19 +20,22 @@ interface BurnOptions {
   position: 'bottom' | 'center' | 'top';
 }
 
+const FONT_PATH = '/fonts/Inter-Variable.ttf';
+const FONT_FS_NAME = 'subtitle_font.ttf';
+
 /**
  * Escape text for FFmpeg drawtext filter.
- * drawtext requires escaping: \ : ' and also [ ] ; %
- * In filtergraph context, we need one level of escaping.
+ * Inside single-quoted values, we need to escape: \ : ' [ ] %
  */
 function escapeDrawtext(text: string): string {
   return text
-    .replace(/\\/g, '\\\\')   // \ → \\
-    .replace(/'/g, "'\\'")     // ' → '\'
-    .replace(/:/g, '\\:')     // : → \:
-    .replace(/%/g, '%%')      // % → %%
-    .replace(/\[/g, '\\[')    // [ → \[
-    .replace(/\]/g, '\\]');   // ] → \]
+    .replace(/\\/g, '\\\\')       // \ → \\
+    .replace(/'/g, "\u2019")       // ' → typographic apostrophe (safest)
+    .replace(/:/g, '\\:')         // : → \:
+    .replace(/%/g, '%%')          // % → %%
+    .replace(/\[/g, '\\[')        // [ → \[
+    .replace(/\]/g, '\\]')        // ] → \]
+    .replace(/;/g, '\\;');        // ; → \;
 }
 
 function hexToFFmpeg(hex: string): string {
@@ -39,7 +43,12 @@ function hexToFFmpeg(hex: string): string {
   return '0x' + clean.substring(0, 6);
 }
 
-export function buildDrawtextFilter(options: BurnOptions): string {
+/**
+ * Build a chain of drawtext filters, one per subtitle segment.
+ * Each filter is separated by comma (filter chain in FFmpeg).
+ * We use the `enable` option with `between(t,start,end)` for timing.
+ */
+export function buildDrawtextFilter(options: BurnOptions, fontFile: string): string {
   const { segments, style, fontSize, position } = options;
 
   const yExpr = position === 'top'
@@ -55,15 +64,16 @@ export function buildDrawtextFilter(options: BurnOptions): string {
       const endSec = (seg.toMs / 1000).toFixed(3);
       const text = escapeDrawtext(seg.text);
 
-      const parts = [
-        `drawtext=text='${text}'`,
+      const parts: string[] = [
+        `drawtext=fontfile=${fontFile}`,
+        `text='${text}'`,
         `fontsize=${fontSize}`,
         `fontcolor=${hexToFFmpeg(style.fontColor)}`,
         `borderw=${style.borderW}`,
         `bordercolor=${hexToFFmpeg(style.borderColor)}`,
         `x=(w-text_w)/2`,
         `y=${yExpr}`,
-        `enable='between(t,${startSec},${endSec})'`,
+        `enable='between(t\\,${startSec}\\,${endSec})'`,
       ];
 
       if (style.bgColor !== 'transparent') {
@@ -74,6 +84,21 @@ export function buildDrawtextFilter(options: BurnOptions): string {
     });
 
   return filters.join(',');
+}
+
+/**
+ * Load the font file into FFmpeg's virtual filesystem.
+ */
+async function loadFontIntoFS(ffmpeg: any): Promise<string> {
+  try {
+    const fontData = await fetchFile(FONT_PATH);
+    await ffmpeg.writeFile(FONT_FS_NAME, fontData);
+    console.log('[SubtitleBurner] Font loaded into FFmpeg FS:', FONT_FS_NAME);
+    return FONT_FS_NAME;
+  } catch (err) {
+    console.warn('[SubtitleBurner] Failed to load font, drawtext may fail:', err);
+    return FONT_FS_NAME;
+  }
 }
 
 export async function burnSubtitlesIntoVideo(
@@ -87,20 +112,22 @@ export async function burnSubtitlesIntoVideo(
   const inputName = `burn_input_${Date.now()}.mp4`;
   const outputName = `burned_${Date.now()}.mp4`;
 
+  onProgress?.(8, 'Carregando fonte...');
+  const fontFile = await loadFontIntoFS(ffmpeg);
+
   onProgress?.(10, 'Carregando vídeo...');
   await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-  const filterStr = buildDrawtextFilter(options);
-  console.log('[SubtitleBurner] drawtext filter:', filterStr.substring(0, 500));
+  const filterStr = buildDrawtextFilter(options, fontFile);
+  console.log('[SubtitleBurner] drawtext filter (first 600 chars):', filterStr.substring(0, 600));
 
   // Track progress from FFmpeg logs
   let duration = 0;
   let lastError = '';
   const logHandler = ({ message }: { message: string }) => {
-    // Capture errors
     if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
       lastError = message;
-      console.warn('[SubtitleBurner] FFmpeg warning:', message);
+      console.warn('[SubtitleBurner] FFmpeg:', message);
     }
     const durMatch = message.match(/Duration:\s+(\d+):(\d+):(\d+)/);
     if (durMatch) {
@@ -117,8 +144,9 @@ export async function burnSubtitlesIntoVideo(
   ffmpeg.on('log', logHandler);
   onProgress?.(20, 'Gravando legendas no vídeo...');
 
+  let usedFallback = false;
+
   try {
-    // First try with drawtext filter
     try {
       await ffmpeg.exec([
         '-i', inputName,
@@ -131,8 +159,8 @@ export async function burnSubtitlesIntoVideo(
         '-y', outputName,
       ]);
     } catch (filterErr) {
-      console.warn('[SubtitleBurner] drawtext failed, falling back to re-encode without subtitles:', filterErr);
-      // Fallback: just re-encode without subtitles
+      console.warn('[SubtitleBurner] drawtext failed, re-encoding without subtitles:', filterErr);
+      usedFallback = true;
       await ffmpeg.exec([
         '-i', inputName,
         '-c:v', 'libx264',
@@ -148,26 +176,31 @@ export async function burnSubtitlesIntoVideo(
   }
 
   onProgress?.(95, 'Finalizando...');
-  
+
   let outputData: any;
   try {
     outputData = await ffmpeg.readFile(outputName);
   } catch (readErr) {
-    console.error('[SubtitleBurner] Failed to read output file:', readErr);
-    throw new Error('FFmpeg did not produce output file. Check drawtext filter syntax.');
+    console.error('[SubtitleBurner] Failed to read output:', readErr, 'Last error:', lastError);
+    throw new Error('FFmpeg não produziu o arquivo de saída.');
   }
 
   const outputBytes = outputData instanceof Uint8Array ? outputData : new Uint8Array(outputData as unknown as ArrayBuffer);
 
   if (outputBytes.length < 1000) {
-    console.error('[SubtitleBurner] Output file too small:', outputBytes.length, 'bytes. Last error:', lastError);
-    throw new Error('Output video is empty or corrupted.');
+    console.error('[SubtitleBurner] Output too small:', outputBytes.length, 'bytes. Last error:', lastError);
+    throw new Error('Vídeo de saída está vazio ou corrompido.');
+  }
+
+  if (usedFallback) {
+    console.warn('[SubtitleBurner] Used fallback - video re-encoded without subtitles');
   }
 
   // Cleanup
   try {
     await ffmpeg.deleteFile(inputName);
     await ffmpeg.deleteFile(outputName);
+    await ffmpeg.deleteFile(FONT_FS_NAME);
   } catch { /* ignore */ }
 
   onProgress?.(100, 'Concluído!');
