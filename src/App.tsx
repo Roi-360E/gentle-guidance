@@ -13,6 +13,7 @@ import Plans from "./pages/Plans";
 import Downloads from "./pages/Downloads";
 import NotFound from "./pages/NotFound";
 import Sales from "./pages/Sales";
+import AutoSubtitles from "./pages/AutoSubtitles";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
+              <Route path="/auto-subtitles" element={<ProtectedRoute><AutoSubtitles /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ProcessingProvider>

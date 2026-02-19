@@ -296,6 +296,9 @@ const Index = () => {
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/auto-subtitles')}>
+              <Type className="w-4 h-4" /> Legendas Auto
+            </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair
             </Button>
@@ -320,8 +323,8 @@ const Index = () => {
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 hidden sm:flex" onClick={() => { navigate('/subtitles'); setMobileMenuOpen(false); }}>
-              <Type className="w-4 h-4" /> Legendas IA
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/auto-subtitles'); setMobileMenuOpen(false); }}>
+              <Type className="w-4 h-4" /> Legendas Automáticas
             </Button>
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
