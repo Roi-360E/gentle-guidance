@@ -403,6 +403,7 @@ const AutoSubtitles = () => {
               <video
                 src={outputUrl}
                 controls
+                autoPlay
                 className="w-full max-h-[400px] rounded-xl bg-black object-contain"
               />
               <div className="flex gap-3">

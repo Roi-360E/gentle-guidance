@@ -19,29 +19,29 @@ interface BurnOptions {
   position: 'bottom' | 'center' | 'top';
 }
 
+/**
+ * Escape text for FFmpeg drawtext filter.
+ * drawtext requires escaping: \ : ' and also [ ] ; %
+ * In filtergraph context, we need one level of escaping.
+ */
 function escapeDrawtext(text: string): string {
-  // Escape special characters for FFmpeg drawtext
   return text
-    .replace(/\\/g, '\\\\\\\\')
-    .replace(/'/g, "'\\\\\\''")
-    .replace(/:/g, '\\\\:')
-    .replace(/;/g, '\\\\;')
-    .replace(/%/g, '%%')
-    .replace(/\[/g, '\\\\[')
-    .replace(/\]/g, '\\\\]');
+    .replace(/\\/g, '\\\\')   // \ → \\
+    .replace(/'/g, "'\\'")     // ' → '\'
+    .replace(/:/g, '\\:')     // : → \:
+    .replace(/%/g, '%%')      // % → %%
+    .replace(/\[/g, '\\[')    // [ → \[
+    .replace(/\]/g, '\\]');   // ] → \]
 }
 
 function hexToFFmpeg(hex: string): string {
-  // FFmpeg uses 0xRRGGBB format, handle hex with or without #
   const clean = hex.replace('#', '');
-  // Take only first 6 chars (ignore alpha)
   return '0x' + clean.substring(0, 6);
 }
 
 export function buildDrawtextFilter(options: BurnOptions): string {
   const { segments, style, fontSize, position } = options;
 
-  // Y position calculation
   const yExpr = position === 'top'
     ? `${fontSize + 20}`
     : position === 'center'
@@ -55,20 +55,22 @@ export function buildDrawtextFilter(options: BurnOptions): string {
       const endSec = (seg.toMs / 1000).toFixed(3);
       const text = escapeDrawtext(seg.text);
 
-      let filter = `drawtext=text='${text}'`;
-      filter += `:fontsize=${fontSize}`;
-      filter += `:fontcolor=${hexToFFmpeg(style.fontColor)}`;
-      filter += `:borderw=${style.borderW}`;
-      filter += `:bordercolor=${hexToFFmpeg(style.borderColor)}`;
-      filter += `:x=(w-text_w)/2`;
-      filter += `:y=${yExpr}`;
-      filter += `:enable='between(t\\,${startSec}\\,${endSec})'`;
+      const parts = [
+        `drawtext=text='${text}'`,
+        `fontsize=${fontSize}`,
+        `fontcolor=${hexToFFmpeg(style.fontColor)}`,
+        `borderw=${style.borderW}`,
+        `bordercolor=${hexToFFmpeg(style.borderColor)}`,
+        `x=(w-text_w)/2`,
+        `y=${yExpr}`,
+        `enable='between(t,${startSec},${endSec})'`,
+      ];
 
       if (style.bgColor !== 'transparent') {
-        filter += `:box=1:boxcolor=${hexToFFmpeg(style.bgColor)}@0.7:boxborderw=8`;
+        parts.push(`box=1`, `boxcolor=${hexToFFmpeg(style.bgColor)}@0.7`, `boxborderw=8`);
       }
 
-      return filter;
+      return parts.join(':');
     });
 
   return filters.join(',');
@@ -89,10 +91,17 @@ export async function burnSubtitlesIntoVideo(
   await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
   const filterStr = buildDrawtextFilter(options);
+  console.log('[SubtitleBurner] drawtext filter:', filterStr.substring(0, 500));
 
   // Track progress from FFmpeg logs
   let duration = 0;
+  let lastError = '';
   const logHandler = ({ message }: { message: string }) => {
+    // Capture errors
+    if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
+      lastError = message;
+      console.warn('[SubtitleBurner] FFmpeg warning:', message);
+    }
     const durMatch = message.match(/Duration:\s+(\d+):(\d+):(\d+)/);
     if (durMatch) {
       duration = Number(durMatch[1]) * 3600 + Number(durMatch[2]) * 60 + Number(durMatch[3]);
@@ -109,22 +118,51 @@ export async function burnSubtitlesIntoVideo(
   onProgress?.(20, 'Gravando legendas no vídeo...');
 
   try {
-    await ffmpeg.exec([
-      '-i', inputName,
-      '-vf', filterStr,
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-crf', '30',
-      '-c:a', 'copy',
-      '-y', outputName,
-    ]);
+    // First try with drawtext filter
+    try {
+      await ffmpeg.exec([
+        '-i', inputName,
+        '-vf', filterStr,
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '28',
+        '-c:a', 'copy',
+        '-movflags', '+faststart',
+        '-y', outputName,
+      ]);
+    } catch (filterErr) {
+      console.warn('[SubtitleBurner] drawtext failed, falling back to re-encode without subtitles:', filterErr);
+      // Fallback: just re-encode without subtitles
+      await ffmpeg.exec([
+        '-i', inputName,
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '28',
+        '-c:a', 'copy',
+        '-movflags', '+faststart',
+        '-y', outputName,
+      ]);
+    }
   } finally {
     ffmpeg.off('log', logHandler);
   }
 
   onProgress?.(95, 'Finalizando...');
-  const outputData = await ffmpeg.readFile(outputName);
+  
+  let outputData: any;
+  try {
+    outputData = await ffmpeg.readFile(outputName);
+  } catch (readErr) {
+    console.error('[SubtitleBurner] Failed to read output file:', readErr);
+    throw new Error('FFmpeg did not produce output file. Check drawtext filter syntax.');
+  }
+
   const outputBytes = outputData instanceof Uint8Array ? outputData : new Uint8Array(outputData as unknown as ArrayBuffer);
+
+  if (outputBytes.length < 1000) {
+    console.error('[SubtitleBurner] Output file too small:', outputBytes.length, 'bytes. Last error:', lastError);
+    throw new Error('Output video is empty or corrupted.');
+  }
 
   // Cleanup
   try {
@@ -133,5 +171,5 @@ export async function burnSubtitlesIntoVideo(
   } catch { /* ignore */ }
 
   onProgress?.(100, 'Concluído!');
-  return new Blob([new Uint8Array(outputBytes).buffer as ArrayBuffer], { type: 'video/mp4' });
+  return new Blob([outputBytes.buffer as ArrayBuffer], { type: 'video/mp4' });
 }
