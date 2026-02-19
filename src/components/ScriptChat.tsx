@@ -38,10 +38,9 @@ export function ScriptChatFloat() {
   const [plan, setPlan] = useState('free');
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const charQueueRef = useRef<string[]>([]);
-  const fullTextRef = useRef('');
+  const charQueueRef = useRef<string>('');
+  const revealedRef = useRef('');
   const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [displayedText, setDisplayedText] = useState('');
 
   // Load plan
   useEffect(() => {
@@ -195,27 +194,25 @@ export function ScriptChatFloat() {
       let assistantSoFar = '';
       let streamDone = false;
       setIsStreaming(true);
-      charQueueRef.current = [];
-      fullTextRef.current = '';
-      setDisplayedText('');
+      charQueueRef.current = '';
+      revealedRef.current = '';
 
-      // Start typewriter interval — reveals chars from queue
-      const CHAR_DELAY = 12; // ms per character
-      const CHARS_PER_TICK = 2;
+      // Typewriter interval — reveals chars from the queue
+      const CHAR_DELAY = 15;
+      const CHARS_PER_TICK = 3;
       typingTimerRef.current = setInterval(() => {
         if (charQueueRef.current.length > 0) {
-          const chunk = charQueueRef.current.splice(0, CHARS_PER_TICK).join('');
-          setDisplayedText((prev) => {
-            const next = prev + chunk;
-            // Update messages state to keep in sync
-            setMessages((msgs) => {
-              const last = msgs[msgs.length - 1];
-              if (last?.role === 'assistant') {
-                return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: next } : m));
-              }
-              return [...msgs, { role: 'assistant', content: next }];
-            });
-            return next;
+          const take = Math.min(CHARS_PER_TICK, charQueueRef.current.length);
+          const chunk = charQueueRef.current.slice(0, take);
+          charQueueRef.current = charQueueRef.current.slice(take);
+          revealedRef.current += chunk;
+          const revealed = revealedRef.current;
+          setMessages((msgs) => {
+            const last = msgs[msgs.length - 1];
+            if (last?.role === 'assistant') {
+              return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: revealed } : m));
+            }
+            return [...msgs, { role: 'assistant', content: revealed }];
           });
         }
       }, CHAR_DELAY);
@@ -244,11 +241,7 @@ export function ScriptChatFloat() {
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               assistantSoFar += content;
-              fullTextRef.current = assistantSoFar;
-              // Push chars to queue for typewriter effect
-              for (const ch of content) {
-                charQueueRef.current.push(ch);
-              }
+              charQueueRef.current += content;
             }
           } catch {
             textBuffer = line + '\n' + textBuffer;
@@ -274,7 +267,6 @@ export function ScriptChatFloat() {
 
       // Ensure final text is fully displayed
       if (assistantSoFar) {
-        setDisplayedText(assistantSoFar);
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === 'assistant') {
