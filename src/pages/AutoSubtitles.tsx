@@ -389,55 +389,39 @@ const AutoSubtitles = () => {
                   </div>
                 </div>
 
-                {/* Animated CapCut-style preview */}
+                {/* Preview */}
                 {selectedStyleObj && (
                   <div
                     className="rounded-xl bg-black/95 relative overflow-hidden"
-                    style={{ minHeight: '180px' }}
+                    style={{ minHeight: '160px' }}
                   >
-                    {/* Simulated video background gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-gray-800/30 via-transparent to-black/60" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-gray-800/20 via-transparent to-black/50" />
                     
-                    <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-6' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-6'} px-4 text-center`}>
-                      <div
-                        className="inline-flex gap-2 items-center justify-center flex-wrap px-4 py-3"
+                    <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-5' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-5'} px-4 text-center`}>
+                      <span
+                        className="inline-block px-5 py-2 font-bold"
                         style={{
+                          color: selectedStyleObj.colors.primary,
+                          fontSize: `${Math.min(fontSize / 1.6, 38)}px`,
+                          WebkitTextStroke: selectedStyleObj.id === 'minimal'
+                            ? 'none'
+                            : `${selectedStyleObj.id === 'neon' ? 2 : 1.5}px ${selectedStyleObj.colors.outline}`,
+                          textShadow: selectedStyleObj.id === 'neon'
+                            ? `0 0 10px ${selectedStyleObj.colors.primary}, 0 0 20px ${selectedStyleObj.colors.outline}`
+                            : selectedStyleObj.id === 'fire'
+                            ? `0 0 8px ${selectedStyleObj.colors.highlight}, 2px 2px 4px #000`
+                            : selectedStyleObj.id === 'minimal'
+                            ? '0 2px 8px rgba(0,0,0,0.6)'
+                            : `2px 2px 6px rgba(0,0,0,0.9)`,
                           backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
                             ? selectedStyleObj.colors.bg
                             : 'transparent',
                           borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '8px' : '0',
+                          letterSpacing: '0.5px',
                         }}
                       >
-                        {['EXEMPLO', 'DE', 'LEGENDA'].map((word, i) => (
-                          <span
-                            key={word}
-                            className="inline-block font-black uppercase"
-                            style={{
-                              color: i === 1 ? selectedStyleObj.colors.highlight : selectedStyleObj.colors.primary,
-                              fontSize: `${Math.min(fontSize / 1.8, 36)}px`,
-                              WebkitTextStroke: selectedStyleObj.id === 'minimal'
-                                ? 'none'
-                                : `${selectedStyleObj.id === 'neon' ? 2.5 : 2}px ${selectedStyleObj.colors.outline}`,
-                              textShadow: selectedStyleObj.id === 'neon'
-                                ? `0 0 12px ${selectedStyleObj.colors.primary}, 0 0 24px ${selectedStyleObj.colors.highlight}, 0 0 48px ${selectedStyleObj.colors.outline}`
-                                : selectedStyleObj.id === 'fire'
-                                ? `0 0 10px ${selectedStyleObj.colors.highlight}, 0 2px 6px #000, 0 0 20px ${selectedStyleObj.colors.outline}`
-                                : selectedStyleObj.id === 'minimal'
-                                ? '0 2px 8px rgba(0,0,0,0.5)'
-                                : `3px 3px 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.5)`,
-                              transform: i === 1 ? 'scale(1.15)' : 'scale(1)',
-                              transition: 'all 0.2s ease',
-                              letterSpacing: '1px',
-                              animation: `fade-in 0.3s ease-out ${i * 0.15}s both`,
-                            }}
-                          >
-                            {word}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-white/40 mt-3">
-                        Palavra destacada muda em tempo real no vídeo
-                      </p>
+                        template desse robozinho de
+                      </span>
                     </div>
                   </div>
                 )}
