@@ -336,10 +336,10 @@ export function ScriptChatFloat() {
                   </div>
                   <h3 className="text-lg font-bold text-foreground">RoteiroPRO IA</h3>
                   <p className="text-sm text-muted-foreground max-w-[280px]">
-                    Seu especialista em roteiros virais. Me conte sobre seu negócio e o tipo de vídeo que quer criar! 🎬
+                    Seu copywriter veterano com 50+ anos de experiência. Vou te guiar por etapas para criar roteiros sob medida! 🎬
                   </p>
                   <div className="grid gap-2 w-full max-w-[280px]">
-                    {['Quero criar um Reels de vendas', 'Preciso de um gancho viral', 'Me ajude com um roteiro educativo'].map((suggestion) => (
+                    {['Quero criar roteiros para meu negócio', 'Preciso de ganchos virais para Reels', 'Me ajude a vender mais com vídeos curtos'].map((suggestion) => (
                       <Button
                         key={suggestion}
                         variant="outline"
