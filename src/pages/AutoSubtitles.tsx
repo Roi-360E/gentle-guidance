@@ -347,18 +347,30 @@ const AutoSubtitles = () => {
                 {/* Style preview */}
                 {selectedStyleObj && (
                   <div
-                    className="rounded-xl bg-black/80 p-6 text-center relative overflow-hidden"
-                    style={{ minHeight: '120px' }}
+                    className="rounded-xl bg-black/90 p-6 text-center relative overflow-hidden"
+                    style={{ minHeight: '140px' }}
                   >
                     <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-4' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-4'} px-4`}>
                       <span
-                        className="inline-block px-3 py-1 font-bold"
+                        className="inline-block px-4 py-2 font-extrabold"
                         style={{
                           color: selectedStyleObj.colors.primary,
-                          textShadow: selectedStyleObj.id !== 'minimal' ? `2px 2px 4px ${selectedStyleObj.colors.outline}` : 'none',
                           fontSize: `${Math.min(fontSize / 2, 32)}px`,
-                          backgroundColor: selectedStyleObj.colors.bg !== 'transparent' ? selectedStyleObj.colors.bg : 'transparent',
-                          borderRadius: '4px',
+                          WebkitTextStroke: selectedStyleObj.id === 'minimal'
+                            ? 'none'
+                            : `${selectedStyleObj.id === 'neon' ? 2 : 1.5}px ${selectedStyleObj.colors.outline}`,
+                          textShadow: selectedStyleObj.id === 'neon'
+                            ? `0 0 10px ${selectedStyleObj.colors.primary}, 0 0 20px ${selectedStyleObj.colors.outline}, 0 0 40px ${selectedStyleObj.colors.outline}`
+                            : selectedStyleObj.id === 'fire'
+                            ? `0 0 8px ${selectedStyleObj.colors.outline}, 2px 2px 4px #000`
+                            : selectedStyleObj.id === 'minimal'
+                            ? 'none'
+                            : `2px 2px 4px rgba(0,0,0,0.8)`,
+                          backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
+                            ? selectedStyleObj.colors.bg
+                            : 'transparent',
+                          borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '6px' : '0',
+                          letterSpacing: '0.5px',
                         }}
                       >
                         Exemplo de legenda
