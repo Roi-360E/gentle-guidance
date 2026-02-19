@@ -12,6 +12,7 @@ import SubtitleEditor from "./pages/SubtitleEditor";
 import Plans from "./pages/Plans";
 import Downloads from "./pages/Downloads";
 import NotFound from "./pages/NotFound";
+import Sales from "./pages/Sales";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
           <ProcessingProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/vendas" element={<Sales />} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
