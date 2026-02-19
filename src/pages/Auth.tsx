@@ -5,8 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sparkles, Mail, Lock, User } from 'lucide-react';
+import { Sparkles, Mail, Lock, User, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import { validateEmailDomain } from '@/lib/email-validator';
+import { generateFingerprint } from '@/lib/device-fingerprint';
+import { supabase } from '@/integrations/supabase/client';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -30,6 +33,40 @@ const Auth = () => {
         navigate('/');
       }
     } else {
+      // --- Client-side email validation ---
+      const emailCheck = validateEmailDomain(email);
+      if (!emailCheck.valid) {
+        toast.error(emailCheck.reason);
+        setLoading(false);
+        return;
+      }
+
+      // --- Server-side validation (fingerprint + IP + domain) ---
+      try {
+        const fingerprint = await generateFingerprint();
+
+        const { data, error: fnError } = await supabase.functions.invoke('signup-guard', {
+          body: { email, fingerprint },
+        });
+
+        if (fnError) {
+          toast.error('Erro ao validar cadastro. Tente novamente.');
+          setLoading(false);
+          return;
+        }
+
+        if (!data?.allowed) {
+          toast.error(data?.reason || 'Cadastro bloqueado.');
+          setLoading(false);
+          return;
+        }
+      } catch {
+        toast.error('Erro ao validar cadastro. Tente novamente.');
+        setLoading(false);
+        return;
+      }
+
+      // --- Proceed with signup ---
       const { error } = await signUp(email, password, name);
       if (error) {
         toast.error(error.message);
@@ -112,6 +149,14 @@ const Auth = () => {
               {loading ? 'Aguarde...' : isLogin ? 'Entrar' : 'Criar Conta'}
             </Button>
           </form>
+
+          {!isLogin && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground justify-center">
+              <Shield className="h-3 w-3" />
+              <span>Apenas emails de provedores confiáveis são aceitos</span>
+            </div>
+          )}
+
           <div className="mt-4 text-center">
             <button
               type="button"
