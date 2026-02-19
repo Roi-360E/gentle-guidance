@@ -21,7 +21,7 @@ import { cloudPreprocessFiles } from '@/lib/cloud-preprocess';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X } from 'lucide-react';
+import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock } from 'lucide-react';
 import { ScriptChatFloat } from '@/components/ScriptChat';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
@@ -298,6 +298,7 @@ const Index = () => {
             </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/auto-subtitles')}>
               <Type className="w-4 h-4" /> Legendas Auto
+              {currentPlan !== 'professional' && currentPlan !== 'enterprise' && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair

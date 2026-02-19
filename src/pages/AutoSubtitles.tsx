@@ -1,5 +1,7 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -11,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type, Trash2 } from 'lucide-react';
+import { Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type, Trash2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractAudioAsFile, transcribeAudio, type TranscriptionResult } from '@/lib/whisper-transcriber';
 import { SUBTITLE_STYLES } from '@/lib/subtitle-styles';
@@ -20,6 +22,24 @@ import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
 type Step = 'upload' | 'transcribing' | 'style' | 'burning' | 'done';
 
 const AutoSubtitles = () => {
+  const { user } = useAuth();
+  const [plan, setPlan] = useState<string>('free');
+
+  useEffect(() => {
+    if (!user) return;
+    const monthYear = new Date().toISOString().slice(0, 7);
+    supabase
+      .from('video_usage')
+      .select('plan')
+      .eq('user_id', user.id)
+      .eq('month_year', monthYear)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setPlan(data.plan);
+      });
+  }, [user]);
+
+  const hasAccess = plan === 'professional' || plan === 'enterprise';
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,6 +175,30 @@ const AutoSubtitles = () => {
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
 
+  if (!hasAccess) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="bg-primary/10 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
+            <Lock className="w-8 h-8 text-primary" />
+          </div>
+          <h2 className="text-2xl font-bold text-foreground">Recurso Exclusivo</h2>
+          <p className="text-muted-foreground">
+            As Legendas Automáticas estão disponíveis apenas para os planos <strong>Profissional</strong> e <strong>Empresarial</strong>.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button variant="outline" onClick={() => navigate('/')}>
+              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
+            </Button>
+            <Button onClick={() => navigate('/plans')} className="bg-gradient-to-r from-primary to-accent text-primary-foreground">
+              Ver Planos
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -167,7 +211,7 @@ const AutoSubtitles = () => {
                 Legendas Automáticas
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground">
-                100% gratuito • Roda no seu navegador
+                Profissional & Empresarial • Roda no seu navegador
               </p>
             </div>
           </div>
