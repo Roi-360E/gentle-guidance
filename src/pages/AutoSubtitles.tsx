@@ -389,38 +389,47 @@ const AutoSubtitles = () => {
                   </div>
                 </div>
 
-                {/* Preview */}
+                {/* Preview — CapCut style */}
                 {selectedStyleObj && (
                   <div
-                    className="rounded-xl bg-black/95 relative overflow-hidden"
-                    style={{ minHeight: '160px' }}
+                    className="rounded-xl bg-black relative overflow-hidden"
+                    style={{ minHeight: '200px' }}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-b from-gray-800/20 via-transparent to-black/50" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70" />
                     
-                    <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-5' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-5'} px-4 text-center`}>
+                    <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-4' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-3'} px-4 text-center`}>
                       <span
-                        className="inline-block px-5 py-2 font-bold"
+                        className="inline-block px-3 py-1"
                         style={{
-                          color: selectedStyleObj.colors.primary,
-                          fontSize: `${Math.min(fontSize / 1.6, 38)}px`,
-                          WebkitTextStroke: selectedStyleObj.id === 'minimal'
-                            ? 'none'
-                            : `${selectedStyleObj.id === 'neon' ? 2 : 1.5}px ${selectedStyleObj.colors.outline}`,
-                          textShadow: selectedStyleObj.id === 'neon'
-                            ? `0 0 10px ${selectedStyleObj.colors.primary}, 0 0 20px ${selectedStyleObj.colors.outline}`
-                            : selectedStyleObj.id === 'fire'
-                            ? `0 0 8px ${selectedStyleObj.colors.highlight}, 2px 2px 4px #000`
-                            : selectedStyleObj.id === 'minimal'
-                            ? '0 2px 8px rgba(0,0,0,0.6)'
-                            : `2px 2px 6px rgba(0,0,0,0.9)`,
                           backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
                             ? selectedStyleObj.colors.bg
                             : 'transparent',
-                          borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '8px' : '0',
-                          letterSpacing: '0.5px',
+                          borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '6px' : '0',
                         }}
                       >
-                        template desse robozinho de
+                        {['template', 'desse', 'robozinho', 'de'].map((word, i) => (
+                          <span
+                            key={i}
+                            className="font-bold"
+                            style={{
+                              color: i === 1 ? selectedStyleObj.colors.highlight : selectedStyleObj.colors.primary,
+                              fontSize: `${Math.min(fontSize / 1.5, 40)}px`,
+                              WebkitTextStroke: selectedStyleObj.id === 'minimal'
+                                ? 'none'
+                                : `${selectedStyleObj.id === 'neon' ? 2 : 1.5}px ${selectedStyleObj.colors.outline}`,
+                              textShadow: selectedStyleObj.id === 'neon'
+                                ? `0 0 10px ${selectedStyleObj.colors.primary}, 0 0 20px ${selectedStyleObj.colors.outline}`
+                                : selectedStyleObj.id === 'fire'
+                                ? `0 0 8px ${selectedStyleObj.colors.highlight}, 2px 2px 4px #000`
+                                : selectedStyleObj.id === 'minimal'
+                                ? '0 2px 8px rgba(0,0,0,0.6)'
+                                : `2px 2px 4px rgba(0,0,0,0.95)`,
+                              marginRight: '6px',
+                            }}
+                          >
+                            {word}
+                          </span>
+                        ))}
                       </span>
                     </div>
                   </div>
