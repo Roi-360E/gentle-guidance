@@ -47,11 +47,12 @@ function hexToFFmpeg(hex: string): string {
 export function buildDrawtextFilter(options: BurnOptions, fontFile: string): string {
   const { segments, style, fontSize, position } = options;
 
+  // Position: bottom places text near the bottom edge like CapCut
   const yExpr = position === 'top'
-    ? `${fontSize + 30}`
+    ? `${fontSize}`
     : position === 'center'
     ? '(h-text_h)/2'
-    : `h-${fontSize + 60}`;
+    : `h-text_h-${Math.round(fontSize * 0.6)}`;
 
   const filters = segments
     .filter(seg => seg.text.trim())
