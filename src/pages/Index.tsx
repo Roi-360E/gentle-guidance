@@ -38,7 +38,7 @@ const Index = () => {
   const [bodies, setBodies] = useState<VideoFileWithProgress[]>([]);
   const [ctas, setCtas] = useState<VideoFileWithProgress[]>([]);
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
-  const [showExtras, setShowExtras] = useState(false);
+  
   
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [tokenBalance, setTokenBalance] = useState<number>(50);
@@ -582,55 +582,6 @@ const Index = () => {
           </div>
         )}
 
-        {/* Funcionalidades extras */}
-        <div className="flex flex-col items-center gap-4">
-          <button
-            onClick={() => setShowExtras((v) => !v)}
-            className="bg-gradient-to-r from-primary/30 to-accent/30 border border-primary/20 rounded-full px-6 py-3 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
-          >
-            <Sparkles className="w-5 h-5 text-primary" />
-            <span className="font-bold text-sm uppercase tracking-wide">Funcionalidades extras</span>
-            <span className="bg-destructive text-destructive-foreground text-xs font-bold px-2 py-0.5 rounded-full">NOVO</span>
-          </button>
-
-          {showExtras && (
-            <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-              <h3 className="text-lg font-bold text-foreground text-center">Funcionalidades Extras</h3>
-              <ul className="space-y-3">
-                <li className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-start gap-2 sm:gap-3 w-full">
-                    <Type className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-foreground text-sm">Editor de Legendas com IA</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Geração automática de legendas usando IA, com personalização de estilo e formato.</p>
-                    </div>
-                  </div>
-                  <Button size="sm" variant="outline" className="shrink-0 rounded-full w-full sm:w-auto" onClick={() => navigate('/subtitles')}>Acessar</Button>
-                </li>
-                <li className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-start gap-2 sm:gap-3 w-full">
-                    <Clapperboard className="w-5 h-5 text-accent mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-foreground text-sm">Dashboard de Resultados</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Painel com métricas, gráficos e análise de ROI dos criativos.</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1 shrink-0 self-start sm:self-auto">Em breve</span>
-                </li>
-                <li className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-start gap-2 sm:gap-3 w-full">
-                    <Zap className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-foreground text-sm">Andromeda META ADS</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Integração com Meta Ads para upload e gestão de criativos publicitários.</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1 shrink-0 self-start sm:self-auto">Em breve</span>
-                </li>
-              </ul>
-            </div>
-          )}
-        </div>
 
         {/* Results */}
         {combinations.length > 0 && (
