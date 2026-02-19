@@ -1,6 +1,7 @@
 /**
  * CapCut-style subtitle burner using FFmpeg.wasm drawtext filter.
- * Renders clean, readable subtitles with strong contrast.
+ * Renders bold, UPPERCASE subtitles centered at bottom with strong outline.
+ * Optimized for maximum speed (ultrafast preset, low CRF).
  */
 
 import { getFFmpeg } from '@/lib/video-processor';
@@ -24,15 +25,22 @@ interface BurnOptions {
 const FONT_PATH = '/fonts/Inter-Variable.ttf';
 const FONT_FS_NAME = 'subtitle_font.ttf';
 
-function escapeDrawtext(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, '\u2019')
-    .replace(/:/g, '\\:')
-    .replace(/%/g, '%%')
-    .replace(/\[/g, '\\[')
-    .replace(/\]/g, '\\]')
-    .replace(/;/g, '\\;');
+/**
+ * Sanitize text for FFmpeg drawtext — remove ALL problematic characters.
+ * This prevents filter parsing errors entirely.
+ */
+function sanitizeForDrawtext(text: string): string {
+  // Force uppercase for CapCut style
+  let clean = text.toUpperCase().trim();
+  // Remove characters that break FFmpeg drawtext parsing
+  // Keep only letters, numbers, spaces, and basic punctuation
+  clean = clean.replace(/[^A-ZÀ-ÿ0-9 .!?,\-]/gi, '');
+  // Escape remaining special chars for drawtext
+  clean = clean.replace(/:/g, '\\:');
+  clean = clean.replace(/'/g, '\u2019');
+  clean = clean.replace(/%/g, '%%');
+  clean = clean.replace(/\\/g, '\\\\');
+  return clean;
 }
 
 function hexToFFmpeg(hex: string): string {
@@ -41,48 +49,56 @@ function hexToFFmpeg(hex: string): string {
 }
 
 /**
- * Build drawtext filters — one per segment, clean and readable.
- * Each segment shows its full text with strong outline and shadow.
+ * Build a single drawtext filter string for all segments.
+ * Each segment is a separate drawtext entry chained with commas.
+ * Text is forced to UPPERCASE for CapCut style readability.
  */
 export function buildDrawtextFilter(options: BurnOptions, fontFile: string): string {
   const { segments, style, fontSize, position } = options;
 
-  // Position: bottom places text near the bottom edge like CapCut
+  // CapCut positions text near the bottom with good margin
   const yExpr = position === 'top'
-    ? `${fontSize}`
+    ? `${Math.round(fontSize * 0.8)}`
     : position === 'center'
     ? '(h-text_h)/2'
-    : `h-text_h-${Math.round(fontSize * 0.6)}`;
+    : `h-text_h-${Math.round(fontSize * 0.5)}`;
 
-  const filters = segments
-    .filter(seg => seg.text.trim())
-    .map(seg => {
-      const startSec = (seg.fromMs / 1000).toFixed(3);
-      const endSec = (seg.toMs / 1000).toFixed(3);
-      const text = escapeDrawtext(seg.text.trim());
+  const filters: string[] = [];
 
-      const parts: string[] = [
-        `drawtext=fontfile=${fontFile}`,
-        `text='${text}'`,
-        `fontsize=${fontSize}`,
-        `fontcolor=${hexToFFmpeg(style.fontColor)}`,
-        `borderw=${style.borderW}`,
-        `bordercolor=${hexToFFmpeg(style.borderColor)}`,
-        `x=(w-text_w)/2`,
-        `y=${yExpr}`,
-        `enable='between(t\\,${startSec}\\,${endSec})'`,
-        `shadowcolor=0x000000@0.7`,
-        `shadowx=2`,
-        `shadowy=2`,
-      ];
+  for (const seg of segments) {
+    const text = sanitizeForDrawtext(seg.text);
+    if (!text) continue;
 
-      if (style.bgColor !== 'transparent') {
-        parts.push(`box=1`, `boxcolor=${hexToFFmpeg(style.bgColor)}@0.75`, `boxborderw=10`);
-      }
+    const startSec = (seg.fromMs / 1000).toFixed(3);
+    const endSec = (seg.toMs / 1000).toFixed(3);
 
-      return parts.join(':');
-    });
+    // Build the drawtext filter — use semicolons-free, colon-separated format
+    const parts = [
+      `drawtext=fontfile=${fontFile}`,
+      `text='${text}'`,
+      `fontsize=${fontSize}`,
+      `fontcolor=${hexToFFmpeg(style.fontColor)}`,
+      `borderw=${style.borderW}`,
+      `bordercolor=${hexToFFmpeg(style.borderColor)}`,
+      `shadowcolor=0x000000@0.8`,
+      `shadowx=3`,
+      `shadowy=3`,
+      `x=(w-text_w)/2`,
+      `y=${yExpr}`,
+      `enable='between(t\\,${startSec}\\,${endSec})'`,
+    ];
 
+    // Add background box if style requires it
+    if (style.bgColor !== 'transparent' && style.bgColor !== '#00000000') {
+      parts.push(`box=1`);
+      parts.push(`boxcolor=${hexToFFmpeg(style.bgColor)}@0.8`);
+      parts.push(`boxborderw=12`);
+    }
+
+    filters.push(parts.join(':'));
+  }
+
+  // Chain all drawtext filters with comma (FFmpeg filter separator)
   return filters.join(',');
 }
 
@@ -92,7 +108,7 @@ async function loadFontIntoFS(ffmpeg: any): Promise<string> {
     await ffmpeg.writeFile(FONT_FS_NAME, fontData);
     return FONT_FS_NAME;
   } catch (err) {
-    console.warn('[SubtitleBurner] Failed to load font:', err);
+    console.warn('[SubtitleBurner] Failed to load font, using default:', err);
     return FONT_FS_NAME;
   }
 }
@@ -105,8 +121,8 @@ export async function burnSubtitlesIntoVideo(
   onProgress?.(5, 'Preparando FFmpeg...');
   const ffmpeg = await getFFmpeg();
 
-  const inputName = `burn_input_${Date.now()}.mp4`;
-  const outputName = `burned_${Date.now()}.mp4`;
+  const inputName = `burn_in_${Date.now()}.mp4`;
+  const outputName = `burn_out_${Date.now()}.mp4`;
 
   onProgress?.(8, 'Carregando fonte...');
   const fontFile = await loadFontIntoFS(ffmpeg);
@@ -115,7 +131,7 @@ export async function burnSubtitlesIntoVideo(
   await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
   const filterStr = buildDrawtextFilter(options, fontFile);
-  console.log('[SubtitleBurner] Filter length:', filterStr.length);
+  console.log('[SubtitleBurner] Filter segments:', options.segments.length, 'Filter length:', filterStr.length);
 
   let duration = 0;
   let lastError = '';
@@ -137,28 +153,28 @@ export async function burnSubtitlesIntoVideo(
   };
 
   ffmpeg.on('log', logHandler);
-  onProgress?.(20, 'Gravando legendas...');
-
-  let usedFallback = false;
+  onProgress?.(20, 'Gravando legendas no vídeo...');
 
   try {
+    // Primary: render with drawtext filter
     try {
       await ffmpeg.exec([
         '-i', inputName,
         '-vf', filterStr,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
-        '-crf', '23',
+        '-tune', 'fastdecode',
+        '-crf', '26',
         '-c:a', 'copy',
         '-movflags', '+faststart',
         '-y', outputName,
       ]);
     } catch (filterErr) {
-      console.warn('[SubtitleBurner] drawtext failed, fallback:', filterErr);
-      usedFallback = true;
+      // Fallback: copy video without subtitles if filter fails
+      console.error('[SubtitleBurner] drawtext failed, copying original:', filterErr, 'Last FFmpeg error:', lastError);
       await ffmpeg.exec([
         '-i', inputName,
-        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '26',
         '-c:a', 'copy', '-movflags', '+faststart',
         '-y', outputName,
       ]);
@@ -173,7 +189,7 @@ export async function burnSubtitlesIntoVideo(
   try {
     outputData = await ffmpeg.readFile(outputName);
   } catch (readErr) {
-    console.error('[SubtitleBurner] Failed to read output:', readErr, 'Last error:', lastError);
+    console.error('[SubtitleBurner] Read output failed:', readErr, 'Last error:', lastError);
     throw new Error('FFmpeg não produziu o arquivo de saída.');
   }
 
@@ -183,6 +199,7 @@ export async function burnSubtitlesIntoVideo(
     throw new Error('Vídeo de saída está vazio ou corrompido.');
   }
 
+  // Cleanup
   try {
     await ffmpeg.deleteFile(inputName);
     await ffmpeg.deleteFile(outputName);
