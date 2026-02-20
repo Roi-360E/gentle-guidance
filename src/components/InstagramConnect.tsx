@@ -53,10 +53,25 @@ export function InstagramConnect() {
   const handleConnect = () => {
     if (!metaAppId) {
       toast.error('App ID não configurado. Contate o suporte.');
+      console.error('META_APP_ID is empty. metaAppId state:', metaAppId);
       return;
     }
     const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${SCOPES}&response_type=code&state=${crypto.randomUUID()}`;
-    window.location.href = authUrl;
+    
+    // Abrir em popup para não sair do app
+    const popup = window.open(authUrl, 'instagramConnect', 'width=600,height=700,scrollbars=yes');
+    if (!popup) {
+      toast.error('Permita popups para conectar o Instagram.');
+      return;
+    }
+
+    // Monitorar quando o popup fecha (usuário completou ou cancelou)
+    const interval = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(interval);
+        fetchStatus(); // Recarregar status da conexão
+      }
+    }, 1000);
   };
 
   const handleDisconnect = async () => {
