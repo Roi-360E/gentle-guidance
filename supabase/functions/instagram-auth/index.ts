@@ -1,10 +1,15 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const jsonResponse = (body: object) =>
+  new Response(JSON.stringify(body), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,33 +27,32 @@ Deno.serve(async (req) => {
 
     // Action: get_app_id — return public app id for frontend OAuth
     if (action === "get_app_id") {
-      return new Response(JSON.stringify({ app_id: META_APP_ID }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ app_id: META_APP_ID });
     }
 
     // Authenticate user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("No auth header");
+      return jsonResponse({ error: "Não autenticado. Faça login novamente." });
     }
 
     const token = authHeader.replace("Bearer ", "");
+    console.log("Auth: creating client...");
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    console.log("Auth: validating token...");
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    console.log("Auth result:", { userId: userData?.user?.id, error: userError?.message });
+    
+    if (userError || !userData?.user) {
+      console.error("Auth failed:", userError?.message);
+      return jsonResponse({ error: `Autenticação falhou: ${userError?.message || "Usuário não encontrado"}` });
     }
-    const userId = user.id;
+    const userId = userData.user.id;
+    console.log("Authenticated:", userId);
 
     // Action: disconnect
     if (action === "disconnect") {
@@ -56,9 +60,7 @@ Deno.serve(async (req) => {
         .from("instagram_connections")
         .delete()
         .eq("user_id", userId);
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ success: true });
     }
 
     // Action: status — check if connected
@@ -68,26 +70,16 @@ Deno.serve(async (req) => {
         .select("instagram_username, instagram_user_id")
         .eq("user_id", userId)
         .maybeSingle();
-      return new Response(
-        JSON.stringify({ connected: !!data, connection: data }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ connected: !!data, connection: data });
     }
 
     // Action: exchange code for token
     if (!code) {
-      return new Response(
-        JSON.stringify({ error: "Authorization code is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ error: "Código de autorização é obrigatório" });
     }
 
     const redirectUri = body.redirect_uri;
+    console.log("Exchanging code, redirect_uri:", redirectUri);
 
     // Step 1: Exchange code for short-lived token
     const tokenRes = await fetch(
@@ -97,17 +89,11 @@ Deno.serve(async (req) => {
 
     if (tokenData.error) {
       console.error("Token exchange error:", tokenData.error);
-      return new Response(
-        JSON.stringify({
-          error: "Failed to exchange code",
-          details: tokenData.error.message,
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({
+        error: `Falha na troca do código: ${tokenData.error.message}`,
+      });
     }
+    console.log("Token exchanged successfully");
 
     // Step 2: Exchange for long-lived token (60 days)
     const longTokenRes = await fetch(
@@ -123,16 +109,9 @@ Deno.serve(async (req) => {
     const pagesData = await pagesRes.json();
 
     if (!pagesData.data || pagesData.data.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "No Facebook Pages found. Your Instagram Business account must be linked to a Facebook Page.",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({
+        error: "Nenhuma Página do Facebook encontrada. Sua conta Instagram Business precisa estar vinculada a uma Página do Facebook.",
+      });
     }
 
     // Step 4: Get Instagram Business Account ID from the first page
@@ -145,16 +124,9 @@ Deno.serve(async (req) => {
     const igData = await igRes.json();
 
     if (!igData.instagram_business_account) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "No Instagram Business/Creator account linked to this Facebook Page. Please convert your Instagram to a Business or Creator account first.",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({
+        error: "Nenhuma conta Instagram Business/Criador vinculada a esta Página do Facebook.",
+      });
     }
 
     const igUserId = igData.instagram_business_account.id;
@@ -186,30 +158,17 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       console.error("Upsert error:", upsertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to save connection" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ error: "Falha ao salvar conexão no banco de dados." });
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        username: igProfile.username,
-        ig_user_id: igUserId,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    console.log("Instagram connected:", igProfile.username);
+    return jsonResponse({
+      success: true,
+      username: igProfile.username,
+      ig_user_id: igUserId,
+    });
   } catch (err) {
     console.error("Instagram auth error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: `Erro interno: ${err.message || "desconhecido"}` });
   }
 });
