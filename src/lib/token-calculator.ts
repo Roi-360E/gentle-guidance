@@ -41,7 +41,10 @@ export function calculateTokenCost(
 export const TOKEN_PLANS = {
   free: { name: 'Gratuito', tokens: 10, price: 0 },
   professional: { name: 'Profissional', tokens: 200, price: 37.90 },
-  enterprise: { name: 'Empresarial', tokens: Infinity, price: 197 },
+  advanced: { name: 'Avançado', tokens: 400, price: 67.90 },
+  premium: { name: 'Premium', tokens: 850, price: 87.90 },
+  enterprise: { name: 'Empresarial', tokens: 1200, price: 197 },
+  unlimited: { name: 'Ilimitado', tokens: Infinity, price: 297 },
 } as const;
 
 export type PlanId = keyof typeof TOKEN_PLANS;
@@ -52,6 +55,6 @@ export function hasEnoughTokens(
   tokenBalance: number,
   cost: number
 ): boolean {
-  if (plan === 'enterprise') return true;
+  if (plan === 'unlimited') return true;
   return tokenBalance >= cost;
 }
