@@ -1,6 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { enableSourceProtection } from "./lib/source-protection";
+
+// Enable source code protection in production
+enableSourceProtection();
 
 // Force cache clear on new versions
 const APP_VERSION = '2.1.0';
