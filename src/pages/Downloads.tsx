@@ -136,9 +136,15 @@ const Downloads = () => {
                     size="sm"
                     variant="outline"
                     className="flex-1 gap-1 rounded-full"
-                    onClick={() => window.open('https://business.facebook.com/latest/content_calendar', '_blank')}
+                    onClick={() => {
+                      handleDownload(video.url, video.name);
+                      toast.info('Vídeo baixado! O Creator Studio será aberto em instantes...');
+                      setTimeout(() => {
+                        window.open('https://business.facebook.com/latest/content_calendar', '_blank');
+                      }, 1500);
+                    }}
                   >
-                    <ExternalLink className="w-3 h-3" /> Creator Studio
+                    <ExternalLink className="w-3 h-3" /> Postar no Meta
                   </Button>
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => clearDownload(video.id)}>
                     <Trash2 className="w-3 h-3" />
