@@ -298,7 +298,7 @@ const Index = () => {
             </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/auto-subtitles')}>
               <Type className="w-4 h-4" /> Legendas Auto
-              {currentPlan !== 'professional' && currentPlan !== 'enterprise' && <Lock className="w-3 h-3 text-muted-foreground" />}
+              {currentPlan === 'free' && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair
@@ -372,10 +372,10 @@ const Index = () => {
             </div>
             <div>
               <p className="font-bold text-foreground">
-                {currentPlan === 'enterprise' ? 'Empresarial' : currentPlan === 'professional' ? 'Profissional' : 'Gratuito'}
+                {{ free: 'Gratuito', professional: 'Profissional', advanced: 'Avançado', premium: 'Premium', enterprise: 'Empresarial', unlimited: 'Ilimitado' }[currentPlan] || 'Gratuito'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {currentPlan === 'enterprise' 
+                {currentPlan === 'unlimited' 
                   ? '● Tokens ilimitados'
                   : `● ${tokenBalance} tokens restantes`
                 }
