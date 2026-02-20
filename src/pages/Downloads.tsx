@@ -1,11 +1,39 @@
 import { useProcessing } from '@/hooks/useProcessing';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, ArrowLeft, Loader2, Film } from 'lucide-react';
+import { Download, Trash2, ArrowLeft, Loader2, Film, Share2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
+const shareToInstagram = async (videoUrl: string, videoName: string) => {
+  try {
+    const response = await fetch(videoUrl);
+    const blob = await response.blob();
+    const file = new File([blob], videoName, { type: blob.type || 'video/mp4' });
+
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        title: videoName,
+        text: 'Confira este vídeo! 🎬',
+        files: [file],
+      });
+      toast.success('Compartilhado com sucesso!');
+    } else {
+      // Fallback: download and instruct user
+      const a = document.createElement('a');
+      a.href = videoUrl;
+      a.download = videoName;
+      a.click();
+      toast.info('Vídeo baixado! Abra o Instagram e poste o vídeo manualmente.');
+    }
+  } catch (err: any) {
+    if (err?.name !== 'AbortError') {
+      toast.error('Não foi possível compartilhar o vídeo.');
+    }
+  }
+};
 const Downloads = () => {
   const navigate = useNavigate();
   const { downloadedVideos, clearDownload, clearAllDownloads, isProcessing, currentProgress, combinations } = useProcessing();
@@ -100,6 +128,9 @@ const Downloads = () => {
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="flex-1 gap-1 rounded-full" onClick={() => handleDownload(video.url, video.name)}>
                     <Download className="w-3 h-3" /> Baixar
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1 gap-1 rounded-full" onClick={() => shareToInstagram(video.url, video.name)}>
+                    <Share2 className="w-3 h-3" /> Compartilhar
                   </Button>
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => clearDownload(video.id)}>
                     <Trash2 className="w-3 h-3" />

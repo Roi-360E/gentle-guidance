@@ -1,9 +1,30 @@
 import { useState } from 'react';
-import { Download, Loader2, CheckCircle2, AlertCircle, Clock, Play } from 'lucide-react';
+import { Download, Loader2, CheckCircle2, AlertCircle, Clock, Play, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
+import { toast } from 'sonner';
 import type { Combination } from '@/lib/video-processor';
+
+const shareVideo = async (url: string, name: string) => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const file = new File([blob], name, { type: blob.type || 'video/mp4' });
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ title: name, text: 'Confira este vídeo! 🎬', files: [file] });
+      toast.success('Compartilhado com sucesso!');
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      toast.info('Vídeo baixado! Abra o Instagram e poste manualmente.');
+    }
+  } catch (err: any) {
+    if (err?.name !== 'AbortError') toast.error('Não foi possível compartilhar.');
+  }
+};
 
 interface CombinationListProps {
   combinations: Combination[];
@@ -119,6 +140,15 @@ export function CombinationList({
                   title="Visualizar"
                 >
                   <Play className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => shareVideo(combo.outputUrl!, combo.outputName)}
+                  title="Compartilhar"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
