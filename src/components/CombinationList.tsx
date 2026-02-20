@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Loader2, CheckCircle2, AlertCircle, Clock, Play, Share2 } from 'lucide-react';
+import { Download, Loader2, CheckCircle2, AlertCircle, Clock, Play, Share2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
@@ -149,6 +149,15 @@ export function CombinationList({
                   title="Compartilhar"
                 >
                   <Share2 className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => window.open('https://business.facebook.com/latest/content_calendar', '_blank')}
+                  title="Abrir Creator Studio"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
