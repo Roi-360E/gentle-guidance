@@ -154,8 +154,14 @@ export function CombinationList({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => window.open('https://business.facebook.com/latest/content_calendar', '_blank')}
-                  title="Abrir Creator Studio"
+                  onClick={() => {
+                    onDownload(combo);
+                    toast.info('Vídeo baixado! Abrindo Creator Studio...');
+                    setTimeout(() => {
+                      window.open('https://business.facebook.com/latest/content_calendar', '_blank');
+                    }, 1500);
+                  }}
+                  title="Baixar e abrir Creator Studio"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </Button>
