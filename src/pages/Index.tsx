@@ -23,6 +23,7 @@ import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
 import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock } from 'lucide-react';
 import { ScriptChatFloat } from '@/components/ScriptChat';
+import { InstagramConnect } from '@/components/InstagramConnect';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 
@@ -586,14 +587,22 @@ const Index = () => {
 
         {/* Results */}
         {combinations.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-6">
-            <CombinationList
-              combinations={combinations}
-              currentProgress={currentProgress}
-              onDownload={handleDownload}
-              onDownloadAll={handleDownloadAll}
-              isProcessing={isProcessing}
-            />
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-card p-6">
+              <CombinationList
+                combinations={combinations}
+                currentProgress={currentProgress}
+                onDownload={handleDownload}
+                onDownloadAll={handleDownloadAll}
+                isProcessing={isProcessing}
+              />
+            </div>
+
+            {/* Instagram Connect — only for enterprise/unlimited plans with completed videos */}
+            {(currentPlan === 'enterprise' || currentPlan === 'unlimited') &&
+              combinations.some(c => c.status === 'done') && (
+              <InstagramConnect />
+            )}
           </div>
         )}
 
