@@ -344,41 +344,55 @@ export default function Plans() {
                         <Button
                           className="w-full"
                           variant="secondary"
+                          disabled={loading === `admin-${plan.id}`}
                           onClick={async () => {
+                            setLoading(`admin-${plan.id}`);
                             try {
                               const monthYear = new Date().toISOString().substring(0, 7);
-                              console.log('[Admin] Tentando alterar plano para:', plan.id, 'user:', user.id, 'month:', monthYear);
-                              
-                              const { data: updateData, error, count } = await supabase
+                              const tokenBalance = plan.tokens === Infinity ? 999999 : plan.tokens;
+
+                              // Try update first
+                              const { data: updateData, error: updateError } = await supabase
                                 .from('video_usage')
-                                .update({ plan: plan.id })
+                                .update({ plan: plan.id, token_balance: tokenBalance })
                                 .eq('user_id', user.id)
                                 .eq('month_year', monthYear)
                                 .select();
-                              
-                              console.log('[Admin] Resultado update:', { updateData, error, count });
-                              
-                              if (error) {
-                                console.error('[Admin] Erro no update:', error);
-                                toast.error('Erro ao alterar plano: ' + error.message);
+
+                              if (updateError) {
+                                toast.error('Erro ao alterar plano: ' + updateError.message);
                                 return;
                               }
-                              
+
+                              // If no row existed, insert one
                               if (!updateData || updateData.length === 0) {
-                                console.error('[Admin] Nenhuma linha atualizada! Verifique user_id e month_year.');
-                                toast.error('Nenhum registro encontrado para atualizar.');
-                                return;
+                                const { error: insertError } = await supabase
+                                  .from('video_usage')
+                                  .insert({
+                                    user_id: user.id,
+                                    month_year: monthYear,
+                                    plan: plan.id,
+                                    token_balance: tokenBalance,
+                                    video_count: 0,
+                                  });
+                                if (insertError) {
+                                  toast.error('Erro ao criar registro: ' + insertError.message);
+                                  return;
+                                }
                               }
-                              
-                              console.log('[Admin] Plano atualizado com sucesso:', updateData[0]?.plan);
+
                               setCurrentPlan(plan.id);
                               toast.success(`Plano alterado para ${plan.name}!`);
                             } catch (err) {
-                              console.error('[Admin] Erro inesperado:', err);
                               toast.error('Erro inesperado ao alterar plano.');
+                            } finally {
+                              setLoading(null);
                             }
                           }}
                         >
+                          {loading === `admin-${plan.id}` ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          ) : null}
                           ⚡ Ativar {plan.name}
                         </Button>
                       )}
