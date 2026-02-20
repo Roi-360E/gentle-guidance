@@ -102,16 +102,37 @@ Deno.serve(async (req) => {
     const longTokenData = await longTokenRes.json();
     const longLivedToken = longTokenData.access_token || tokenData.access_token;
 
-    // Step 3: Get user's Facebook Pages
+    // Step 3: Check granted permissions
+    const permRes = await fetch(
+      `https://graph.facebook.com/v21.0/me/permissions?access_token=${longLivedToken}`
+    );
+    const permData = await permRes.json();
+    console.log("Granted permissions:", JSON.stringify(permData));
+
+    // Step 4: Get user's Facebook Pages
     const pagesRes = await fetch(
       `https://graph.facebook.com/v21.0/me/accounts?access_token=${longLivedToken}`
     );
     const pagesData = await pagesRes.json();
+    console.log("Pages response:", JSON.stringify(pagesData));
 
     if (!pagesData.data || pagesData.data.length === 0) {
-      return jsonResponse({
-        error: "Nenhuma Página do Facebook encontrada. Sua conta Instagram Business precisa estar vinculada a uma Página do Facebook.",
-      });
+      // Check if pages_show_list was declined
+      const declinedPerms = permData?.data?.filter((p: any) => p.status === 'declined')?.map((p: any) => p.permission) || [];
+      const grantedPerms = permData?.data?.filter((p: any) => p.status === 'granted')?.map((p: any) => p.permission) || [];
+      
+      console.error("No pages found. Granted:", grantedPerms, "Declined:", declinedPerms);
+      
+      let errorMsg = "Nenhuma Página do Facebook encontrada.";
+      if (declinedPerms.includes('pages_show_list')) {
+        errorMsg += " Você precisa conceder a permissão 'pages_show_list' durante a autorização.";
+      } else if (!grantedPerms.includes('pages_show_list')) {
+        errorMsg += " A permissão 'pages_show_list' não foi concedida. Tente reconectar.";
+      } else {
+        errorMsg += " Sua conta Instagram Business precisa estar vinculada a uma Página do Facebook que você administra.";
+      }
+      
+      return jsonResponse({ error: errorMsg });
     }
 
     // Step 4: Get Instagram Business Account ID from the first page
