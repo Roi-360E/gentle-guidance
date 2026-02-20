@@ -105,20 +105,32 @@ export default function InstagramCallback() {
 
             {/* Debug info */}
             {debugInfo && (
-              <div className="rounded-lg border border-border bg-secondary/30 p-3 text-left space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Diagnóstico (para suporte)</p>
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 text-left space-y-2 max-h-64 overflow-y-auto">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Diagnóstico Detalhado</p>
                 <div className="space-y-1 text-xs font-mono text-muted-foreground">
-                  <p>👤 Conta FB: <span className="text-foreground">{debugInfo.fb_user?.name || 'N/A'} (id: {debugInfo.fb_user?.id || 'N/A'})</span></p>
-                  <p>🔑 Token longa duração: <span className="text-foreground">{debugInfo.long_token_ok ? '✅ Sim' : '❌ Não'}</span></p>
-                  <p>✅ Permissões concedidas: <span className="text-foreground">{debugInfo.granted_permissions?.join(', ') || 'nenhuma'}</span></p>
-                  <p>❌ Permissões recusadas: <span className="text-foreground">{debugInfo.declined_permissions?.join(', ') || 'nenhuma'}</span></p>
-                  <p>📄 Páginas retornadas: <span className="text-foreground">{debugInfo.pages_raw?.data?.length ?? 0}</span>
-                    {debugInfo.pages_raw?.error && <span className="text-destructive"> (Erro: {debugInfo.pages_raw.error.message})</span>}
-                  </p>
-                  {debugInfo.pages_raw?.data?.length > 0 && debugInfo.pages_raw.data.map((p: any) => (
-                    <p key={p.id} className="pl-2">↳ {p.name} (id: {p.id}, IG: {p.instagram_business_account?.id || 'sem IG vinculado'})</p>
+                  <p>👤 FB: <span className="text-foreground">{debugInfo.fb_user?.name} (id:{debugInfo.fb_user?.id})</span></p>
+                  <p>🔑 Token longo: <span className="text-foreground">{debugInfo.long_token_ok ? '✅' : '❌'}</span></p>
+                  <p>✅ Permissões: <span className="text-foreground">{debugInfo.granted_permissions?.join(', ')}</span></p>
+                  
+                  <p className="mt-2 font-bold text-yellow-400">Estratégia 1 (/me/accounts):</p>
+                  <p>Páginas: <span className="text-foreground">{debugInfo.strategy1_pages?.data?.length ?? 0}
+                    {debugInfo.strategy1_pages?.error ? ` ❌ ${debugInfo.strategy1_pages.error.message}` : ''}</span></p>
+                  {debugInfo.strategy1_pages?.data?.map((p: any) => (
+                    <p key={p.id} className="pl-2 text-foreground">↳ {p.name} | IG: {p.instagram_business_account?.id || 'sem IG'}</p>
                   ))}
+
+                  <p className="mt-2 font-bold text-yellow-400">Estratégia 2 (/me/businesses):</p>
+                  <p>Businesses: <span className="text-foreground">{debugInfo.strategy2_businesses?.data?.length ?? 0}
+                    {debugInfo.strategy2_businesses?.error ? ` ❌ ${debugInfo.strategy2_businesses.error.message}` : ''}</span></p>
+                  {debugInfo.strategy2_businesses?.data?.map((b: any) => (
+                    <p key={b.id} className="pl-2 text-foreground">↳ {b.name} | IG accounts: {b.instagram_business_accounts?.data?.length ?? 0} | pages: {b.owned_pages?.data?.length ?? 0}</p>
+                  ))}
+
+                  <p className="mt-2 font-bold text-yellow-400">Estratégia 3 (/me?instagram_accounts):</p>
+                  <p>IG accounts: <span className="text-foreground">{debugInfo.strategy3_creator?.instagram_accounts?.data?.length ?? 0}
+                    {debugInfo.strategy3_creator?.error ? ` ❌ ${debugInfo.strategy3_creator.error.message}` : ''}</span></p>
                 </div>
+                <p className="text-xs text-muted-foreground mt-2">Copie estas informações e envie para o suporte.</p>
               </div>
             )}
 
