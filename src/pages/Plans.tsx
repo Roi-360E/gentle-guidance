@@ -46,7 +46,7 @@ const plans = [
     price: 197,
     tokens: Infinity,
     icon: Crown,
-    features: ['Tokens ilimitados', 'Processamento em nuvem', 'API dedicada', 'Suporte VIP'],
+    features: ['Tokens ilimitados', 'Processamento em nuvem', 'Chat gerador de roteiros', 'API dedicada', 'Suporte VIP'],
     color: 'text-accent',
     bgColor: 'bg-accent/10',
   },
