@@ -36,18 +36,27 @@ export default function InstagramCallback() {
           },
         });
 
-        if (fnError || data?.error) {
+        console.log('Instagram auth response:', { data, fnError });
+
+        if (fnError) {
           setStatus('error');
-          setMessage(data?.error || fnError?.message || 'Erro ao conectar conta.');
+          setMessage(fnError.message || 'Erro ao chamar função de autenticação.');
+          return;
+        }
+
+        if (data?.error) {
+          setStatus('error');
+          setMessage(data.error);
           return;
         }
 
         setStatus('success');
         setUsername(data.username || '');
         setMessage(`Conta @${data.username} conectada com sucesso!`);
-      } catch (err) {
+      } catch (err: any) {
+        console.error('Instagram callback error:', err);
         setStatus('error');
-        setMessage('Erro inesperado ao processar a conexão.');
+        setMessage(err?.message || 'Erro inesperado ao processar a conexão.');
       }
     };
 
