@@ -1,7 +1,7 @@
 import { useProcessing } from '@/hooks/useProcessing';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, ArrowLeft, Loader2, Film, Share2 } from 'lucide-react';
+import { Download, Trash2, ArrowLeft, Loader2, Film, Share2, ExternalLink } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
 import { useState } from 'react';
@@ -125,12 +125,20 @@ const Downloads = () => {
                 <p className="text-xs text-muted-foreground">
                   {video.createdAt.toLocaleString('pt-BR')}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" className="flex-1 gap-1 rounded-full" onClick={() => handleDownload(video.url, video.name)}>
                     <Download className="w-3 h-3" /> Baixar
                   </Button>
                   <Button size="sm" variant="outline" className="flex-1 gap-1 rounded-full" onClick={() => shareToInstagram(video.url, video.name)}>
                     <Share2 className="w-3 h-3" /> Compartilhar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 gap-1 rounded-full"
+                    onClick={() => window.open('https://business.facebook.com/latest/content_calendar', '_blank')}
+                  >
+                    <ExternalLink className="w-3 h-3" /> Creator Studio
                   </Button>
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => clearDownload(video.id)}>
                     <Trash2 className="w-3 h-3" />
