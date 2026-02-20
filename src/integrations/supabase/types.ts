@@ -73,6 +73,42 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_connections: {
+        Row: {
+          created_at: string
+          id: string
+          instagram_user_id: string
+          instagram_username: string | null
+          page_access_token: string
+          page_id: string
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          instagram_user_id: string
+          instagram_username?: string | null
+          page_access_token: string
+          page_id: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          instagram_user_id?: string
+          instagram_username?: string | null
+          page_access_token?: string
+          page_id?: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number

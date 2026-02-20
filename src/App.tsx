@@ -14,6 +14,7 @@ import Downloads from "./pages/Downloads";
 import NotFound from "./pages/NotFound";
 import Sales from "./pages/Sales";
 import AutoSubtitles from "./pages/AutoSubtitles";
+import InstagramCallback from "./pages/InstagramCallback";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
           <ProcessingProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
               <Route path="/vendas" element={<Sales />} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
