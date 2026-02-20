@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function InstagramCallback() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Conectando sua conta do Instagram...');
-  const [username, setUsername] = useState('');
   const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [rawDebug, setRawDebug] = useState('');
 
   useEffect(() => {
     const code = searchParams.get('code');
@@ -30,18 +29,27 @@ export default function InstagramCallback() {
 
     const exchangeCode = async () => {
       try {
+        // Get session — works whether in popup or main window
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+
+        console.log('Session found:', !!accessToken);
+
         const { data, error: fnError } = await supabase.functions.invoke('instagram-auth', {
           body: {
             code,
             redirect_uri: `${window.location.origin}/auth/instagram/callback`,
           },
+          headers: accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : undefined,
         });
 
         console.log('Instagram auth response:', { data, fnError });
 
         if (fnError) {
           setStatus('error');
-          setMessage(fnError.message || 'Erro ao chamar função de autenticação.');
+          setMessage(`Erro na função: ${fnError.message || 'desconhecido'}`);
           return;
         }
 
@@ -50,14 +58,21 @@ export default function InstagramCallback() {
           setMessage(data.error);
           if (data._debug) {
             setDebugInfo(data._debug);
-            console.log('=== INSTAGRAM AUTH DEBUG ===', JSON.stringify(data._debug, null, 2));
+            const debugStr = JSON.stringify(data._debug, null, 2);
+            setRawDebug(debugStr);
+            console.log('=== INSTAGRAM AUTH DEBUG ===\n', debugStr);
           }
           return;
         }
 
         setStatus('success');
-        setUsername(data.username || '');
         setMessage(`Conta @${data.username} conectada com sucesso!`);
+
+        // Notify parent window if opened as popup
+        if (window.opener) {
+          window.opener.postMessage({ type: 'INSTAGRAM_CONNECTED', username: data.username }, '*');
+          setTimeout(() => window.close(), 2000);
+        }
       } catch (err: any) {
         console.error('Instagram callback error:', err);
         setStatus('error');
@@ -68,9 +83,13 @@ export default function InstagramCallback() {
     exchangeCode();
   }, [searchParams]);
 
+  const copyDebug = () => {
+    navigator.clipboard.writeText(rawDebug);
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="max-w-md w-full text-center space-y-6">
+      <div className="max-w-lg w-full text-center space-y-6">
         {status === 'loading' && (
           <>
             <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
@@ -87,7 +106,7 @@ export default function InstagramCallback() {
               <h2 className="text-xl font-bold text-foreground">Instagram Conectado!</h2>
               <p className="text-muted-foreground">{message}</p>
             </div>
-            <Button onClick={() => { window.close(); }} className="gap-2">
+            <Button onClick={() => window.close()} className="gap-2">
               Fechar e Voltar
             </Button>
           </>
@@ -103,34 +122,58 @@ export default function InstagramCallback() {
               <p className="text-sm text-muted-foreground">{message}</p>
             </div>
 
-            {/* Debug info */}
-            {debugInfo && (
-              <div className="rounded-lg border border-border bg-secondary/30 p-3 text-left space-y-2 max-h-64 overflow-y-auto">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Diagnóstico Detalhado</p>
-                <div className="space-y-1 text-xs font-mono text-muted-foreground">
-                  <p>👤 FB: <span className="text-foreground">{debugInfo.fb_user?.name} (id:{debugInfo.fb_user?.id})</span></p>
-                  <p>🔑 Token longo: <span className="text-foreground">{debugInfo.long_token_ok ? '✅' : '❌'}</span></p>
-                  <p>✅ Permissões: <span className="text-foreground">{debugInfo.granted_permissions?.join(', ')}</span></p>
-                  
-                  <p className="mt-2 font-bold text-yellow-400">Estratégia 1 (/me/accounts):</p>
-                  <p>Páginas: <span className="text-foreground">{debugInfo.strategy1_pages?.data?.length ?? 0}
-                    {debugInfo.strategy1_pages?.error ? ` ❌ ${debugInfo.strategy1_pages.error.message}` : ''}</span></p>
-                  {debugInfo.strategy1_pages?.data?.map((p: any) => (
-                    <p key={p.id} className="pl-2 text-foreground">↳ {p.name} | IG: {p.instagram_business_account?.id || 'sem IG'}</p>
-                  ))}
-
-                  <p className="mt-2 font-bold text-yellow-400">Estratégia 2 (/me/businesses):</p>
-                  <p>Businesses: <span className="text-foreground">{debugInfo.strategy2_businesses?.data?.length ?? 0}
-                    {debugInfo.strategy2_businesses?.error ? ` ❌ ${debugInfo.strategy2_businesses.error.message}` : ''}</span></p>
-                  {debugInfo.strategy2_businesses?.data?.map((b: any) => (
-                    <p key={b.id} className="pl-2 text-foreground">↳ {b.name} | IG accounts: {b.instagram_business_accounts?.data?.length ?? 0} | pages: {b.owned_pages?.data?.length ?? 0}</p>
-                  ))}
-
-                  <p className="mt-2 font-bold text-yellow-400">Estratégia 3 (/me?instagram_accounts):</p>
-                  <p>IG accounts: <span className="text-foreground">{debugInfo.strategy3_creator?.instagram_accounts?.data?.length ?? 0}
-                    {debugInfo.strategy3_creator?.error ? ` ❌ ${debugInfo.strategy3_creator.error.message}` : ''}</span></p>
+            {/* Diagnostic box — always shown when debug data exists */}
+            {debugInfo ? (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-left space-y-2 max-h-72 overflow-y-auto">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Diagnóstico</p>
+                  <Button variant="ghost" size="sm" onClick={copyDebug} className="h-6 gap-1 text-xs">
+                    <Copy className="w-3 h-3" /> Copiar
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">Copie estas informações e envie para o suporte.</p>
+                <div className="space-y-1 text-xs font-mono text-muted-foreground">
+                  <p>👤 <span className="text-foreground">{debugInfo.fb_user?.name} (id:{debugInfo.fb_user?.id})</span></p>
+                  <p>🔑 Token 60d: <span className="text-foreground">{debugInfo.long_token_ok ? '✅' : '❌'}</span></p>
+                  <p>✅ Perms: <span className="text-foreground">{debugInfo.granted_permissions?.join(', ') || 'nenhuma'}</span></p>
+                  {debugInfo.declined_permissions?.length > 0 && (
+                    <p>❌ Recusadas: <span className="text-destructive">{debugInfo.declined_permissions.join(', ')}</span></p>
+                  )}
+
+                  <div className="border-t border-border mt-2 pt-2">
+                    <p className="font-semibold text-yellow-500">[S1] /me/accounts → {debugInfo.strategy1_pages?.data?.length ?? 0} páginas
+                      {debugInfo.strategy1_pages?.error ? ` ❌ ${debugInfo.strategy1_pages.error.message}` : ''}
+                    </p>
+                    {debugInfo.strategy1_pages?.data?.map((p: any) => (
+                      <p key={p.id} className="pl-2 text-foreground">↳ {p.name} | IG: {p.instagram_business_account?.id || 'sem IG vinculado'}</p>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-border pt-2">
+                    <p className="font-semibold text-yellow-500">[S2] /me/businesses → {debugInfo.strategy2_businesses?.data?.length ?? 0} business(es)
+                      {debugInfo.strategy2_businesses?.error ? ` ❌ ${debugInfo.strategy2_businesses.error.message}` : ''}
+                    </p>
+                    {debugInfo.strategy2_businesses?.data?.map((b: any) => (
+                      <p key={b.id} className="pl-2 text-foreground">↳ {b.name} | IG: {b.instagram_business_accounts?.data?.length ?? 0} | pages: {b.owned_pages?.data?.length ?? 0}</p>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-border pt-2">
+                    <p className="font-semibold text-yellow-500">[S3] instagram_accounts → {debugInfo.strategy3_creator?.instagram_accounts?.data?.length ?? 0}
+                      {debugInfo.strategy3_creator?.error ? ` ❌ ${debugInfo.strategy3_creator.error.message}` : ''}
+                    </p>
+                  </div>
+
+                  {debugInfo.strategy4_v20 && (
+                    <div className="border-t border-border pt-2">
+                      <p className="font-semibold text-yellow-500">[S4] v20 fallback → {debugInfo.strategy4_v20?.data?.length ?? 0} páginas</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground text-left">
+                <p>⚠️ Dados de diagnóstico não disponíveis. Possível causa: sessão expirada na janela popup.</p>
+                <p className="mt-1">Tente fechar e reconectar. Verifique o console do navegador (F12) para detalhes.</p>
               </div>
             )}
 

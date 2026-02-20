@@ -14,6 +14,7 @@ const SCOPES = [
   'instagram_content_publish',
   'pages_show_list',
   'pages_read_engagement',
+  'business_management',
 ].join(',');
 
 export function InstagramConnect() {
