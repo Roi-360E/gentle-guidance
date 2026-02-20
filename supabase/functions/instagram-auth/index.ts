@@ -33,37 +33,27 @@ Deno.serve(async (req) => {
     // Authenticate user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      console.error("No auth header");
       return jsonResponse({ error: "Não autenticado. Faça login novamente." });
     }
 
     const token = authHeader.replace("Bearer ", "");
-    console.log("Auth: creating client...");
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    console.log("Auth: validating token...");
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    console.log("Auth result:", { userId: userData?.user?.id, error: userError?.message });
-    
     if (userError || !userData?.user) {
-      console.error("Auth failed:", userError?.message);
       return jsonResponse({ error: `Autenticação falhou: ${userError?.message || "Usuário não encontrado"}` });
     }
     const userId = userData.user.id;
-    console.log("Authenticated:", userId);
 
     // Action: disconnect
     if (action === "disconnect") {
-      await supabase
-        .from("instagram_connections")
-        .delete()
-        .eq("user_id", userId);
+      await supabase.from("instagram_connections").delete().eq("user_id", userId);
       return jsonResponse({ success: true });
     }
 
-    // Action: status — check if connected
+    // Action: status
     if (action === "status") {
       const { data } = await supabase
         .from("instagram_connections")
@@ -88,7 +78,7 @@ Deno.serve(async (req) => {
     const tokenData = await tokenRes.json();
 
     if (tokenData.error) {
-      console.error("Token exchange error:", tokenData.error);
+      console.error("Token exchange error:", JSON.stringify(tokenData.error));
       return jsonResponse({
         error: `Falha na troca do código: ${tokenData.error.message}`,
       });
@@ -107,58 +97,102 @@ Deno.serve(async (req) => {
       `https://graph.facebook.com/v21.0/me/permissions?access_token=${longLivedToken}`
     );
     const permData = await permRes.json();
-    console.log("Granted permissions:", JSON.stringify(permData));
+    const grantedPerms = permData?.data?.filter((p: any) => p.status === 'granted')?.map((p: any) => p.permission) || [];
+    const declinedPerms = permData?.data?.filter((p: any) => p.status === 'declined')?.map((p: any) => p.permission) || [];
+    console.log("Granted permissions:", JSON.stringify(grantedPerms));
+    console.log("Declined permissions:", JSON.stringify(declinedPerms));
 
     // Step 4: Get user's Facebook Pages
     const pagesRes = await fetch(
-      `https://graph.facebook.com/v21.0/me/accounts?access_token=${longLivedToken}`
+      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${longLivedToken}`
     );
     const pagesData = await pagesRes.json();
     console.log("Pages response:", JSON.stringify(pagesData));
 
-    if (!pagesData.data || pagesData.data.length === 0) {
-      // Check if pages_show_list was declined
-      const declinedPerms = permData?.data?.filter((p: any) => p.status === 'declined')?.map((p: any) => p.permission) || [];
-      const grantedPerms = permData?.data?.filter((p: any) => p.status === 'granted')?.map((p: any) => p.permission) || [];
-      
-      console.error("No pages found. Granted:", grantedPerms, "Declined:", declinedPerms);
-      
-      let errorMsg = "Nenhuma Página do Facebook encontrada.";
-      if (declinedPerms.includes('pages_show_list')) {
-        errorMsg += " Você precisa conceder a permissão 'pages_show_list' durante a autorização.";
-      } else if (!grantedPerms.includes('pages_show_list')) {
-        errorMsg += " A permissão 'pages_show_list' não foi concedida. Tente reconectar.";
-      } else {
-        errorMsg += " Sua conta Instagram Business precisa estar vinculada a uma Página do Facebook que você administra.";
+    let igUserId: string | null = null;
+    let igUsername: string | null = null;
+    let pageAccessToken: string | null = null;
+    let pageId: string | null = null;
+
+    if (pagesData.data && pagesData.data.length > 0) {
+      // Try to find a page with Instagram connected
+      for (const page of pagesData.data) {
+        if (page.instagram_business_account?.id) {
+          igUserId = page.instagram_business_account.id;
+          pageAccessToken = page.access_token;
+          pageId = page.id;
+          console.log(`Found Instagram via page ${page.name}: IG ID ${igUserId}`);
+          break;
+        }
       }
+
+      // If no page has instagram_business_account directly, fetch each page
+      if (!igUserId) {
+        for (const page of pagesData.data) {
+          const igRes = await fetch(
+            `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`
+          );
+          const igData = await igRes.json();
+          console.log(`Page ${page.name} (${page.id}) IG data:`, JSON.stringify(igData));
+          if (igData.instagram_business_account?.id) {
+            igUserId = igData.instagram_business_account.id;
+            pageAccessToken = page.access_token;
+            pageId = page.id;
+            break;
+          }
+        }
+      }
+    } else {
+      // No pages found — try fallback using user's own Instagram account
+      // This works for Creator accounts connected directly without a traditional Page
+      console.log("No pages found, trying direct Instagram account lookup...");
       
+      // Try to get instagram_account directly from user profile
+      const meRes = await fetch(
+        `https://graph.facebook.com/v21.0/me?fields=id,name,accounts{id,name,access_token,instagram_business_account}&access_token=${longLivedToken}`
+      );
+      const meData = await meRes.json();
+      console.log("Me+accounts response:", JSON.stringify(meData));
+
+      if (meData.accounts?.data?.length > 0) {
+        for (const page of meData.accounts.data) {
+          if (page.instagram_business_account?.id) {
+            igUserId = page.instagram_business_account.id;
+            pageAccessToken = page.access_token;
+            pageId = page.id;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!igUserId || !pageAccessToken || !pageId) {
+      // Build diagnostic error message
+      let errorMsg = "";
+
+      if (declinedPerms.includes('pages_show_list')) {
+        errorMsg = "Você recusou a permissão de acesso às Páginas. Reconecte e, na tela de permissões do Facebook, clique em 'Editar' e selecione sua Página antes de continuar.";
+      } else if (!grantedPerms.includes('pages_show_list')) {
+        errorMsg = "A permissão 'pages_show_list' não foi concedida. Tente reconectar.";
+      } else if (pagesData.data && pagesData.data.length > 0) {
+        errorMsg = `Nenhuma conta Instagram Business encontrada nas suas ${pagesData.data.length} Página(s) do Facebook. Certifique-se de que sua conta Instagram está configurada como 'Profissional' (Business ou Criador) e vinculada à Página do Facebook.`;
+      } else {
+        errorMsg = "Nenhuma Página do Facebook foi selecionada durante a autorização. Ao conectar, você deve clicar em 'Editar' na tela de seleção de Páginas do Facebook e selecionar sua Página antes de clicar em 'Continuar'.";
+      }
+
+      console.error("Connection failed. Granted:", grantedPerms, "Declined:", declinedPerms, "Pages:", pagesData?.data?.length);
       return jsonResponse({ error: errorMsg });
     }
 
-    // Step 4: Get Instagram Business Account ID from the first page
-    const page = pagesData.data[0];
-    const pageAccessToken = page.access_token;
-
-    const igRes = await fetch(
-      `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${pageAccessToken}`
-    );
-    const igData = await igRes.json();
-
-    if (!igData.instagram_business_account) {
-      return jsonResponse({
-        error: "Nenhuma conta Instagram Business/Criador vinculada a esta Página do Facebook.",
-      });
-    }
-
-    const igUserId = igData.instagram_business_account.id;
-
     // Step 5: Get Instagram username
     const igProfileRes = await fetch(
-      `https://graph.facebook.com/v21.0/${igUserId}?fields=username&access_token=${pageAccessToken}`
+      `https://graph.facebook.com/v21.0/${igUserId}?fields=username,name&access_token=${pageAccessToken}`
     );
     const igProfile = await igProfileRes.json();
+    igUsername = igProfile.username || igProfile.name || "unknown";
+    console.log("Instagram username:", igUsername);
 
-    // Step 6: Calculate token expiry (60 days for long-lived tokens)
+    // Step 6: Calculate token expiry (60 days)
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 60);
 
@@ -169,8 +203,8 @@ Deno.serve(async (req) => {
         {
           user_id: userId,
           instagram_user_id: igUserId,
-          instagram_username: igProfile.username || "unknown",
-          page_id: page.id,
+          instagram_username: igUsername,
+          page_id: pageId,
           page_access_token: pageAccessToken,
           token_expires_at: expiresAt.toISOString(),
         },
@@ -182,10 +216,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Falha ao salvar conexão no banco de dados." });
     }
 
-    console.log("Instagram connected:", igProfile.username);
+    console.log("Instagram connected successfully:", igUsername);
     return jsonResponse({
       success: true,
-      username: igProfile.username,
+      username: igUsername,
       ig_user_id: igUserId,
     });
   } catch (err) {
