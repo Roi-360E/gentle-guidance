@@ -41,9 +41,39 @@ const plans = [
     popular: true,
   },
   {
+    id: 'advanced',
+    name: 'Avançado',
+    price: 67.90,
+    tokens: 400,
+    icon: Zap,
+    features: ['400 tokens/mês', 'Processamento local', 'Suporte prioritário', 'Legendas com IA'],
+    color: 'text-primary',
+    bgColor: 'bg-primary/10',
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    price: 87.90,
+    tokens: 850,
+    icon: Crown,
+    features: ['850 tokens/mês', 'Processamento em nuvem', 'Suporte prioritário', 'Legendas com IA'],
+    color: 'text-accent',
+    bgColor: 'bg-accent/10',
+  },
+  {
     id: 'enterprise',
     name: 'Empresarial',
     price: 197,
+    tokens: 1200,
+    icon: Crown,
+    features: ['1200 tokens/mês', 'Processamento em nuvem', 'Chat gerador de roteiros', 'Suporte VIP'],
+    color: 'text-accent',
+    bgColor: 'bg-accent/10',
+  },
+  {
+    id: 'unlimited',
+    name: 'Ilimitado',
+    price: 297,
     tokens: Infinity,
     icon: Crown,
     features: ['Tokens ilimitados', 'Processamento em nuvem', 'Chat gerador de roteiros', 'API dedicada', 'Suporte VIP'],
@@ -256,7 +286,7 @@ export default function Plans() {
         )}
 
         {/* Plans grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {plans.map((plan) => {
             const Icon = plan.icon;
             const isCurrent = currentPlan === plan.id;
