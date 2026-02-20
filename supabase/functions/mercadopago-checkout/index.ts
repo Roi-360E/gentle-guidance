@@ -49,7 +49,10 @@ serve(async (req) => {
 
     const plans: Record<string, { title: string; price: number }> = {
       professional: { title: "Plano Profissional - Escala de Criativo", price: 37.90 },
+      advanced: { title: "Plano Avançado - Escala de Criativo", price: 67.90 },
+      premium: { title: "Plano Premium - Escala de Criativo", price: 87.90 },
       enterprise: { title: "Plano Empresarial - Escala de Criativo", price: 197.00 },
+      unlimited: { title: "Plano Ilimitado - Escala de Criativo", price: 297.00 },
     };
 
     const selectedPlan = plans[plan];
