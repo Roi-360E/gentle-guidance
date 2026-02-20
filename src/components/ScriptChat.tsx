@@ -171,19 +171,50 @@ export function ScriptChatFloat() {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ messages: allMessages }),
-        signal: controller.signal,
-      });
+      const MAX_RETRIES = 2;
+      const TIMEOUT_MS = 20000;
+      let resp: Response | null = null;
 
-      if (!resp.ok || !resp.body) {
-        const errorData = await resp.json().catch(() => ({}));
-        toast.error(errorData.error || 'Erro ao gerar resposta');
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+          resp = await fetch(CHAT_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ messages: allMessages }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (resp.ok && resp.body) break;
+
+          if (resp.status === 429 || resp.status >= 500) {
+            if (attempt < MAX_RETRIES) {
+              await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+              continue;
+            }
+          }
+
+          const errorData = await resp.json().catch(() => ({}));
+          toast.error(errorData.error || 'Erro ao gerar resposta');
+          setIsLoading(false);
+          return;
+        } catch (fetchErr: any) {
+          if (fetchErr.name === 'AbortError' && attempt < MAX_RETRIES) {
+            toast('Conexão lenta, tentando novamente…', { duration: 2000 });
+            abortRef.current = new AbortController();
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          throw fetchErr;
+        }
+      }
+
+      if (!resp || !resp.ok || !resp.body) {
+        toast.error('Não foi possível conectar. Verifique sua internet.');
         setIsLoading(false);
         return;
       }
