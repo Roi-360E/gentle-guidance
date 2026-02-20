@@ -7,7 +7,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
-const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
 const REDIRECT_URI = `${window.location.origin}/auth/instagram/callback`;
 
 const SCOPES = [
@@ -21,6 +20,7 @@ export function InstagramConnect() {
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [metaAppId, setMetaAppId] = useState('');
   const [connection, setConnection] = useState<{
     instagram_username: string;
     instagram_user_id: string;
@@ -29,10 +29,16 @@ export function InstagramConnect() {
   const fetchStatus = async () => {
     if (!session) return;
     try {
-      const { data } = await supabase.functions.invoke('instagram-auth', {
-        body: { action: 'status' },
-      });
-      setConnection(data?.connection || null);
+      const [statusRes, appIdRes] = await Promise.all([
+        supabase.functions.invoke('instagram-auth', {
+          body: { action: 'status' },
+        }),
+        supabase.functions.invoke('instagram-auth', {
+          body: { action: 'get_app_id' },
+        }),
+      ]);
+      setConnection(statusRes.data?.connection || null);
+      setMetaAppId(appIdRes.data?.app_id || '');
     } catch (err) {
       console.error('Failed to fetch IG status:', err);
     } finally {
@@ -45,7 +51,11 @@ export function InstagramConnect() {
   }, [session]);
 
   const handleConnect = () => {
-    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${SCOPES}&response_type=code&state=${crypto.randomUUID()}`;
+    if (!metaAppId) {
+      toast.error('App ID não configurado. Contate o suporte.');
+      return;
+    }
+    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${SCOPES}&response_type=code&state=${crypto.randomUUID()}`;
     window.location.href = authUrl;
   };
 
