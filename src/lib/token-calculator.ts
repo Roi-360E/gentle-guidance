@@ -39,7 +39,7 @@ export function calculateTokenCost(
 
 /** Planos e seus limites de tokens */
 export const TOKEN_PLANS = {
-  free: { name: 'Gratuito', tokens: 50, price: 0 },
+  free: { name: 'Gratuito', tokens: 7, price: 0 },
   professional: { name: 'Profissional', tokens: 200, price: 37.90 },
   enterprise: { name: 'Empresarial', tokens: Infinity, price: 197 },
 } as const;
