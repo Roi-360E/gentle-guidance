@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import Sales from "./pages/Sales";
 import AutoSubtitles from "./pages/AutoSubtitles";
 import InstagramCallback from "./pages/InstagramCallback";
+import ViralFlux from "./pages/ViralFlux";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
               <Route path="/vendas" element={<Sales />} />
+              <Route path="/viral-flux" element={<ViralFlux />} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
