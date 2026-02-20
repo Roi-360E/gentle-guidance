@@ -10,6 +10,7 @@ export default function InstagramCallback() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Conectando sua conta do Instagram...');
   const [username, setUsername] = useState('');
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
     const code = searchParams.get('code');
@@ -47,6 +48,10 @@ export default function InstagramCallback() {
         if (data?.error) {
           setStatus('error');
           setMessage(data.error);
+          if (data._debug) {
+            setDebugInfo(data._debug);
+            console.log('=== INSTAGRAM AUTH DEBUG ===', JSON.stringify(data._debug, null, 2));
+          }
           return;
         }
 
@@ -97,22 +102,31 @@ export default function InstagramCallback() {
               <h2 className="text-xl font-bold text-foreground">Erro na Conexão</h2>
               <p className="text-sm text-muted-foreground">{message}</p>
             </div>
-            {message.includes('Página') && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-left space-y-2">
-                <p className="text-xs font-semibold text-amber-400">Como corrigir:</p>
-                <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
-                  <li>Clique em <strong className="text-foreground">"Tentar Novamente"</strong></li>
-                  <li>Na tela do Facebook, clique em <strong className="text-foreground">"Editar"</strong> ao lado de "Páginas"</li>
-                  <li>Selecione sua Página do Facebook e confirme</li>
-                  <li>Clique em <strong className="text-foreground">"Continuar"</strong> para finalizar</li>
-                </ol>
+
+            {/* Debug info */}
+            {debugInfo && (
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 text-left space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Diagnóstico (para suporte)</p>
+                <div className="space-y-1 text-xs font-mono text-muted-foreground">
+                  <p>👤 Conta FB: <span className="text-foreground">{debugInfo.fb_user?.name || 'N/A'} (id: {debugInfo.fb_user?.id || 'N/A'})</span></p>
+                  <p>🔑 Token longa duração: <span className="text-foreground">{debugInfo.long_token_ok ? '✅ Sim' : '❌ Não'}</span></p>
+                  <p>✅ Permissões concedidas: <span className="text-foreground">{debugInfo.granted_permissions?.join(', ') || 'nenhuma'}</span></p>
+                  <p>❌ Permissões recusadas: <span className="text-foreground">{debugInfo.declined_permissions?.join(', ') || 'nenhuma'}</span></p>
+                  <p>📄 Páginas retornadas: <span className="text-foreground">{debugInfo.pages_raw?.data?.length ?? 0}</span>
+                    {debugInfo.pages_raw?.error && <span className="text-destructive"> (Erro: {debugInfo.pages_raw.error.message})</span>}
+                  </p>
+                  {debugInfo.pages_raw?.data?.length > 0 && debugInfo.pages_raw.data.map((p: any) => (
+                    <p key={p.id} className="pl-2">↳ {p.name} (id: {p.id}, IG: {p.instagram_business_account?.id || 'sem IG vinculado'})</p>
+                  ))}
+                </div>
               </div>
             )}
+
             <div className="flex gap-3 justify-center">
               <Button variant="outline" onClick={() => window.close()}>
                 Fechar
               </Button>
-              <Button onClick={() => window.location.href = window.location.pathname}>
+              <Button onClick={() => { window.location.href = window.location.pathname; }}>
                 Tentar Novamente
               </Button>
             </div>

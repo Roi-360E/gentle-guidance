@@ -90,7 +90,11 @@ Deno.serve(async (req) => {
       `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&fb_exchange_token=${tokenData.access_token}`
     );
     const longTokenData = await longTokenRes.json();
+    if (longTokenData.error) {
+      console.error("Long token exchange error:", JSON.stringify(longTokenData.error));
+    }
     const longLivedToken = longTokenData.access_token || tokenData.access_token;
+    console.log("Using token type:", longTokenData.access_token ? "long-lived" : "short-lived");
 
     // Step 3: Check granted permissions
     const permRes = await fetch(
@@ -167,6 +171,11 @@ Deno.serve(async (req) => {
     }
 
     if (!igUserId || !pageAccessToken || !pageId) {
+      // Fetch /me to see which user we are
+      const meInfoRes = await fetch(`https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${longLivedToken}`);
+      const meInfo = await meInfoRes.json();
+      console.log("Me info:", JSON.stringify(meInfo));
+
       // Build diagnostic error message
       let errorMsg = "";
 
@@ -180,8 +189,17 @@ Deno.serve(async (req) => {
         errorMsg = "Nenhuma Página do Facebook foi selecionada durante a autorização. Ao conectar, você deve clicar em 'Editar' na tela de seleção de Páginas do Facebook e selecionar sua Página antes de clicar em 'Continuar'.";
       }
 
-      console.error("Connection failed. Granted:", grantedPerms, "Declined:", declinedPerms, "Pages:", pagesData?.data?.length);
-      return jsonResponse({ error: errorMsg });
+      console.error("Connection failed. FB User:", meInfo?.name, "| Granted:", grantedPerms, "| Declined:", declinedPerms, "| Pages count:", pagesData?.data?.length ?? "null");
+      return jsonResponse({ 
+        error: errorMsg,
+        _debug: {
+          fb_user: meInfo,
+          granted_permissions: grantedPerms,
+          declined_permissions: declinedPerms,
+          pages_raw: pagesData,
+          long_token_ok: !!longTokenData.access_token,
+        }
+      });
     }
 
     // Step 5: Get Instagram username
