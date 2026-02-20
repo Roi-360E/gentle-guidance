@@ -97,11 +97,22 @@ export default function InstagramCallback() {
               <h2 className="text-xl font-bold text-foreground">Erro na Conexão</h2>
               <p className="text-sm text-muted-foreground">{message}</p>
             </div>
+            {message.includes('Página') && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-left space-y-2">
+                <p className="text-xs font-semibold text-amber-400">Como corrigir:</p>
+                <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+                  <li>Clique em <strong className="text-foreground">"Tentar Novamente"</strong></li>
+                  <li>Na tela do Facebook, clique em <strong className="text-foreground">"Editar"</strong> ao lado de "Páginas"</li>
+                  <li>Selecione sua Página do Facebook e confirme</li>
+                  <li>Clique em <strong className="text-foreground">"Continuar"</strong> para finalizar</li>
+                </ol>
+              </div>
+            )}
             <div className="flex gap-3 justify-center">
-              <Button variant="outline" onClick={() => navigate('/')}>
-                Voltar
+              <Button variant="outline" onClick={() => window.close()}>
+                Fechar
               </Button>
-              <Button onClick={() => navigate('/auth/instagram/callback' + window.location.search)}>
+              <Button onClick={() => window.location.href = window.location.pathname}>
                 Tentar Novamente
               </Button>
             </div>
