@@ -6,10 +6,32 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const jsonResponse = (body: object) =>
+const jsonResponse = (body: object, status = 200) =>
   new Response(JSON.stringify(body), {
+    status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+// Safe fetch that handles non-JSON responses (e.g. 502 HTML pages)
+async function fetchJsonSafely<T = any>(url: string): Promise<T> {
+  const res = await fetch(url);
+  const contentType = res.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const text = await res.text();
+    const preview = text.substring(0, 300);
+    console.error(`fetchJsonSafely: expected JSON, got ${contentType} (status ${res.status})`);
+    console.error("Response preview:", preview);
+
+    if (text.trim().startsWith("<!") || text.includes("<html")) {
+      throw new Error(`API retornou HTML (status ${res.status}) — possível erro de gateway ou redirect.`);
+    }
+    throw new Error(`Resposta inesperada do servidor (${res.status}): ${preview}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
 
 // Helper: find Instagram account through multiple fallback strategies
 async function findInstagramAccount(longLivedToken: string) {
@@ -21,132 +43,151 @@ async function findInstagramAccount(longLivedToken: string) {
 
   // Strategy 1: /me/accounts (traditional Facebook Pages)
   console.log("[S1] /me/accounts...");
-  const pagesRes = await fetch(
-    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}&limit=100&access_token=${longLivedToken}`
-  );
-  const pagesData = await pagesRes.json();
-  diagnostics.strategy1_pages = pagesData;
-  console.log("[S1]", JSON.stringify(pagesData));
+  try {
+    const pagesData = await fetchJsonSafely(
+      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}&limit=100&access_token=${longLivedToken}`
+    );
+    diagnostics.strategy1_pages = pagesData;
+    console.log("[S1]", JSON.stringify(pagesData));
 
-  if (pagesData.data?.length > 0) {
-    for (const page of pagesData.data) {
-      if (page.instagram_business_account?.id) {
-        igUserId = page.instagram_business_account.id;
-        igUsername = page.instagram_business_account.username || page.instagram_business_account.name || null;
-        pageAccessToken = page.access_token;
-        pageId = page.id;
-        console.log(`[S1] Found IG ${igUserId} on page ${page.name}`);
-        break;
-      }
-    }
-    // Pages found but no IG link — query each page individually
-    if (!igUserId) {
+    if (pagesData.data?.length > 0) {
       for (const page of pagesData.data) {
-        const r = await fetch(
-          `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account{id,username}&access_token=${page.access_token}`
-        );
-        const d = await r.json();
-        console.log(`[S1b] page ${page.name}:`, JSON.stringify(d));
-        if (d.instagram_business_account?.id) {
-          igUserId = d.instagram_business_account.id;
-          igUsername = d.instagram_business_account.username || null;
+        if (page.instagram_business_account?.id) {
+          igUserId = page.instagram_business_account.id;
+          igUsername = page.instagram_business_account.username || page.instagram_business_account.name || null;
           pageAccessToken = page.access_token;
           pageId = page.id;
+          console.log(`[S1] Found IG ${igUserId} on page ${page.name}`);
           break;
         }
       }
+      // Pages found but no IG link — query each page individually
+      if (!igUserId) {
+        for (const page of pagesData.data) {
+          try {
+            const d = await fetchJsonSafely(
+              `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account{id,username}&access_token=${page.access_token}`
+            );
+            console.log(`[S1b] page ${page.name}:`, JSON.stringify(d));
+            if (d.instagram_business_account?.id) {
+              igUserId = d.instagram_business_account.id;
+              igUsername = d.instagram_business_account.username || null;
+              pageAccessToken = page.access_token;
+              pageId = page.id;
+              break;
+            }
+          } catch (e: any) {
+            console.error(`[S1b] Error querying page ${page.id}:`, e.message);
+          }
+        }
+      }
     }
+  } catch (e: any) {
+    console.error("[S1] Error:", e.message);
+    diagnostics.strategy1_pages = { error: { message: e.message } };
   }
   if (igUserId) return { igUserId, igUsername, pageAccessToken, pageId, diagnostics };
 
   // Strategy 2: /me/businesses (Business Portfolio accounts)
   console.log("[S2] /me/businesses...");
-  const bizRes = await fetch(
-    `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,instagram_business_accounts{id,username},owned_pages{id,name,access_token,instagram_business_account{id,username}}&access_token=${longLivedToken}`
-  );
-  const bizData = await bizRes.json();
-  diagnostics.strategy2_businesses = bizData;
-  console.log("[S2]", JSON.stringify(bizData));
+  try {
+    const bizData = await fetchJsonSafely(
+      `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,instagram_business_accounts{id,username},owned_pages{id,name,access_token,instagram_business_account{id,username}}&access_token=${longLivedToken}`
+    );
+    diagnostics.strategy2_businesses = bizData;
+    console.log("[S2]", JSON.stringify(bizData));
 
-  if (bizData.data?.length > 0) {
-    for (const biz of bizData.data) {
-      if (biz.instagram_business_accounts?.data?.length > 0) {
-        const igAcc = biz.instagram_business_accounts.data[0];
-        igUserId = igAcc.id;
-        igUsername = igAcc.username || null;
-        // Find a page token for this IG account
-        if (biz.owned_pages?.data?.length > 0) {
-          for (const page of biz.owned_pages.data) {
-            if (page.instagram_business_account?.id === igUserId || !pageAccessToken) {
-              pageAccessToken = page.access_token;
-              pageId = page.id;
-              if (page.instagram_business_account?.id === igUserId) break;
+    if (bizData.data?.length > 0) {
+      for (const biz of bizData.data) {
+        if (biz.instagram_business_accounts?.data?.length > 0) {
+          const igAcc = biz.instagram_business_accounts.data[0];
+          igUserId = igAcc.id;
+          igUsername = igAcc.username || null;
+          if (biz.owned_pages?.data?.length > 0) {
+            for (const page of biz.owned_pages.data) {
+              if (page.instagram_business_account?.id === igUserId || !pageAccessToken) {
+                pageAccessToken = page.access_token;
+                pageId = page.id;
+                if (page.instagram_business_account?.id === igUserId) break;
+              }
             }
           }
+          if (!pageAccessToken) { pageAccessToken = longLivedToken; pageId = igUserId; }
+          console.log(`[S2] Found IG ${igUserId} via business ${biz.name}`);
+          break;
         }
-        if (!pageAccessToken) { pageAccessToken = longLivedToken; pageId = igUserId; }
-        console.log(`[S2] Found IG ${igUserId} via business ${biz.name}`);
-        break;
-      }
-      if (biz.owned_pages?.data?.length > 0) {
-        for (const page of biz.owned_pages.data) {
-          if (page.instagram_business_account?.id) {
-            igUserId = page.instagram_business_account.id;
-            igUsername = page.instagram_business_account.username || null;
-            pageAccessToken = page.access_token;
-            pageId = page.id;
-            console.log(`[S2b] Found IG ${igUserId} via biz owned_page`);
-            break;
+        if (biz.owned_pages?.data?.length > 0) {
+          for (const page of biz.owned_pages.data) {
+            if (page.instagram_business_account?.id) {
+              igUserId = page.instagram_business_account.id;
+              igUsername = page.instagram_business_account.username || null;
+              pageAccessToken = page.access_token;
+              pageId = page.id;
+              console.log(`[S2b] Found IG ${igUserId} via biz owned_page`);
+              break;
+            }
           }
+          if (igUserId) break;
         }
-        if (igUserId) break;
       }
     }
+  } catch (e: any) {
+    console.error("[S2] Error:", e.message);
+    diagnostics.strategy2_businesses = { error: { message: e.message } };
   }
   if (igUserId) return { igUserId, igUsername, pageAccessToken, pageId, diagnostics };
 
   // Strategy 3: /me?fields=instagram_accounts (Creator accounts)
   console.log("[S3] /me?fields=instagram_accounts...");
-  const creatorRes = await fetch(
-    `https://graph.facebook.com/v21.0/me?fields=id,name,instagram_accounts{id,username,name}&access_token=${longLivedToken}`
-  );
-  const creatorData = await creatorRes.json();
-  diagnostics.strategy3_creator = creatorData;
-  console.log("[S3]", JSON.stringify(creatorData));
+  try {
+    const creatorData = await fetchJsonSafely(
+      `https://graph.facebook.com/v21.0/me?fields=id,name,instagram_accounts{id,username,name}&access_token=${longLivedToken}`
+    );
+    diagnostics.strategy3_creator = creatorData;
+    console.log("[S3]", JSON.stringify(creatorData));
 
-  if (creatorData.instagram_accounts?.data?.length > 0) {
-    const igAcc = creatorData.instagram_accounts.data[0];
-    igUserId = igAcc.id;
-    igUsername = igAcc.username || igAcc.name || null;
-    pageAccessToken = longLivedToken;
-    pageId = igAcc.id;
-    console.log(`[S3] Found creator IG ${igUserId}`);
+    if (creatorData.instagram_accounts?.data?.length > 0) {
+      const igAcc = creatorData.instagram_accounts.data[0];
+      igUserId = igAcc.id;
+      igUsername = igAcc.username || igAcc.name || null;
+      pageAccessToken = longLivedToken;
+      pageId = igAcc.id;
+      console.log(`[S3] Found creator IG ${igUserId}`);
+    }
+  } catch (e: any) {
+    console.error("[S3] Error:", e.message);
+    diagnostics.strategy3_creator = { error: { message: e.message } };
   }
   if (igUserId) return { igUserId, igUsername, pageAccessToken, pageId, diagnostics };
 
   // Strategy 4: Try Graph API v20.0 fallback
   console.log("[S4] /me/accounts v20.0 fallback...");
-  const pages20Res = await fetch(
-    `https://graph.facebook.com/v20.0/me/accounts?fields=id,name,access_token,instagram_business_account&limit=100&access_token=${longLivedToken}`
-  );
-  const pages20Data = await pages20Res.json();
-  diagnostics.strategy4_v20 = pages20Data;
-  console.log("[S4]", JSON.stringify(pages20Data));
+  try {
+    const pages20Data = await fetchJsonSafely(
+      `https://graph.facebook.com/v20.0/me/accounts?fields=id,name,access_token,instagram_business_account&limit=100&access_token=${longLivedToken}`
+    );
+    diagnostics.strategy4_v20 = pages20Data;
+    console.log("[S4]", JSON.stringify(pages20Data));
 
-  if (pages20Data.data?.length > 0) {
-    for (const page of pages20Data.data) {
-      if (page.instagram_business_account?.id) {
-        igUserId = page.instagram_business_account.id;
-        pageAccessToken = page.access_token;
-        pageId = page.id;
-        console.log(`[S4] Found IG ${igUserId} via v20 page ${page.name}`);
-        break;
+    if (pages20Data.data?.length > 0) {
+      for (const page of pages20Data.data) {
+        if (page.instagram_business_account?.id) {
+          igUserId = page.instagram_business_account.id;
+          pageAccessToken = page.access_token;
+          pageId = page.id;
+          console.log(`[S4] Found IG ${igUserId} via v20 page ${page.name}`);
+          break;
+        }
       }
     }
+  } catch (e: any) {
+    console.error("[S4] Error:", e.message);
+    diagnostics.strategy4_v20 = { error: { message: e.message } };
   }
 
   return { igUserId, igUsername, pageAccessToken, pageId, diagnostics };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -204,31 +245,45 @@ Deno.serve(async (req) => {
     console.log("redirect_uri:", redirectUri);
 
     // Step 1: Exchange code → short-lived token
-    const tokenRes = await fetch(
-      `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`
-    );
-    const tokenData = await tokenRes.json();
+    let tokenData: any;
+    try {
+      tokenData = await fetchJsonSafely(
+        `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`
+      );
+    } catch (e: any) {
+      console.error("Token exchange error:", e.message);
+      return jsonResponse({ error: `Falha ao trocar o código OAuth: ${e.message}` });
+    }
     if (tokenData.error) {
       console.error("Token error:", JSON.stringify(tokenData.error));
       return jsonResponse({ error: `Falha na troca do código: ${tokenData.error.message}` });
     }
 
     // Step 2: Exchange → long-lived token (60 days)
-    const longTokenRes = await fetch(
-      `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&fb_exchange_token=${tokenData.access_token}`
-    );
-    const longTokenData = await longTokenRes.json();
+    let longTokenData: any = {};
+    try {
+      longTokenData = await fetchJsonSafely(
+        `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&fb_exchange_token=${tokenData.access_token}`
+      );
+    } catch (e: any) {
+      console.warn("Long token exchange failed, using short-lived:", e.message);
+    }
     const longLivedToken = longTokenData.access_token || tokenData.access_token;
     console.log("Token:", longTokenData.access_token ? "long-lived ✅" : "short-lived ⚠️");
 
     // Step 3: Check permissions
-    const permRes = await fetch(
-      `https://graph.facebook.com/v21.0/me/permissions?access_token=${longLivedToken}`
-    );
-    const permData = await permRes.json();
-    const grantedPerms = permData?.data?.filter((p: any) => p.status === 'granted')?.map((p: any) => p.permission) || [];
-    const declinedPerms = permData?.data?.filter((p: any) => p.status === 'declined')?.map((p: any) => p.permission) || [];
-    console.log("Granted:", grantedPerms, "| Declined:", declinedPerms);
+    let grantedPerms: string[] = [];
+    let declinedPerms: string[] = [];
+    try {
+      const permData = await fetchJsonSafely(
+        `https://graph.facebook.com/v21.0/me/permissions?access_token=${longLivedToken}`
+      );
+      grantedPerms = permData?.data?.filter((p: any) => p.status === 'granted')?.map((p: any) => p.permission) || [];
+      declinedPerms = permData?.data?.filter((p: any) => p.status === 'declined')?.map((p: any) => p.permission) || [];
+      console.log("Granted:", grantedPerms, "| Declined:", declinedPerms);
+    } catch (e: any) {
+      console.warn("Permissions check failed:", e.message);
+    }
 
     // Step 4: Find Instagram account via multiple strategies
     const { igUserId, igUsername: igFoundUsername, pageAccessToken, pageId, diagnostics } =
@@ -237,8 +292,8 @@ Deno.serve(async (req) => {
     let igUsername = igFoundUsername;
 
     if (!igUserId || !pageAccessToken || !pageId) {
-      const meInfoRes = await fetch(`https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${longLivedToken}`);
-      const meInfo = await meInfoRes.json();
+      let meInfo: any = {};
+      try { meInfo = await fetchJsonSafely(`https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${longLivedToken}`); } catch (_) { /* ignore */ }
       console.error("All strategies failed. User:", meInfo?.name, "| Granted:", grantedPerms);
 
       return jsonResponse({
@@ -255,11 +310,15 @@ Deno.serve(async (req) => {
 
     // Step 5: Get username if not already found
     if (!igUsername) {
-      const igProfileRes = await fetch(
-        `https://graph.facebook.com/v21.0/${igUserId}?fields=username,name&access_token=${pageAccessToken}`
-      );
-      const igProfile = await igProfileRes.json();
-      igUsername = igProfile.username || igProfile.name || "unknown";
+      try {
+        const igProfile = await fetchJsonSafely(
+          `https://graph.facebook.com/v21.0/${igUserId}?fields=username,name&access_token=${pageAccessToken}`
+        );
+        igUsername = igProfile.username || igProfile.name || "unknown";
+      } catch (e: any) {
+        console.warn("Could not fetch IG username:", e.message);
+        igUsername = "unknown";
+      }
     }
     console.log("IG username:", igUsername);
 
