@@ -73,8 +73,8 @@ export default function InstagramCallback() {
               <h2 className="text-xl font-bold text-foreground">Instagram Conectado!</h2>
               <p className="text-muted-foreground">{message}</p>
             </div>
-            <Button onClick={() => navigate('/')} className="gap-2">
-              Voltar ao App
+            <Button onClick={() => { window.close(); }} className="gap-2">
+              Fechar e Voltar
             </Button>
           </>
         )}
