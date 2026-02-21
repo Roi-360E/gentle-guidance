@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   Zap,
-  Sparkles,
+  Rocket,
   ShieldCheck,
   Clock,
   TrendingUp,
@@ -79,7 +79,7 @@ const painTable = [
 
 const bonuses = [
   {
-    icon: Sparkles,
+    icon: Rocket,
     title: 'Biblioteca de Ganchos de Alta Retenção',
     desc: 'Copy pronta para copiar e adaptar nos primeiros 3 segundos dos seus criativos.',
   },
@@ -111,8 +111,8 @@ export default function Sales() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-primary" />
-            <span className="text-lg font-extrabold tracking-tight text-primary uppercase">EscalaX</span>
+            <Rocket className="w-6 h-6 text-primary" />
+            <span className="text-lg font-extrabold tracking-tight text-primary uppercase">EscalaXPro</span>
           </div>
           <Button size="sm" className="rounded-full gap-1.5" onClick={scrollToCTA}>
             Quero Acesso <ArrowRight className="w-4 h-4" />
@@ -142,7 +142,7 @@ export default function Sales() {
           </h1>
 
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Pare de ser escravo da edição manual. O EscalaX automatiza a criação de
+            Pare de ser escravo da edição manual. O EscalaXPro automatiza a criação de
             <strong className="text-foreground"> Ganchos, Corpos e CTAs </strong>
             para você dominar o leilão e reduzir seu CPA drasticamente.
           </p>
@@ -160,7 +160,7 @@ export default function Sales() {
           </div>
 
           <Button size="lg" className="rounded-full gap-2 text-base px-8 mt-4" onClick={scrollToCTA}>
-            <Zap className="w-5 h-5" /> Quero o EscalaX Agora
+            <Zap className="w-5 h-5" /> Quero o EscalaXPro Agora
           </Button>
         </div>
       </section>
@@ -169,7 +169,7 @@ export default function Sales() {
       <Section className="py-16 sm:py-20 space-y-10">
         <div className="text-center space-y-3">
           <h2 className="text-2xl sm:text-4xl font-black">
-            Como o EscalaX <span className="text-primary">Destrói</span> a Fadiga do Seu Anúncio
+            Como o EscalaXPro <span className="text-primary">Destrói</span> a Fadiga do Seu Anúncio
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
             Não é um editor. É um <strong className="text-foreground">motor de escala</strong> projetado para
@@ -199,10 +199,10 @@ export default function Sales() {
       <Section className="py-16 sm:py-20 space-y-10">
         <div className="text-center space-y-3">
           <h2 className="text-2xl sm:text-4xl font-black">
-            Para Quem é o <span className="text-primary">EscalaX</span>?
+            Para Quem é o <span className="text-primary">EscalaXPro</span>?
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Se você se identifica com algum desses problemas, o EscalaX foi feito pra você.
+            Se você se identifica com algum desses problemas, o EscalaXPro foi feito pra você.
           </p>
         </div>
 
@@ -213,7 +213,7 @@ export default function Sales() {
               ❌ O Problema Atual
             </div>
             <div className="px-4 sm:px-6 py-3 text-sm font-bold text-primary uppercase tracking-wide">
-              ✅ A Solução EscalaX
+              ✅ A Solução EscalaXPro
             </div>
           </div>
           {painTable.map((row, i) => (
@@ -232,7 +232,7 @@ export default function Sales() {
       <Section className="py-16 sm:py-20 space-y-10">
         <div className="text-center space-y-3">
           <h2 className="text-2xl sm:text-4xl font-black">
-            O EscalaX <span className="text-primary">em Ação</span>
+            O EscalaXPro <span className="text-primary">em Ação</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
             Veja como gestores de tráfego estão escalando seus resultados.
@@ -243,7 +243,7 @@ export default function Sales() {
         <GlowCard className="max-w-2xl mx-auto text-center space-y-4">
           <div className="aspect-video rounded-xl bg-secondary/60 border border-border flex items-center justify-center">
             <div className="text-center space-y-2">
-              <Sparkles className="w-10 h-10 text-primary mx-auto" />
+              <Rocket className="w-10 h-10 text-primary mx-auto" />
               <p className="text-sm text-muted-foreground">Dashboard processando 50 variações...</p>
               <div className="w-48 h-2 rounded-full bg-muted mx-auto overflow-hidden">
                 <div className="h-full w-3/4 rounded-full bg-primary animate-pulse" />
@@ -251,14 +251,14 @@ export default function Sales() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Interface real do EscalaX — Upload → Pré-processamento → Combinações prontas em segundos.
+            Interface real do EscalaXPro — Upload → Pré-processamento → Combinações prontas em segundos.
           </p>
         </GlowCard>
 
         {/* Testimonials grid */}
         <div className="grid sm:grid-cols-3 gap-5">
           {[
-            { name: 'Rafael M.', role: 'Gestor de Tráfego', text: 'CTR de 1.2% foi pra 3.8% só trocando hooks com o EscalaX. Nunca mais edito manualmente.' },
+            { name: 'Rafael M.', role: 'Gestor de Tráfego', text: 'CTR de 1.2% foi pra 3.8% só trocando hooks com o EscalaXPro. Nunca mais edito manualmente.' },
             { name: 'Juliana S.', role: 'Media Buyer', text: 'Economizo 15h por semana que gastava fazendo variações no Premiere. O CPA caiu 40%.' },
             { name: 'Lucas P.', role: 'Agência de Performance', text: 'Testamos 200 variações em um dia. Encontramos 3 criativos que sozinhos faturam R$ 50k/mês.' },
           ].map((t) => (
@@ -414,8 +414,8 @@ export default function Sales() {
       {/* ════════════════════ FOOTER ════════════════════ */}
       <footer className="border-t border-border py-8 text-center">
         <div className="flex items-center justify-center gap-2 mb-3">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <span className="font-extrabold text-primary uppercase tracking-tight">EscalaX</span>
+          <Rocket className="w-5 h-5 text-primary" />
+          <span className="font-extrabold text-primary uppercase tracking-tight">EscalaXPro</span>
         </div>
         <p className="text-xs text-muted-foreground">
           © {new Date().getFullYear()} EscalaX. Todos os direitos reservados.

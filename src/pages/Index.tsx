@@ -21,7 +21,7 @@ import { cloudPreprocessFiles } from '@/lib/cloud-preprocess';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
-import { Sparkles, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock } from 'lucide-react';
+import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock } from 'lucide-react';
 import { ScriptChatFloat } from '@/components/ScriptChat';
 import { InstagramConnect } from '@/components/InstagramConnect';
 import { Progress } from '@/components/ui/progress';
@@ -274,10 +274,10 @@ const Index = () => {
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+            <Rocket className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
             <div>
               <h1 className="text-lg sm:text-2xl font-extrabold tracking-tight text-primary uppercase">
-                EscalaX
+                EscalaXPro
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
                 Feito para escalar seus criativos de vídeo
@@ -351,7 +351,7 @@ const Index = () => {
                 Olá, {userName}! 👋
               </p>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Bem-vindo(a) de volta ao EscalaX. Pronto(a) para escalar seus criativos?
+                Bem-vindo(a) de volta ao EscalaXPro. Pronto(a) para escalar seus criativos?
               </p>
             </div>
           </div>
@@ -427,7 +427,7 @@ const Index = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
             <div className="bg-primary/10 rounded-lg p-2.5">
-              <Sparkles className="w-5 h-5 text-primary" />
+              <Rocket className="w-5 h-5 text-primary" />
             </div>
             <div>
               <p className="text-2xl font-bold">{totalCombinations}</p>
