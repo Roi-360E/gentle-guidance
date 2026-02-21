@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sparkles, Mail, Lock, User, Shield, CreditCard } from 'lucide-react';
+import { Rocket, Mail, Lock, User, Shield, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { validateEmailDomain } from '@/lib/email-validator';
 import { generateFingerprint } from '@/lib/device-fingerprint';
@@ -102,11 +102,11 @@ const Auth = () => {
         <CardHeader className="text-center space-y-3">
           <div className="flex justify-center">
             <div className="bg-primary/20 rounded-xl p-3">
-              <Sparkles className="w-8 h-8 text-primary" />
+              <Rocket className="w-8 h-8 text-primary" />
             </div>
           </div>
           <CardTitle className="text-2xl font-extrabold text-primary uppercase tracking-tight">
-            EscalaX
+            EscalaXPro
           </CardTitle>
           <CardDescription>
             {isLogin ? 'Entre na sua conta' : 'Crie sua conta'}
