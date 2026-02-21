@@ -103,7 +103,7 @@ export function TestimonialUploadDialog({ open, onOpenChange, userId, onSuccess 
             Enviar Vídeo Depoimento
           </DialogTitle>
           <DialogDescription>
-            Envie um vídeo contando sua experiência com o EscalaX e ganhe 6 meses de acesso ilimitado.
+            Envie um vídeo contando sua experiência com o EscalaXPro e ganhe 6 meses de acesso ilimitado.
           </DialogDescription>
         </DialogHeader>
 
