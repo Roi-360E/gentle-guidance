@@ -21,7 +21,8 @@ import { cloudPreprocessFiles } from '@/lib/cloud-preprocess';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
-import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock } from 'lucide-react';
+import { Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock } from 'lucide-react';
+import logoEscalaxpro from '@/assets/logo-escalaxpro.png';
 import { ScriptChatFloat } from '@/components/ScriptChat';
 import { InstagramConnect } from '@/components/InstagramConnect';
 import { Progress } from '@/components/ui/progress';
@@ -274,7 +275,7 @@ const Index = () => {
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Rocket className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+            <img src={logoEscalaxpro} alt="EscalaXPro" className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg" />
             <div>
               <h1 className="text-lg sm:text-2xl font-extrabold tracking-tight text-primary uppercase">
                 EscalaXPro
@@ -427,7 +428,7 @@ const Index = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
             <div className="bg-primary/10 rounded-lg p-2.5">
-              <Rocket className="w-5 h-5 text-primary" />
+              <img src={logoEscalaxpro} alt="EscalaXPro" className="w-5 h-5 rounded" />
             </div>
             <div>
               <p className="text-2xl font-bold">{totalCombinations}</p>
