@@ -1,9 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import logoEscalaxpro from '@/assets/logo-escalaxpro.png';
 import {
   Zap,
-  Sparkles,
+  Rocket,
   ShieldCheck,
   Clock,
   TrendingUp,
@@ -80,7 +79,7 @@ const painTable = [
 
 const bonuses = [
   {
-    icon: Sparkles,
+    icon: Rocket,
     title: 'Biblioteca de Ganchos de Alta Retenção',
     desc: 'Copy pronta para copiar e adaptar nos primeiros 3 segundos dos seus criativos.',
   },
@@ -112,7 +111,7 @@ export default function Sales() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={logoEscalaxpro} alt="EscalaXPro" className="w-7 h-7 rounded-lg" />
+            <Rocket className="w-6 h-6 text-primary" />
             <span className="text-lg font-extrabold tracking-tight text-primary uppercase">EscalaXPro</span>
           </div>
           <Button size="sm" className="rounded-full gap-1.5" onClick={scrollToCTA}>
@@ -244,7 +243,7 @@ export default function Sales() {
         <GlowCard className="max-w-2xl mx-auto text-center space-y-4">
           <div className="aspect-video rounded-xl bg-secondary/60 border border-border flex items-center justify-center">
             <div className="text-center space-y-2">
-              <img src={logoEscalaxpro} alt="EscalaXPro" className="w-10 h-10 mx-auto rounded-lg" />
+              <Rocket className="w-10 h-10 text-primary mx-auto" />
               <p className="text-sm text-muted-foreground">Dashboard processando 50 variações...</p>
               <div className="w-48 h-2 rounded-full bg-muted mx-auto overflow-hidden">
                 <div className="h-full w-3/4 rounded-full bg-primary animate-pulse" />
@@ -415,7 +414,7 @@ export default function Sales() {
       {/* ════════════════════ FOOTER ════════════════════ */}
       <footer className="border-t border-border py-8 text-center">
         <div className="flex items-center justify-center gap-2 mb-3">
-          <img src={logoEscalaxpro} alt="EscalaXPro" className="w-5 h-5 rounded" />
+          <Rocket className="w-5 h-5 text-primary" />
           <span className="font-extrabold text-primary uppercase tracking-tight">EscalaXPro</span>
         </div>
         <p className="text-xs text-muted-foreground">
