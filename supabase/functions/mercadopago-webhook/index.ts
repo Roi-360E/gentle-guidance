@@ -89,7 +89,7 @@ serve(async (req) => {
 });
 
 async function processApprovedPayment(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   accessToken: string,
   mpPaymentId: string
 ) {
