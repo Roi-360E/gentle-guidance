@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { MessageSquare, Send, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { MessageSquare, Send, Loader2, Plus, Trash2, X, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
@@ -21,6 +21,27 @@ type Conversation = {
   title: string;
   created_at: string;
 };
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast.success('Copiado!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="absolute top-1.5 right-1.5 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+      onClick={handleCopy}
+      title="Copiar resposta"
+    >
+      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+    </Button>
+  );
+}
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-roteiros`;
 
@@ -442,30 +463,35 @@ export function ScriptChatFloat() {
                   {messages.map((msg, idx) => (
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div
-                        className={`rounded-2xl text-sm ${
+                        className={`rounded-2xl text-sm relative group ${
                           msg.role === 'user'
                             ? 'max-w-[85%] bg-primary text-primary-foreground rounded-br-md px-4 py-2.5'
                             : 'max-w-[95%] bg-muted/60 text-foreground rounded-bl-md px-4 py-3'
                         }`}
                       >
                         {msg.role === 'assistant' ? (
-                          <div className="prose prose-sm dark:prose-invert max-w-none
-                            [&>*:first-child]:mt-0 [&>*:last-child]:mb-0
-                            [&>h3]:text-base [&>h3]:font-bold [&>h3]:mt-4 [&>h3]:mb-2 [&>h3]:text-primary
-                            [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:mt-3 [&>h4]:mb-1.5
-                            [&>hr]:my-3 [&>hr]:border-border/50
-                            [&>blockquote]:border-l-2 [&>blockquote]:border-primary/40 [&>blockquote]:pl-3 [&>blockquote]:italic [&>blockquote]:text-foreground/80 [&>blockquote]:my-2
-                            [&>ul]:space-y-1 [&>ol]:space-y-1
-                            [&>table]:text-xs [&>table]:w-full [&>table_th]:text-left [&>table_th]:pb-1 [&>table_th]:border-b [&>table_td]:py-1 [&>table_td]:border-b [&>table_td]:border-border/30
-                            [&>p]:leading-relaxed
-                            [&_strong]:text-foreground
-                            [&_em]:text-muted-foreground
-                          ">
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                            {isStreaming && idx === messages.length - 1 && (
-                              <span className="inline-block w-[2px] h-[1em] bg-primary ml-0.5 align-middle animate-[pulse_0.8s_ease-in-out_infinite]" />
+                          <>
+                            <div className="prose prose-sm dark:prose-invert max-w-none
+                              [&>*:first-child]:mt-0 [&>*:last-child]:mb-0
+                              [&>h3]:text-base [&>h3]:font-bold [&>h3]:mt-4 [&>h3]:mb-2 [&>h3]:text-primary
+                              [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:mt-3 [&>h4]:mb-1.5
+                              [&>hr]:my-3 [&>hr]:border-border/50
+                              [&>blockquote]:border-l-2 [&>blockquote]:border-primary/40 [&>blockquote]:pl-3 [&>blockquote]:italic [&>blockquote]:text-foreground/80 [&>blockquote]:my-2
+                              [&>ul]:space-y-1 [&>ol]:space-y-1
+                              [&>table]:text-xs [&>table]:w-full [&>table_th]:text-left [&>table_th]:pb-1 [&>table_th]:border-b [&>table_td]:py-1 [&>table_td]:border-b [&>table_td]:border-border/30
+                              [&>p]:leading-relaxed
+                              [&_strong]:text-foreground
+                              [&_em]:text-muted-foreground
+                            ">
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                              {isStreaming && idx === messages.length - 1 && (
+                                <span className="inline-block w-[2px] h-[1em] bg-primary ml-0.5 align-middle animate-[pulse_0.8s_ease-in-out_infinite]" />
+                              )}
+                            </div>
+                            {!(isStreaming && idx === messages.length - 1) && (
+                              <CopyButton text={msg.content} />
                             )}
-                          </div>
+                          </>
                         ) : (
                           msg.content
                         )}
