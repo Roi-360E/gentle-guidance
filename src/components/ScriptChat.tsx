@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { MessageSquare, Send, Loader2, Plus, Trash2, X, Copy, Check, Mic, Square } from 'lucide-react';
+import { MessageSquare, Send, Loader2, Plus, Trash2, X, Copy, Check, Mic, Square, PhoneCall, PhoneOff, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
@@ -108,6 +108,8 @@ export function ScriptChatFloat() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const charQueueRef = useRef<string>('');
@@ -117,6 +119,8 @@ export function ScriptChatFloat() {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingAudioRef = useRef<string | null>(null);
+  const voiceModeRef = useRef(false);
+  const speakingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Load plan
   useEffect(() => {
@@ -166,6 +170,101 @@ export function ScriptChatFloat() {
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Keep voiceModeRef in sync
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+
+  // Cleanup speech synthesis on unmount or voice mode off
+  useEffect(() => {
+    return () => {
+      speechSynthesis.cancel();
+    };
+  }, []);
+
+  /** Speak text using browser SpeechSynthesis */
+  const speakText = (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      // Strip markdown formatting for cleaner speech
+      const cleanText = text
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/[""]/g, '"')
+        .replace(/#{1,4}\s/g, '')
+        .replace(/^\d+\.\s/gm, '')
+        .replace(/[🔥💢🎯📝🏪💎📌🎭📊🧠⚡🌀💡🚀✅❌⭐]/g, '')
+        .trim();
+
+      if (!cleanText) { resolve(); return; }
+
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+
+      // Try to find a Portuguese voice
+      const voices = speechSynthesis.getVoices();
+      const ptVoice = voices.find(v => v.lang.startsWith('pt-BR')) 
+        || voices.find(v => v.lang.startsWith('pt'))
+        || voices.find(v => v.lang.startsWith('es')); // fallback
+      if (ptVoice) utterance.voice = ptVoice;
+
+      speakingUtteranceRef.current = utterance;
+      setIsSpeaking(true);
+
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        speakingUtteranceRef.current = null;
+        resolve();
+      };
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        speakingUtteranceRef.current = null;
+        resolve();
+      };
+
+      speechSynthesis.speak(utterance);
+    });
+  };
+
+  /** Toggle voice conversation mode */
+  const toggleVoiceMode = async () => {
+    if (voiceMode) {
+      // Stop voice mode
+      setVoiceMode(false);
+      voiceModeRef.current = false;
+      speechSynthesis.cancel();
+      setIsSpeaking(false);
+      if (isRecording) stopRecording();
+      toast('Modo conversa por voz desativado', { duration: 2000 });
+      return;
+    }
+
+    // Start voice mode
+    setVoiceMode(true);
+    voiceModeRef.current = true;
+    toast('🎙️ Modo conversa por voz ativado! Fale agora...', { duration: 3000 });
+
+    // Auto-create conversation if needed
+    if (!activeConversation && user) {
+      const { data } = await supabase
+        .from('conversations')
+        .insert({ user_id: user.id, title: '🎙️ Conversa por voz' })
+        .select('id, title, created_at')
+        .single();
+      if (data) {
+        setConversations((prev) => [data, ...prev]);
+        setActiveConversation(data.id);
+      }
+    }
+
+    // Start first recording
+    setTimeout(() => {
+      if (voiceModeRef.current) startRecording();
+    }, 500);
+  };
 
   const isPaid = plan === 'advanced' || plan === 'premium' || plan === 'enterprise' || plan === 'unlimited';
 
@@ -448,6 +547,19 @@ export function ScriptChatFloat() {
           role: 'assistant',
           content: assistantSoFar,
         });
+
+        // Voice mode: speak response and auto-record next turn
+        if (voiceModeRef.current) {
+          setIsStreaming(false);
+          setIsLoading(false);
+          await speakText(assistantSoFar);
+          // Auto-start next recording after TTS finishes
+          if (voiceModeRef.current) {
+            setTimeout(() => {
+              if (voiceModeRef.current) startRecording();
+            }, 600);
+          }
+        }
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') toast.error('Erro na conexão com a IA');
@@ -655,6 +767,18 @@ export function ScriptChatFloat() {
           role: 'assistant',
           content: assistantSoFar,
         });
+
+        // Voice mode: speak response
+        if (voiceModeRef.current) {
+          setIsStreaming(false);
+          setIsLoading(false);
+          await speakText(assistantSoFar);
+          if (voiceModeRef.current) {
+            setTimeout(() => {
+              if (voiceModeRef.current) startRecording();
+            }, 600);
+          }
+        }
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -691,6 +815,18 @@ export function ScriptChatFloat() {
               RoteiroPRO IA
             </SheetTitle>
             <div className="flex items-center gap-1">
+              {isPaid && (
+                <Button
+                  variant={voiceMode ? 'destructive' : 'ghost'}
+                  size="icon"
+                  onClick={toggleVoiceMode}
+                  disabled={isLoading && !voiceMode}
+                  title={voiceMode ? 'Desativar conversa por voz' : 'Conversa por voz em tempo real'}
+                  className={voiceMode ? 'animate-pulse' : ''}
+                >
+                  {voiceMode ? <PhoneOff className="w-4 h-4" /> : <PhoneCall className="w-4 h-4" />}
+                </Button>
+              )}
               <Button variant="ghost" size="icon" onClick={() => setShowHistory(!showHistory)} title="Histórico">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
               </Button>
@@ -850,10 +986,40 @@ export function ScriptChatFloat() {
             </ScrollArea>
 
             <div className="p-4 border-t border-border">
-              {isRecording && (
+              {voiceMode && (
+                <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-accent/20 border border-accent/30 text-accent-foreground text-sm">
+                  <PhoneCall className="w-4 h-4 text-primary animate-pulse" />
+                  <span className="font-medium">
+                    {isSpeaking ? '🔊 IA falando...' : isRecording ? '🎙️ Ouvindo você...' : isTranscribing ? '⏳ Processando...' : isLoading ? '🤔 Pensando...' : '🎙️ Aguardando...'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-6 px-2 text-xs"
+                    onClick={toggleVoiceMode}
+                  >
+                    <PhoneOff className="w-3 h-3 mr-1" /> Encerrar
+                  </Button>
+                </div>
+              )}
+              {isRecording && !voiceMode && (
                 <div className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg bg-destructive/10 text-destructive text-sm">
                   <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
                   <span>Gravando... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
+                </div>
+              )}
+              {isRecording && voiceMode && (
+                <div className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                  <span>Gravando... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')} — toque para enviar</span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="ml-auto h-6 px-2 text-xs"
+                    onClick={stopRecording}
+                  >
+                    <Square className="w-3 h-3 mr-1" /> Parar
+                  </Button>
                 </div>
               )}
               {isTranscribing && (
