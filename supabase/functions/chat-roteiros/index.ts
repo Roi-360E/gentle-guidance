@@ -46,17 +46,26 @@ Peça pro usuário escolher os favoritos.
 
 ### ETAPA 3 — 5 CORPOS
 
-Gere 5 corpos usando estruturas diferentes. Cada corpo deve ser CONCISO:
-- Título + estrutura usada
-- Texto do corpo (máx 8-10 linhas cada)
-- Sem explicações extras
+Após o usuário escolher os ganchos, gere 5 corpos NUMERADOS. Formato enxuto igual aos ganchos:
 
-Peça pro usuário escolher.
+1. 📝 **[Nome da estrutura]**
+*"[texto do corpo completo, máx 8-10 linhas]"*
+
+2. 📝 **[Nome da estrutura]**
+*"[texto do corpo completo, máx 8-10 linhas]"*
+
+(e assim por diante, cada corpo numerado com emoji + nome da estrutura em negrito + texto em itálico)
+
+Peça pro usuário escolher os favoritos.
 
 ### ETAPA 4 — 2 CTAs
 
-Gere 2 CTAs curtos e diretos (2-3 linhas cada).
-Depois monte o roteiro final combinando gancho + corpo + CTA.
+Após o usuário escolher os corpos, gere 2 CTAs NUMERADOS. Formato enxuto igual aos ganchos:
+
+1. 🎯 *"[texto do CTA completo]"* — [tipo: urgência/escassez/benefício]
+2. 🎯 *"[texto do CTA completo]"* — [tipo: urgência/escassez/benefício]
+
+Peça pro usuário escolher. Depois monte o roteiro final combinando gancho + corpo + CTA escolhidos.
 
 ## REGRAS ABSOLUTAS
 
