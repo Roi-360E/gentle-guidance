@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { MessageSquare, Send, Loader2, Plus, Trash2, X, Copy, Check } from 'lucide-react';
+import { MessageSquare, Send, Loader2, Plus, Trash2, X, Copy, Check, Mic, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
@@ -104,11 +104,17 @@ export function ScriptChatFloat() {
   const [isLoading, setIsLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [plan, setPlan] = useState('free');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const charQueueRef = useRef<string>('');
   const revealedRef = useRef('');
   const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load plan
   useEffect(() => {
@@ -184,6 +190,82 @@ export function ScriptChatFloat() {
     if (activeConversation === id) {
       setActiveConversation(null);
       setMessages([]);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      setRecordingTime(0);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (blob.size < 1000) {
+          toast.error('Áudio muito curto. Tente novamente.');
+          return;
+        }
+        await transcribeAndSend(blob);
+      };
+
+      mediaRecorder.start(250);
+      setIsRecording(true);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((t) => t + 1);
+      }, 1000);
+    } catch {
+      toast.error('Permissão de microfone negada. Habilite nas configurações do navegador.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setRecordingTime(0);
+  };
+
+  const transcribeAndSend = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-transcribe`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await resp.json();
+      if (data.error || !data.text) {
+        toast.error(data.error || 'Não foi possível transcrever o áudio');
+        return;
+      }
+
+      setInput(data.text);
+      toast.success('Áudio transcrito! Revise e envie.');
+    } catch {
+      toast.error('Erro ao transcrever áudio');
+    } finally {
+      setIsTranscribing(false);
     }
   };
 
@@ -563,6 +645,18 @@ export function ScriptChatFloat() {
             </ScrollArea>
 
             <div className="p-4 border-t border-border">
+              {isRecording && (
+                <div className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                  <span>Gravando... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
+                </div>
+              )}
+              {isTranscribing && (
+                <div className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg bg-primary/10 text-primary text-sm">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Transcrevendo áudio...</span>
+                </div>
+              )}
               <form
                 onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
                 className="flex gap-2"
@@ -571,10 +665,20 @@ export function ScriptChatFloat() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Descreva seu vídeo..."
-                  disabled={isLoading}
+                  disabled={isLoading || isRecording || isTranscribing}
                   className="flex-1"
                 />
-                <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={isRecording ? 'destructive' : 'outline'}
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={isLoading || isTranscribing}
+                  title={isRecording ? 'Parar gravação' : 'Gravar áudio'}
+                >
+                  {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </Button>
+                <Button type="submit" size="icon" disabled={isLoading || !input.trim() || isRecording || isTranscribing}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </Button>
               </form>
