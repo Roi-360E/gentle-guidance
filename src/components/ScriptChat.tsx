@@ -14,6 +14,7 @@ type Message = {
   id?: string;
   role: 'user' | 'assistant';
   content: string;
+  audioUrl?: string;
 };
 
 type Conversation = {
@@ -115,6 +116,7 @@ export function ScriptChatFloat() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingAudioRef = useRef<string | null>(null);
 
   // Load plan
   useEffect(() => {
@@ -239,6 +241,10 @@ export function ScriptChatFloat() {
 
   const transcribeAndSend = async (audioBlob: Blob) => {
     setIsTranscribing(true);
+    
+    // Create audio URL for playback in chat
+    const audioUrl = URL.createObjectURL(audioBlob);
+    
     try {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
@@ -257,15 +263,199 @@ export function ScriptChatFloat() {
       const data = await resp.json();
       if (data.error || !data.text) {
         toast.error(data.error || 'Não foi possível transcrever o áudio');
+        URL.revokeObjectURL(audioUrl);
         return;
       }
 
-      setInput(data.text);
-      toast.success('Áudio transcrito! Revise e envie.');
+      // Show audio message in chat with transcription, then auto-send
+      const transcribedText = data.text;
+      pendingAudioRef.current = audioUrl;
+      setInput(transcribedText);
+      
+      // Auto-send after a brief moment so user sees it
+      setTimeout(() => {
+        setInput('');
+        sendAudioMessage(transcribedText, audioUrl);
+      }, 100);
     } catch {
       toast.error('Erro ao transcrever áudio');
+      URL.revokeObjectURL(audioUrl);
     } finally {
       setIsTranscribing(false);
+    }
+  };
+
+  const sendAudioMessage = async (text: string, audioUrl: string) => {
+    if (!text.trim() || isLoading || !user) return;
+
+    let convId = activeConversation;
+
+    if (!convId) {
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert({ user_id: user.id, title: text.slice(0, 50) })
+        .select('id, title, created_at')
+        .single();
+      if (error || !data) {
+        toast.error('Erro ao criar conversa');
+        return;
+      }
+      convId = data.id;
+      setConversations((prev) => [data, ...prev]);
+      setActiveConversation(convId);
+    }
+
+    const userMsg: Message = { role: 'user', content: text, audioUrl };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true);
+
+    // Save user message (text only for persistence)
+    await supabase.from('chat_messages').insert({
+      conversation_id: convId,
+      user_id: user.id,
+      role: 'user',
+      content: `🎤 ${text}`,
+    });
+
+    if (messages.length === 0) {
+      await supabase
+        .from('conversations')
+        .update({ title: `🎤 ${text.slice(0, 47)}` })
+        .eq('id', convId);
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: `🎤 ${text.slice(0, 47)}` } : c))
+      );
+    }
+
+    // Stream AI response using the transcribed text
+    const allMessages = [...messages, { role: 'user' as const, content: text }].map((m) => ({ role: m.role, content: m.content }));
+
+    try {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const MAX_RETRIES = 2;
+      const TIMEOUT_MS = 20000;
+      let resp: Response | null = null;
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+          resp = await fetch(CHAT_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ messages: allMessages }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (resp.ok && resp.body) break;
+          if ((resp.status === 429 || resp.status >= 500) && attempt < MAX_RETRIES) {
+            await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+            continue;
+          }
+          const errorData = await resp.json().catch(() => ({}));
+          toast.error(errorData.error || 'Erro ao gerar resposta');
+          setIsLoading(false);
+          return;
+        } catch (fetchErr: any) {
+          if (fetchErr.name === 'AbortError' && attempt < MAX_RETRIES) {
+            toast('Conexão lenta, tentando novamente…', { duration: 2000 });
+            abortRef.current = new AbortController();
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          throw fetchErr;
+        }
+      }
+
+      if (!resp || !resp.ok || !resp.body) {
+        toast.error('Não foi possível conectar. Verifique sua internet.');
+        setIsLoading(false);
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = '';
+      let assistantSoFar = '';
+      let streamDone = false;
+      setIsStreaming(true);
+      charQueueRef.current = '';
+      revealedRef.current = '';
+
+      const CHAR_DELAY = 15;
+      const CHARS_PER_TICK = 3;
+      typingTimerRef.current = setInterval(() => {
+        if (charQueueRef.current.length > 0) {
+          const take = Math.min(CHARS_PER_TICK, charQueueRef.current.length);
+          const chunk = charQueueRef.current.slice(0, take);
+          charQueueRef.current = charQueueRef.current.slice(take);
+          revealedRef.current += chunk;
+          const revealed = revealedRef.current;
+          setMessages((msgs) => {
+            const last = msgs[msgs.length - 1];
+            if (last?.role === 'assistant') {
+              return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: revealed } : m));
+            }
+            return [...msgs, { role: 'assistant', content: revealed }];
+          });
+        }
+      }, CHAR_DELAY);
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') { streamDone = true; break; }
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) { assistantSoFar += content; charQueueRef.current += content; }
+          } catch { textBuffer = line + '\n' + textBuffer; break; }
+        }
+      }
+
+      await new Promise<void>((resolve) => {
+        const drainInterval = setInterval(() => {
+          if (charQueueRef.current.length === 0) { clearInterval(drainInterval); resolve(); }
+        }, 50);
+      });
+
+      if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
+
+      if (assistantSoFar) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant') {
+            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+          }
+          return [...prev, { role: 'assistant', content: assistantSoFar }];
+        });
+        await supabase.from('chat_messages').insert({
+          conversation_id: convId,
+          user_id: user.id,
+          role: 'assistant',
+          content: assistantSoFar,
+        });
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') toast.error('Erro na conexão com a IA');
+    } finally {
+      if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
+      setIsStreaming(false);
+      setIsLoading(false);
+      abortRef.current = null;
     }
   };
 
@@ -627,7 +817,22 @@ export function ScriptChatFloat() {
                             )}
                           </>
                         ) : (
-                          msg.content
+                          <div>
+                            {msg.audioUrl && (
+                              <div className="mb-1.5">
+                                <div className="flex items-center gap-1.5 text-xs text-primary-foreground/70 mb-1">
+                                  <Mic className="w-3 h-3" />
+                                  <span>Mensagem de voz</span>
+                                </div>
+                                <audio
+                                  src={msg.audioUrl}
+                                  controls
+                                  className="w-full max-w-[220px] h-8 [&::-webkit-media-controls-panel]:bg-primary-foreground/20 rounded"
+                                />
+                              </div>
+                            )}
+                            <span>{msg.content}</span>
+                          </div>
                         )}
                       </div>
                     </div>
