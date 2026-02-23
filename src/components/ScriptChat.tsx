@@ -22,25 +22,72 @@ type Conversation = {
   created_at: string;
 };
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
     navigator.clipboard.writeText(text);
     setCopied(true);
     toast.success('Copiado!');
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="absolute top-1.5 right-1.5 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+    <button
       onClick={handleCopy}
-      title="Copiar resposta"
+      title="Copiar"
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors bg-primary/10 hover:bg-primary/20 text-primary ml-1"
     >
-      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
-    </Button>
+      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      {label || 'Copiar'}
+    </button>
   );
+}
+
+/** Parse numbered items from assistant text and return sections with copy buttons */
+function renderAssistantContent(content: string) {
+  // Split content into lines
+  const lines = content.split('\n');
+  const result: React.ReactNode[] = [];
+  let currentBlock: string[] = [];
+  let blockIndex = 0;
+
+  const flushBlock = () => {
+    if (currentBlock.length > 0) {
+      const text = currentBlock.join('\n');
+      result.push(
+        <div key={`block-${blockIndex}`} className="mb-1">
+          <ReactMarkdown>{text}</ReactMarkdown>
+        </div>
+      );
+      blockIndex++;
+      currentBlock = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Detect numbered items like "1.", "2.", etc. or items with emoji after number
+    const numberedMatch = line.match(/^\s*(\d+)\.\s+(.+)/);
+    if (numberedMatch) {
+      flushBlock();
+      const itemText = line.trim();
+      result.push(
+        <div key={`item-${blockIndex}-${i}`} className="flex items-start justify-between gap-1 my-0.5">
+          <div className="flex-1 min-w-0">
+            <ReactMarkdown>{itemText}</ReactMarkdown>
+          </div>
+          <div className="shrink-0 mt-0.5">
+            <CopyButton text={numberedMatch[2].replace(/\*\*/g, '').replace(/[""]/g, '"').trim()} label="Copiar" />
+          </div>
+        </div>
+      );
+    } else {
+      currentBlock.push(line);
+    }
+  }
+  flushBlock();
+
+  return result;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-roteiros`;
@@ -434,7 +481,7 @@ export function ScriptChatFloat() {
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-4" data-chat-area>
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-12 space-y-4 text-center">
                   <div className="bg-primary/10 rounded-full w-16 h-16 flex items-center justify-center">
@@ -471,25 +518,30 @@ export function ScriptChatFloat() {
                       >
                         {msg.role === 'assistant' ? (
                           <>
-                            <div className="prose prose-sm dark:prose-invert max-w-none
+                            <div className="prose prose-sm dark:prose-invert max-w-none select-text
                               [&>*:first-child]:mt-0 [&>*:last-child]:mb-0
                               [&>h3]:text-base [&>h3]:font-bold [&>h3]:mt-4 [&>h3]:mb-2 [&>h3]:text-primary
                               [&>h4]:text-sm [&>h4]:font-semibold [&>h4]:mt-3 [&>h4]:mb-1.5
                               [&>hr]:my-3 [&>hr]:border-border/50
                               [&>blockquote]:border-l-2 [&>blockquote]:border-primary/40 [&>blockquote]:pl-3 [&>blockquote]:italic [&>blockquote]:text-foreground/80 [&>blockquote]:my-2
                               [&>ul]:space-y-1 [&>ol]:space-y-1
-                              [&>table]:text-xs [&>table]:w-full [&>table_th]:text-left [&>table_th]:pb-1 [&>table_th]:border-b [&>table_td]:py-1 [&>table_td]:border-b [&>table_td]:border-border/30
                               [&>p]:leading-relaxed
                               [&_strong]:text-foreground
                               [&_em]:text-muted-foreground
                             ">
-                              <ReactMarkdown>{msg.content}</ReactMarkdown>
-                              {isStreaming && idx === messages.length - 1 && (
-                                <span className="inline-block w-[2px] h-[1em] bg-primary ml-0.5 align-middle animate-[pulse_0.8s_ease-in-out_infinite]" />
+                              {isStreaming && idx === messages.length - 1 ? (
+                                <>
+                                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                  <span className="inline-block w-[2px] h-[1em] bg-primary ml-0.5 align-middle animate-[pulse_0.8s_ease-in-out_infinite]" />
+                                </>
+                              ) : (
+                                renderAssistantContent(msg.content)
                               )}
                             </div>
                             {!(isStreaming && idx === messages.length - 1) && (
-                              <CopyButton text={msg.content} />
+                              <div className="flex justify-end mt-1">
+                                <CopyButton text={msg.content} label="Copiar tudo" />
+                              </div>
                             )}
                           </>
                         ) : (

@@ -57,9 +57,14 @@ export function enableSourceProtection() {
   window.addEventListener('keydown', blockKeys, true);
   document.addEventListener('keydown', blockKeys, true);
 
-  // 3. Disable text selection
+  // 3. Disable text selection (except inside chat panel)
   document.body.style.userSelect = 'none';
   (document.body.style as any).webkitUserSelect = 'none';
+
+  // Allow selection inside the chat sheet
+  const style = document.createElement('style');
+  style.textContent = '[data-chat-area], [data-chat-area] * { user-select: text !important; -webkit-user-select: text !important; }';
+  document.head.appendChild(style);
 
   // 4. Disable drag
   window.addEventListener('dragstart', (e) => { e.preventDefault(); }, true);
