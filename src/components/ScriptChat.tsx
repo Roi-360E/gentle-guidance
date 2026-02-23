@@ -121,6 +121,9 @@ export function ScriptChatFloat() {
   const pendingAudioRef = useRef<string | null>(null);
   const voiceModeRef = useRef(false);
   const speakingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeakingQueueRef = useRef(false);
+  const streamSentenceBufferRef = useRef('');
 
   // Load plan
   useEffect(() => {
@@ -183,73 +186,116 @@ export function ScriptChatFloat() {
     };
   }, []);
 
-  /** Speak text using browser SpeechSynthesis - natural conversational pace */
-  const speakText = (text: string): Promise<void> => {
+  /** Clean text for speech */
+  const cleanForSpeech = (text: string): string => {
+    return text
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/[""]/g, '"')
+      .replace(/#{1,4}\s/g, '')
+      .replace(/^\d+\.\s/gm, '')
+      .replace(/[-•]\s/gm, '')
+      .replace(/[🔥💢🎯📝🏪💎📌🎭📊🧠⚡🌀💡🚀✅❌⭐🎙️👋🤝💪🔑📱💰🏆🌟]/g, '')
+      .replace(/\n{2,}/g, '. ')
+      .replace(/\n/g, ', ')
+      .trim();
+  };
+
+  /** Get best Portuguese voice */
+  const getBestVoice = () => {
+    const voices = speechSynthesis.getVoices();
+    return voices.find(v => v.lang === 'pt-BR' && v.name.includes('Google'))
+      || voices.find(v => v.lang === 'pt-BR')
+      || voices.find(v => v.lang.startsWith('pt'))
+      || voices.find(v => v.lang.startsWith('es'));
+  };
+
+  /** Speak a single sentence */
+  const speakSentence = (sentence: string, voice: SpeechSynthesisVoice | null): Promise<void> => {
     return new Promise((resolve) => {
-      // Strip markdown formatting for cleaner speech
-      const cleanText = text
-        .replace(/\*\*([^*]+)\*\*/g, '$1')
-        .replace(/\*([^*]+)\*/g, '$1')
-        .replace(/[""]/g, '"')
-        .replace(/#{1,4}\s/g, '')
-        .replace(/^\d+\.\s/gm, '')
-        .replace(/[-•]\s/gm, '')
-        .replace(/[🔥💢🎯📝🏪💎📌🎭📊🧠⚡🌀💡🚀✅❌⭐🎙️👋🤝💪🔑📱💰🏆🌟]/g, '')
-        .replace(/\n{2,}/g, '. ')
-        .replace(/\n/g, ', ')
-        .trim();
-
-      if (!cleanText) { resolve(); return; }
-
-      speechSynthesis.cancel();
-
-      // Get best Portuguese voice
-      const voices = speechSynthesis.getVoices();
-      const ptVoice = voices.find(v => v.lang === 'pt-BR' && v.name.includes('Google'))
-        || voices.find(v => v.lang === 'pt-BR')
-        || voices.find(v => v.lang.startsWith('pt'))
-        || voices.find(v => v.lang.startsWith('es'));
-
-      // Split into sentences for natural pacing with micro-pauses
-      const sentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
-      let currentIndex = 0;
-
-      const speakNext = () => {
-        if (currentIndex >= sentences.length) {
-          setIsSpeaking(false);
-          speakingUtteranceRef.current = null;
-          resolve();
-          return;
-        }
-
-        const sentence = sentences[currentIndex].trim();
-        currentIndex++;
-
-        if (!sentence) { speakNext(); return; }
-
-        const utterance = new SpeechSynthesisUtterance(sentence);
-        utterance.lang = 'pt-BR';
-        utterance.rate = 1.4;   // Noticeably faster, conversational rhythm
-        utterance.pitch = 1.1;  // Slightly higher for liveliness
-        utterance.volume = 1.0;
-        if (ptVoice) utterance.voice = ptVoice;
-
-        speakingUtteranceRef.current = utterance;
-
-        utterance.onend = () => {
-          // Small pause between sentences for natural cadence
-          setTimeout(speakNext, 120);
-        };
-        utterance.onerror = () => {
-          setTimeout(speakNext, 50);
-        };
-
-        speechSynthesis.speak(utterance);
-      };
-
-      setIsSpeaking(true);
-      speakNext();
+      const utt = new SpeechSynthesisUtterance(sentence);
+      utt.lang = 'pt-BR';
+      utt.rate = 1.4;
+      utt.pitch = 1.1;
+      utt.volume = 1.0;
+      if (voice) utt.voice = voice;
+      speakingUtteranceRef.current = utt;
+      utt.onend = () => { setTimeout(resolve, 80); };
+      utt.onerror = () => { setTimeout(resolve, 30); };
+      speechSynthesis.speak(utt);
     });
+  };
+
+  /** Process the speech queue - speaks sentences as they arrive */
+  const processSpeechQueue = async () => {
+    if (isSpeakingQueueRef.current) return;
+    isSpeakingQueueRef.current = true;
+    setIsSpeaking(true);
+    const voice = getBestVoice();
+
+    while (speechQueueRef.current.length > 0) {
+      if (!voiceModeRef.current) break;
+      const sentence = speechQueueRef.current.shift()!;
+      const clean = cleanForSpeech(sentence);
+      if (clean) await speakSentence(clean, voice);
+    }
+
+    isSpeakingQueueRef.current = false;
+    setIsSpeaking(false);
+    speakingUtteranceRef.current = null;
+  };
+
+  /** Feed streaming text to TTS queue - extracts complete sentences and queues them */
+  const feedStreamToSpeech = (newContent: string) => {
+    if (!voiceModeRef.current) return;
+    streamSentenceBufferRef.current += newContent;
+    
+    // Extract complete sentences (ending with . ! ? or newline after content)
+    const buffer = streamSentenceBufferRef.current;
+    const sentenceMatch = buffer.match(/^([\s\S]*?[.!?\n])\s*/);
+    
+    if (sentenceMatch) {
+      const completeSentence = sentenceMatch[1].trim();
+      streamSentenceBufferRef.current = buffer.slice(sentenceMatch[0].length);
+      
+      if (completeSentence.length > 3) {
+        speechQueueRef.current.push(completeSentence);
+        processSpeechQueue();
+      }
+    }
+  };
+
+  /** Flush remaining text in speech buffer */
+  const flushSpeechBuffer = () => {
+    const remaining = streamSentenceBufferRef.current.trim();
+    streamSentenceBufferRef.current = '';
+    if (remaining.length > 3 && voiceModeRef.current) {
+      speechQueueRef.current.push(remaining);
+      processSpeechQueue();
+    }
+  };
+
+  /** Wait for speech queue to finish */
+  const waitForSpeechDone = (): Promise<void> => {
+    return new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (speechQueueRef.current.length === 0 && !isSpeakingQueueRef.current) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 100);
+    });
+  };
+
+  /** Speak text using browser SpeechSynthesis - for non-streaming use */
+  const speakText = (text: string): Promise<void> => {
+    const clean = cleanForSpeech(text);
+    if (!clean) return Promise.resolve();
+    
+    speechSynthesis.cancel();
+    const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
+    speechQueueRef.current = [...sentences];
+    return processSpeechQueue().then(waitForSpeechDone);
   };
 
   /** Toggle voice conversation mode */
@@ -508,24 +554,30 @@ export function ScriptChatFloat() {
       charQueueRef.current = '';
       revealedRef.current = '';
 
-      const CHAR_DELAY = 15;
-      const CHARS_PER_TICK = 3;
-      typingTimerRef.current = setInterval(() => {
-        if (charQueueRef.current.length > 0) {
-          const take = Math.min(CHARS_PER_TICK, charQueueRef.current.length);
-          const chunk = charQueueRef.current.slice(0, take);
-          charQueueRef.current = charQueueRef.current.slice(take);
-          revealedRef.current += chunk;
-          const revealed = revealedRef.current;
-          setMessages((msgs) => {
-            const last = msgs[msgs.length - 1];
-            if (last?.role === 'assistant') {
-              return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: revealed } : m));
-            }
-            return [...msgs, { role: 'assistant', content: revealed }];
-          });
-        }
-      }, CHAR_DELAY);
+      // In voice mode: skip typewriter, show text instantly and feed TTS progressively
+      const isVoice = voiceModeRef.current;
+      if (isVoice) streamSentenceBufferRef.current = '';
+
+      if (!isVoice) {
+        const CHAR_DELAY = 15;
+        const CHARS_PER_TICK = 3;
+        typingTimerRef.current = setInterval(() => {
+          if (charQueueRef.current.length > 0) {
+            const take = Math.min(CHARS_PER_TICK, charQueueRef.current.length);
+            const chunk = charQueueRef.current.slice(0, take);
+            charQueueRef.current = charQueueRef.current.slice(take);
+            revealedRef.current += chunk;
+            const revealed = revealedRef.current;
+            setMessages((msgs) => {
+              const last = msgs[msgs.length - 1];
+              if (last?.role === 'assistant') {
+                return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: revealed } : m));
+              }
+              return [...msgs, { role: 'assistant', content: revealed }];
+            });
+          }
+        }, CHAR_DELAY);
+      }
 
       while (!streamDone) {
         const { done, value } = await reader.read();
@@ -543,18 +595,34 @@ export function ScriptChatFloat() {
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) { assistantSoFar += content; charQueueRef.current += content; }
+            if (content) {
+              assistantSoFar += content;
+              if (isVoice) {
+                // Voice mode: show text instantly and feed TTS
+                setMessages((msgs) => {
+                  const last = msgs[msgs.length - 1];
+                  if (last?.role === 'assistant') {
+                    return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: assistantSoFar } : m));
+                  }
+                  return [...msgs, { role: 'assistant', content: assistantSoFar }];
+                });
+                feedStreamToSpeech(content);
+              } else {
+                charQueueRef.current += content;
+              }
+            }
           } catch { textBuffer = line + '\n' + textBuffer; break; }
         }
       }
 
-      await new Promise<void>((resolve) => {
-        const drainInterval = setInterval(() => {
-          if (charQueueRef.current.length === 0) { clearInterval(drainInterval); resolve(); }
-        }, 50);
-      });
-
-      if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
+      if (!isVoice) {
+        await new Promise<void>((resolve) => {
+          const drainInterval = setInterval(() => {
+            if (charQueueRef.current.length === 0) { clearInterval(drainInterval); resolve(); }
+          }, 50);
+        });
+        if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
+      }
 
       if (assistantSoFar) {
         setMessages((prev) => {
@@ -571,16 +639,17 @@ export function ScriptChatFloat() {
           content: assistantSoFar,
         });
 
-        // Voice mode: speak response and auto-record next turn
-        if (voiceModeRef.current) {
+        // Voice mode: flush remaining buffer and wait for TTS to finish
+        if (isVoice) {
+          flushSpeechBuffer();
+          await waitForSpeechDone();
           setIsStreaming(false);
           setIsLoading(false);
-          await speakText(assistantSoFar);
-          // Auto-start next recording after TTS finishes
+          // Auto-start next recording
           if (voiceModeRef.current) {
             setTimeout(() => {
               if (voiceModeRef.current) startRecording();
-            }, 600);
+            }, 400);
           }
         }
       }
@@ -703,25 +772,29 @@ export function ScriptChatFloat() {
       charQueueRef.current = '';
       revealedRef.current = '';
 
-      // Typewriter interval — reveals chars from the queue
-      const CHAR_DELAY = 15;
-      const CHARS_PER_TICK = 3;
-      typingTimerRef.current = setInterval(() => {
-        if (charQueueRef.current.length > 0) {
-          const take = Math.min(CHARS_PER_TICK, charQueueRef.current.length);
-          const chunk = charQueueRef.current.slice(0, take);
-          charQueueRef.current = charQueueRef.current.slice(take);
-          revealedRef.current += chunk;
-          const revealed = revealedRef.current;
-          setMessages((msgs) => {
-            const last = msgs[msgs.length - 1];
-            if (last?.role === 'assistant') {
-              return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: revealed } : m));
-            }
-            return [...msgs, { role: 'assistant', content: revealed }];
-          });
-        }
-      }, CHAR_DELAY);
+      const isVoice = voiceModeRef.current;
+      if (isVoice) streamSentenceBufferRef.current = '';
+
+      if (!isVoice) {
+        const CHAR_DELAY = 15;
+        const CHARS_PER_TICK = 3;
+        typingTimerRef.current = setInterval(() => {
+          if (charQueueRef.current.length > 0) {
+            const take = Math.min(CHARS_PER_TICK, charQueueRef.current.length);
+            const chunk = charQueueRef.current.slice(0, take);
+            charQueueRef.current = charQueueRef.current.slice(take);
+            revealedRef.current += chunk;
+            const revealed = revealedRef.current;
+            setMessages((msgs) => {
+              const last = msgs[msgs.length - 1];
+              if (last?.role === 'assistant') {
+                return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: revealed } : m));
+              }
+              return [...msgs, { role: 'assistant', content: revealed }];
+            });
+          }
+        }, CHAR_DELAY);
+      }
 
       while (!streamDone) {
         const { done, value } = await reader.read();
@@ -737,17 +810,25 @@ export function ScriptChatFloat() {
           if (!line.startsWith('data: ')) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') {
-            streamDone = true;
-            break;
-          }
+          if (jsonStr === '[DONE]') { streamDone = true; break; }
 
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               assistantSoFar += content;
-              charQueueRef.current += content;
+              if (isVoice) {
+                setMessages((msgs) => {
+                  const last = msgs[msgs.length - 1];
+                  if (last?.role === 'assistant') {
+                    return msgs.map((m, i) => (i === msgs.length - 1 ? { ...m, content: assistantSoFar } : m));
+                  }
+                  return [...msgs, { role: 'assistant', content: assistantSoFar }];
+                });
+                feedStreamToSpeech(content);
+              } else {
+                charQueueRef.current += content;
+              }
             }
           } catch {
             textBuffer = line + '\n' + textBuffer;
@@ -756,22 +837,15 @@ export function ScriptChatFloat() {
         }
       }
 
-      // Drain remaining queue
-      await new Promise<void>((resolve) => {
-        const drainInterval = setInterval(() => {
-          if (charQueueRef.current.length === 0) {
-            clearInterval(drainInterval);
-            resolve();
-          }
-        }, 50);
-      });
-
-      if (typingTimerRef.current) {
-        clearInterval(typingTimerRef.current);
-        typingTimerRef.current = null;
+      if (!isVoice) {
+        await new Promise<void>((resolve) => {
+          const drainInterval = setInterval(() => {
+            if (charQueueRef.current.length === 0) { clearInterval(drainInterval); resolve(); }
+          }, 50);
+        });
+        if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
       }
 
-      // Ensure final text is fully displayed
       if (assistantSoFar) {
         setMessages((prev) => {
           const last = prev[prev.length - 1];
@@ -780,10 +854,7 @@ export function ScriptChatFloat() {
           }
           return [...prev, { role: 'assistant', content: assistantSoFar }];
         });
-      }
 
-      // Save assistant message
-      if (assistantSoFar) {
         await supabase.from('chat_messages').insert({
           conversation_id: convId,
           user_id: user.id,
@@ -791,15 +862,15 @@ export function ScriptChatFloat() {
           content: assistantSoFar,
         });
 
-        // Voice mode: speak response
-        if (voiceModeRef.current) {
+        if (isVoice) {
+          flushSpeechBuffer();
+          await waitForSpeechDone();
           setIsStreaming(false);
           setIsLoading(false);
-          await speakText(assistantSoFar);
           if (voiceModeRef.current) {
             setTimeout(() => {
               if (voiceModeRef.current) startRecording();
-            }, 600);
+            }, 400);
           }
         }
       }
