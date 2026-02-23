@@ -208,7 +208,7 @@ serve(async (req) => {
           "480p": "854x480",
           "360p": "640x360",
         };
-        const res = resMap[resolution] || "1280x720";
+        const res = (resolution ? resMap[resolution] : undefined) || "1280x720";
         const [width, height] = res.split("x");
 
         const steps: Record<string, unknown> = {

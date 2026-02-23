@@ -23,7 +23,7 @@ serve(async (req) => {
     }
 
     const audioBytes = new Uint8Array(await audioFile.arrayBuffer());
-    const base64Audio = base64Encode(audioBytes);
+    const base64Audio = base64Encode(audioBytes as unknown as ArrayBuffer);
     const mimeType = audioFile.type || "audio/wav";
 
     // Call Gemini for transcription with timestamps
@@ -105,7 +105,7 @@ Return this exact JSON format:
   } catch (error) {
     console.error("Transcription error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Transcription failed" }),
+      JSON.stringify({ error: (error as Error).message || "Transcription failed" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

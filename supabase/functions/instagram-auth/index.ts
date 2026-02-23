@@ -351,6 +351,6 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error("Instagram auth error:", err);
-    return jsonResponse({ error: `Erro interno: ${err.message || "desconhecido"}` });
+    return jsonResponse({ error: `Erro interno: ${(err as Error).message || "desconhecido"}` });
   }
 });
