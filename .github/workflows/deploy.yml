@@ -1,4 +1,4 @@
-name: Deploy Lovable via FTP na Hostinger
+name: Deploy na VPS Integrator
 
 on:
   push:
@@ -12,10 +12,10 @@ jobs:
       - name: Clonar o repositório
         uses: actions/checkout@v3
 
-      - name: Configurar Node.js 18
+      - name: Configurar Node.js 20
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Instalar dependências
         run: npm install
@@ -23,18 +23,21 @@ jobs:
       - name: Build do projeto
         run: npm run build
 
-      - name: Mostrar arquivos gerados
-        run: ls -al dist/
-
-      - name: Deploy FTP para Hostinger
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      - name: Deploy via SSH na VPS
+        uses: appleboy/scp-action@v0.1.7
         with:
-          server: ${{ secrets.FTP_HOST }}
-          port: 21
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          local-dir: dist/
-          server-dir: /
-          dangerous-clean-slate: true
-          dry-run: false
-          log-level: verbose
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "dist/*"
+          target: "/var/www/deploysites.online/"
+          strip_components: 1
+          rm: true
+
+      - name: Reiniciar Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: sudo systemctl restart nginx
