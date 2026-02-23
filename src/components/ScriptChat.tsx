@@ -183,7 +183,7 @@ export function ScriptChatFloat() {
     };
   }, []);
 
-  /** Speak text using browser SpeechSynthesis */
+  /** Speak text using browser SpeechSynthesis - natural conversational pace */
   const speakText = (text: string): Promise<void> => {
     return new Promise((resolve) => {
       // Strip markdown formatting for cleaner speech
@@ -193,39 +193,62 @@ export function ScriptChatFloat() {
         .replace(/[""]/g, '"')
         .replace(/#{1,4}\s/g, '')
         .replace(/^\d+\.\s/gm, '')
-        .replace(/[🔥💢🎯📝🏪💎📌🎭📊🧠⚡🌀💡🚀✅❌⭐]/g, '')
+        .replace(/[-•]\s/gm, '')
+        .replace(/[🔥💢🎯📝🏪💎📌🎭📊🧠⚡🌀💡🚀✅❌⭐🎙️👋🤝💪🔑📱💰🏆🌟]/g, '')
+        .replace(/\n{2,}/g, '. ')
+        .replace(/\n/g, ', ')
         .trim();
 
       if (!cleanText) { resolve(); return; }
 
       speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'pt-BR';
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
 
-      // Try to find a Portuguese voice
+      // Get best Portuguese voice
       const voices = speechSynthesis.getVoices();
-      const ptVoice = voices.find(v => v.lang.startsWith('pt-BR')) 
+      const ptVoice = voices.find(v => v.lang === 'pt-BR' && v.name.includes('Google'))
+        || voices.find(v => v.lang === 'pt-BR')
         || voices.find(v => v.lang.startsWith('pt'))
-        || voices.find(v => v.lang.startsWith('es')); // fallback
-      if (ptVoice) utterance.voice = ptVoice;
+        || voices.find(v => v.lang.startsWith('es'));
 
-      speakingUtteranceRef.current = utterance;
+      // Split into sentences for natural pacing with micro-pauses
+      const sentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
+      let currentIndex = 0;
+
+      const speakNext = () => {
+        if (currentIndex >= sentences.length) {
+          setIsSpeaking(false);
+          speakingUtteranceRef.current = null;
+          resolve();
+          return;
+        }
+
+        const sentence = sentences[currentIndex].trim();
+        currentIndex++;
+
+        if (!sentence) { speakNext(); return; }
+
+        const utterance = new SpeechSynthesisUtterance(sentence);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.4;   // Noticeably faster, conversational rhythm
+        utterance.pitch = 1.1;  // Slightly higher for liveliness
+        utterance.volume = 1.0;
+        if (ptVoice) utterance.voice = ptVoice;
+
+        speakingUtteranceRef.current = utterance;
+
+        utterance.onend = () => {
+          // Small pause between sentences for natural cadence
+          setTimeout(speakNext, 120);
+        };
+        utterance.onerror = () => {
+          setTimeout(speakNext, 50);
+        };
+
+        speechSynthesis.speak(utterance);
+      };
+
       setIsSpeaking(true);
-
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        speakingUtteranceRef.current = null;
-        resolve();
-      };
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        speakingUtteranceRef.current = null;
-        resolve();
-      };
-
-      speechSynthesis.speak(utterance);
+      speakNext();
     });
   };
 
