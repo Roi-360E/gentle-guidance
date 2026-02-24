@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Plan {
@@ -38,6 +38,7 @@ interface UserRow {
   plan: string;
   token_balance: number;
   month_year: string;
+  is_blocked: boolean;
 }
 
 const ICON_OPTIONS = ['Sparkles', 'Zap', 'Crown'];
@@ -108,7 +109,7 @@ export default function AdminPlans() {
 
     // Load profiles and usage data
     const [profilesRes, usageRes] = await Promise.all([
-      supabase.from('profiles').select('user_id, name, email'),
+      supabase.from('profiles').select('user_id, name, email, is_blocked'),
       supabase.from('video_usage').select('user_id, plan, token_balance, month_year').eq('month_year', monthYear),
     ]);
 
@@ -126,6 +127,7 @@ export default function AdminPlans() {
         plan: usage?.plan || 'free',
         token_balance: usage?.token_balance ?? 0,
         month_year: monthYear,
+        is_blocked: p.is_blocked ?? false,
       };
     });
 
@@ -201,6 +203,23 @@ export default function AdminPlans() {
     toast.success(`Tokens atualizados para ${newTokens}!`);
     setTokenEditUser(null);
     setTokenEditValue('');
+    setUpdatingUser(null);
+  };
+
+  const toggleBlockUser = async (userId: string, currentlyBlocked: boolean) => {
+    setUpdatingUser(userId);
+    const newValue = !currentlyBlocked;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_blocked: newValue } as any)
+      .eq('user_id', userId);
+
+    if (error) {
+      toast.error('Erro: ' + error.message);
+    } else {
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, is_blocked: newValue } : u));
+      toast.success(newValue ? 'Usuário bloqueado!' : 'Usuário desbloqueado!');
+    }
     setUpdatingUser(null);
   };
 
@@ -576,12 +595,13 @@ export default function AdminPlans() {
                           <TableHead className="text-xs">Plano Atual</TableHead>
                           <TableHead className="text-xs">Tokens</TableHead>
                           <TableHead className="text-xs text-right">Alterar Plano</TableHead>
+                          <TableHead className="text-xs text-center">Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredUsers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                            <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
                               Nenhum usuário encontrado.
                             </TableCell>
                           </TableRow>
@@ -651,6 +671,21 @@ export default function AdminPlans() {
                                     ))}
                                   </SelectContent>
                                 </Select>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant={u.is_blocked ? 'destructive' : 'outline'}
+                                  size="sm"
+                                  className="h-7 text-xs gap-1"
+                                  disabled={updatingUser === u.user_id}
+                                  onClick={() => toggleBlockUser(u.user_id, u.is_blocked)}
+                                >
+                                  {u.is_blocked ? (
+                                    <><ShieldBan className="w-3 h-3" /> Bloqueado</>
+                                  ) : (
+                                    <><ShieldCheck className="w-3 h-3" /> Ativo</>
+                                  )}
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))
