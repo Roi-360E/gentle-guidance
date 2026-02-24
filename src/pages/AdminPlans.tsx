@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Plan {
@@ -59,6 +60,8 @@ export default function AdminPlans() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
+  const [tokenEditUser, setTokenEditUser] = useState<string | null>(null);
+  const [tokenEditValue, setTokenEditValue] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -163,6 +166,41 @@ export default function AdminPlans() {
 
     setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, plan: newPlanKey, token_balance: tokenBalance } : u));
     toast.success('Plano do usuário atualizado!');
+    setUpdatingUser(null);
+  };
+
+  const updateUserTokens = async (userId: string, newTokens: number) => {
+    setUpdatingUser(userId);
+    const monthYear = new Date().toISOString().substring(0, 7);
+
+    const { data: updateData, error: updateError } = await supabase
+      .from('video_usage')
+      .update({ token_balance: newTokens } as any)
+      .eq('user_id', userId)
+      .eq('month_year', monthYear)
+      .select();
+
+    if (updateError) {
+      toast.error('Erro: ' + updateError.message);
+      setUpdatingUser(null);
+      return;
+    }
+
+    if (!updateData || updateData.length === 0) {
+      const { error: insertError } = await supabase
+        .from('video_usage')
+        .insert({ user_id: userId, month_year: monthYear, plan: 'free', token_balance: newTokens, video_count: 0 } as any);
+      if (insertError) {
+        toast.error('Erro: ' + insertError.message);
+        setUpdatingUser(null);
+        return;
+      }
+    }
+
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, token_balance: newTokens } : u));
+    toast.success(`Tokens atualizados para ${newTokens}!`);
+    setTokenEditUser(null);
+    setTokenEditValue('');
     setUpdatingUser(null);
   };
 
@@ -555,7 +593,48 @@ export default function AdminPlans() {
                               <TableCell>
                                 <Badge variant="outline" className="text-xs capitalize">{u.plan}</Badge>
                               </TableCell>
-                              <TableCell className="text-sm">{u.token_balance}</TableCell>
+                              <TableCell className="text-sm">
+                                <div className="flex items-center gap-1">
+                                  <span>{u.token_balance}</span>
+                                  <Popover
+                                    open={tokenEditUser === u.user_id}
+                                    onOpenChange={(open) => {
+                                      if (open) {
+                                        setTokenEditUser(u.user_id);
+                                        setTokenEditValue(String(u.token_balance));
+                                      } else {
+                                        setTokenEditUser(null);
+                                      }
+                                    }}
+                                  >
+                                    <PopoverTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                                        <Coins className="w-3 h-3" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-56 p-3 space-y-2" align="start">
+                                      <Label className="text-xs font-semibold">Editar Tokens</Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        value={tokenEditValue}
+                                        onChange={e => setTokenEditValue(e.target.value)}
+                                        className="h-8 text-sm"
+                                        placeholder="Quantidade"
+                                      />
+                                      <Button
+                                        size="sm"
+                                        className="w-full h-7 text-xs"
+                                        disabled={updatingUser === u.user_id}
+                                        onClick={() => updateUserTokens(u.user_id, parseInt(tokenEditValue) || 0)}
+                                      >
+                                        {updatingUser === u.user_id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
+                                        Salvar
+                                      </Button>
+                                    </PopoverContent>
+                                  </Popover>
+                                </div>
+                              </TableCell>
                               <TableCell className="text-right">
                                 <Select
                                   value={u.plan}
