@@ -215,15 +215,19 @@ export function ScriptChatFloat() {
       .trim();
   };
 
-  /** Speak text using browser SpeechSynthesis (free fallback) */
+  /** Speak text using browser SpeechSynthesis (free) */
   const speakWithBrowser = (text: string): Promise<void> => {
     return new Promise((resolve) => {
       const utt = new SpeechSynthesisUtterance(text);
       utt.lang = 'pt-BR';
-      utt.rate = 1.3;
-      utt.pitch = 1.05;
+      utt.rate = 1.1;
+      utt.pitch = 1.0;
+      utt.volume = 1.0;
       const voices = speechSynthesis.getVoices();
+      // Prefer high-quality voices: Google > Microsoft > Apple > any pt-BR
       const voice = voices.find(v => v.lang === 'pt-BR' && v.name.includes('Google'))
+        || voices.find(v => v.lang === 'pt-BR' && v.name.includes('Microsoft'))
+        || voices.find(v => v.lang === 'pt-BR' && (v.name.includes('Luciana') || v.name.includes('Daniel')))
         || voices.find(v => v.lang === 'pt-BR')
         || voices.find(v => v.lang.startsWith('pt'));
       if (voice) utt.voice = voice;
