@@ -199,6 +199,57 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_plans: {
+        Row: {
+          bg_color: string
+          color: string
+          created_at: string
+          features: Json
+          icon: string
+          id: string
+          is_active: boolean
+          is_popular: boolean
+          name: string
+          plan_key: string
+          price: number
+          sort_order: number
+          tokens: number
+          updated_at: string
+        }
+        Insert: {
+          bg_color?: string
+          color?: string
+          created_at?: string
+          features?: Json
+          icon?: string
+          id?: string
+          is_active?: boolean
+          is_popular?: boolean
+          name: string
+          plan_key: string
+          price?: number
+          sort_order?: number
+          tokens?: number
+          updated_at?: string
+        }
+        Update: {
+          bg_color?: string
+          color?: string
+          created_at?: string
+          features?: Json
+          icon?: string
+          id?: string
+          is_active?: boolean
+          is_popular?: boolean
+          name?: string
+          plan_key?: string
+          price?: number
+          sort_order?: number
+          tokens?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subtitles: {
         Row: {
           created_at: string
