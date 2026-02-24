@@ -190,7 +190,7 @@ export function ScriptChatFloat() {
     };
   }, []);
 
-  /** Clean text for speech */
+  /** Clean and condense text for speech - saves ElevenLabs credits */
   const cleanForSpeech = (text: string): string => {
     return text
       .replace(/\*\*([^*]+)\*\*/g, '$1')
@@ -199,9 +199,16 @@ export function ScriptChatFloat() {
       .replace(/#{1,4}\s/g, '')
       .replace(/^\d+\.\s/gm, '')
       .replace(/[-•]\s/gm, '')
-      .replace(/[🔥💢🎯📝🏪💎📌🎭📊🧠⚡🌀💡🚀✅❌⭐🎙️👋🤝💪🔑📱💰🏆🌟]/g, '')
+      .replace(/[🔥💢🎯📝🏪💎📌🎭📊🧠⚡🌀💡🚀✅❌⭐🎙️👋🤝💪🔑📱💰🏆🌟🎤📌🏅🧩🔒🗣️📈🤩😎🙌💬🫡🤫🫠💥🪄✨🎬📢]/g, '')
+      .replace(/\([^)]*\)/g, '') // remove parenthetical notes
+      .replace(/—\s*[^.!?\n]*/g, '') // remove dash explanations like "— Curiosidade"
+      .replace(/Tipo:\s*[^.!?\n]*/gi, '') // remove "Tipo: urgência/escassez"
+      .replace(/Estrutura:\s*[^.!?\n]*/gi, '')
       .replace(/\n{2,}/g, '. ')
-      .replace(/\n/g, ', ')
+      .replace(/\n/g, '. ')
+      .replace(/\.\s*\./g, '.')
+      .replace(/,\s*,/g, ',')
+      .replace(/\s{2,}/g, ' ')
       .trim();
   };
 
