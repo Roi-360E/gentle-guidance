@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN has_ai_chat boolean NOT NULL DEFAULT false;

@@ -151,6 +151,7 @@ export type Database = {
           cpf_hash: string | null
           created_at: string
           email: string | null
+          has_ai_chat: boolean
           id: string
           is_blocked: boolean
           name: string | null
@@ -162,6 +163,7 @@ export type Database = {
           cpf_hash?: string | null
           created_at?: string
           email?: string | null
+          has_ai_chat?: boolean
           id?: string
           is_blocked?: boolean
           name?: string | null
@@ -173,6 +175,7 @@ export type Database = {
           cpf_hash?: string | null
           created_at?: string
           email?: string | null
+          has_ai_chat?: boolean
           id?: string
           is_blocked?: boolean
           name?: string | null
