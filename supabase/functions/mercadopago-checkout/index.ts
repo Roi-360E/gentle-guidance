@@ -47,18 +47,27 @@ serve(async (req) => {
     const body = await req.json();
     const { plan, paymentMethod } = body as { plan: string; paymentMethod?: string };
 
-    const plans: Record<string, { title: string; price: number }> = {
-      professional: { title: "Plano Profissional - Escala de Criativo", price: 37.90 },
-      advanced: { title: "Plano Avançado - Escala de Criativo", price: 67.90 },
-      premium: { title: "Plano Premium - Escala de Criativo", price: 87.90 },
-      enterprise: { title: "Plano Empresarial - Escala de Criativo", price: 197.00 },
-      unlimited: { title: "Plano Ilimitado - Escala de Criativo", price: 297.00 },
-    };
+    // Fetch plan details from database (using service role to bypass RLS for inactive plans)
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminClient = createClient(supabaseUrl, serviceKey);
 
-    const selectedPlan = plans[plan];
-    if (!selectedPlan) {
+    const { data: planData, error: planError } = await adminClient
+      .from("subscription_plans")
+      .select("plan_key, name, price")
+      .eq("plan_key", plan)
+      .eq("is_active", true)
+      .single();
+
+    if (planError || !planData) {
       return jsonResponse({ error: "Invalid plan" }, 400);
     }
+
+    if (planData.price <= 0) {
+      return jsonResponse({ error: "Cannot purchase free plan" }, 400);
+    }
+
+    const title = `Plano ${planData.name} - Escala de Criativo`;
+    const price = Number(planData.price);
 
     // Create payment record in pending status
     const { data: payment, error: paymentError } = await supabase
@@ -66,7 +75,7 @@ serve(async (req) => {
       .insert({
         user_id: userId,
         plan,
-        amount: selectedPlan.price,
+        amount: price,
         status: "pending",
       })
       .select()
@@ -79,15 +88,13 @@ serve(async (req) => {
 
     const webhookUrl = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
 
-    // If user wants Pix specifically, create a Pix payment directly
+    // If user wants Pix specifically
     if (paymentMethod === "pix") {
       const pixPayload = {
-        transaction_amount: selectedPlan.price,
-        description: selectedPlan.title,
+        transaction_amount: price,
+        description: title,
         payment_method_id: "pix",
-        payer: {
-          email: userEmail || "cliente@escala.com",
-        },
+        payer: { email: userEmail || "cliente@escala.com" },
         external_reference: payment.id,
         notification_url: webhookUrl,
       };
@@ -109,11 +116,7 @@ serve(async (req) => {
       }
 
       const pixData = await pixRes.json();
-
-      // Update payment with MP payment ID
-      await supabase.from("payments").update({
-        pix_tx_id: String(pixData.id),
-      }).eq("id", payment.id);
+      await supabase.from("payments").update({ pix_tx_id: String(pixData.id) }).eq("id", payment.id);
 
       return jsonResponse({
         type: "pix",
@@ -126,17 +129,10 @@ serve(async (req) => {
       });
     }
 
-    // Otherwise, create a Checkout Pro preference (supports all payment methods)
+    // Checkout Pro preference
     const preferencePayload = {
-      items: [{
-        title: selectedPlan.title,
-        quantity: 1,
-        unit_price: selectedPlan.price,
-        currency_id: "BRL",
-      }],
-      payer: {
-        email: userEmail || "cliente@escala.com",
-      },
+      items: [{ title, quantity: 1, unit_price: price, currency_id: "BRL" }],
+      payer: { email: userEmail || "cliente@escala.com" },
       external_reference: payment.id,
       notification_url: webhookUrl,
       back_urls: {
@@ -149,10 +145,7 @@ serve(async (req) => {
 
     const prefRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Authorization": `Bearer ${MP_ACCESS_TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify(preferencePayload),
     });
 
@@ -163,7 +156,6 @@ serve(async (req) => {
     }
 
     const prefData = await prefRes.json();
-
     return jsonResponse({
       type: "checkout",
       paymentId: payment.id,
