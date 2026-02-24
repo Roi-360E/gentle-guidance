@@ -212,10 +212,10 @@ export function ScriptChatFloat() {
       .trim();
   };
 
-  /** Speak a single sentence using ElevenLabs TTS */
-  const speakSentence = async (sentence: string): Promise<void> => {
-    const clean = cleanForSpeech(sentence);
-    if (!clean || clean.length < 2) return;
+  /** Fetch audio from ElevenLabs TTS */
+  const fetchTtsAudio = async (text: string): Promise<HTMLAudioElement | null> => {
+    const clean = cleanForSpeech(text);
+    if (!clean || clean.length < 3) return null;
     
     try {
       const resp = await fetch(TTS_URL, {
@@ -229,42 +229,94 @@ export function ScriptChatFloat() {
 
       if (!resp.ok) {
         console.error('ElevenLabs TTS error:', resp.status);
-        return;
+        return null;
       }
 
       const audioBlob = await resp.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      
-      return new Promise<void>((resolve) => {
-        const audio = new Audio(audioUrl);
-        speakingAudioRef.current = audio;
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          speakingAudioRef.current = null;
-          setTimeout(resolve, 80);
-        };
-        audio.onerror = () => {
-          URL.revokeObjectURL(audioUrl);
-          speakingAudioRef.current = null;
-          resolve();
-        };
-        audio.play().catch(() => resolve());
+      const audio = new Audio(audioUrl);
+      // Pre-load the audio
+      await new Promise<void>((resolve) => {
+        audio.oncanplaythrough = () => resolve();
+        audio.onerror = () => resolve();
+        audio.load();
       });
+      return audio;
     } catch (err) {
       console.error('TTS fetch error:', err);
+      return null;
     }
   };
 
-  /** Process the speech queue - speaks sentences as they arrive */
+  /** Play a pre-loaded audio element */
+  const playAudio = (audio: HTMLAudioElement): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      speakingAudioRef.current = audio;
+      audio.onended = () => {
+        const src = audio.src;
+        speakingAudioRef.current = null;
+        URL.revokeObjectURL(src);
+        resolve();
+      };
+      audio.onerror = () => {
+        speakingAudioRef.current = null;
+        resolve();
+      };
+      audio.play().catch(() => resolve());
+    });
+  };
+
+  /** Process the speech queue - batches sentences and pre-fetches next audio */
   const processSpeechQueue = async () => {
     if (isSpeakingQueueRef.current) return;
     isSpeakingQueueRef.current = true;
     setIsSpeaking(true);
 
-    while (speechQueueRef.current.length > 0) {
+    let nextAudioPromise: Promise<HTMLAudioElement | null> | null = null;
+
+    while (speechQueueRef.current.length > 0 || nextAudioPromise) {
       if (!voiceModeRef.current) break;
-      const sentence = speechQueueRef.current.shift()!;
-      await speakSentence(sentence);
+
+      // Batch multiple short sentences into one chunk (target ~150-300 chars)
+      let chunk = '';
+      while (speechQueueRef.current.length > 0 && chunk.length < 250) {
+        const next = speechQueueRef.current[0];
+        if (chunk.length > 0 && chunk.length + next.length > 350) break;
+        chunk += (chunk ? ' ' : '') + speechQueueRef.current.shift()!;
+      }
+
+      let currentAudio: HTMLAudioElement | null;
+      
+      if (nextAudioPromise) {
+        // Use pre-fetched audio
+        currentAudio = await nextAudioPromise;
+        nextAudioPromise = null;
+      } else if (chunk) {
+        currentAudio = await fetchTtsAudio(chunk);
+      } else {
+        break;
+      }
+
+      // Pre-fetch next chunk while current plays
+      if (speechQueueRef.current.length > 0) {
+        let nextChunk = '';
+        const tempQueue = [...speechQueueRef.current];
+        while (tempQueue.length > 0 && nextChunk.length < 250) {
+          const next = tempQueue[0];
+          if (nextChunk.length > 0 && nextChunk.length + next.length > 350) break;
+          nextChunk += (nextChunk ? ' ' : '') + tempQueue.shift()!;
+        }
+        if (nextChunk) {
+          // Remove the items we peeked from the real queue
+          const itemsConsumed = speechQueueRef.current.length - tempQueue.length;
+          const consumed = speechQueueRef.current.splice(0, itemsConsumed);
+          nextAudioPromise = fetchTtsAudio(consumed.join(' '));
+        }
+      }
+
+      if (currentAudio) {
+        await playAudio(currentAudio);
+      }
     }
 
     isSpeakingQueueRef.current = false;
