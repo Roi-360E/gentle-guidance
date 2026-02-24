@@ -150,6 +150,7 @@ export type Database = {
           avatar_url: string | null
           cpf_hash: string | null
           created_at: string
+          email: string | null
           id: string
           name: string | null
           updated_at: string
@@ -159,6 +160,7 @@ export type Database = {
           avatar_url?: string | null
           cpf_hash?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           name?: string | null
           updated_at?: string
@@ -168,6 +170,7 @@ export type Database = {
           avatar_url?: string | null
           cpf_hash?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           name?: string | null
           updated_at?: string
@@ -205,6 +208,7 @@ export type Database = {
           color: string
           created_at: string
           features: Json
+          has_ai_chat: boolean
           icon: string
           id: string
           is_active: boolean
@@ -221,6 +225,7 @@ export type Database = {
           color?: string
           created_at?: string
           features?: Json
+          has_ai_chat?: boolean
           icon?: string
           id?: string
           is_active?: boolean
@@ -237,6 +242,7 @@ export type Database = {
           color?: string
           created_at?: string
           features?: Json
+          has_ai_chat?: boolean
           icon?: string
           id?: string
           is_active?: boolean
