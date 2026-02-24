@@ -39,6 +39,7 @@ interface UserRow {
   token_balance: number;
   month_year: string;
   is_blocked: boolean;
+  has_ai_chat: boolean;
 }
 
 const ICON_OPTIONS = ['Sparkles', 'Zap', 'Crown'];
@@ -109,7 +110,7 @@ export default function AdminPlans() {
 
     // Load profiles and usage data
     const [profilesRes, usageRes] = await Promise.all([
-      supabase.from('profiles').select('user_id, name, email, is_blocked'),
+      supabase.from('profiles').select('user_id, name, email, is_blocked, has_ai_chat'),
       supabase.from('video_usage').select('user_id, plan, token_balance, month_year').eq('month_year', monthYear),
     ]);
 
@@ -128,11 +129,29 @@ export default function AdminPlans() {
         token_balance: usage?.token_balance ?? 0,
         month_year: monthYear,
         is_blocked: p.is_blocked ?? false,
+        has_ai_chat: p.has_ai_chat ?? false,
       };
     });
 
     setUsers(merged);
     setUsersLoading(false);
+  };
+
+  const toggleUserAiChat = async (userId: string, currentValue: boolean) => {
+    setUpdatingUser(userId);
+    const newValue = !currentValue;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ has_ai_chat: newValue } as any)
+      .eq('user_id', userId);
+
+    if (error) {
+      toast.error('Erro: ' + error.message);
+    } else {
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, has_ai_chat: newValue } : u));
+      toast.success(newValue ? 'Chat IA ativado para o usuário!' : 'Chat IA desativado para o usuário!');
+    }
+    setUpdatingUser(null);
   };
 
   const changeUserPlan = async (userId: string, newPlanKey: string) => {
@@ -595,13 +614,14 @@ export default function AdminPlans() {
                           <TableHead className="text-xs">Plano Atual</TableHead>
                           <TableHead className="text-xs">Tokens</TableHead>
                           <TableHead className="text-xs text-right">Alterar Plano</TableHead>
+                          <TableHead className="text-xs text-center">Chat IA</TableHead>
                           <TableHead className="text-xs text-center">Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredUsers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                            <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
                               Nenhum usuário encontrado.
                             </TableCell>
                           </TableRow>
@@ -671,6 +691,13 @@ export default function AdminPlans() {
                                     ))}
                                   </SelectContent>
                                 </Select>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Switch
+                                  checked={u.has_ai_chat}
+                                  onCheckedChange={() => toggleUserAiChat(u.user_id, u.has_ai_chat)}
+                                  disabled={updatingUser === u.user_id}
+                                />
                               </TableCell>
                               <TableCell className="text-center">
                                 <Button
