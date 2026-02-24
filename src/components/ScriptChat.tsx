@@ -120,10 +120,11 @@ export function ScriptChatFloat() {
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingAudioRef = useRef<string | null>(null);
   const voiceModeRef = useRef(false);
-  const speakingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speakingAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechQueueRef = useRef<string[]>([]);
   const isSpeakingQueueRef = useRef(false);
   const streamSentenceBufferRef = useRef('');
+  const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
 
   // Load plan
   useEffect(() => {
@@ -179,10 +180,13 @@ export function ScriptChatFloat() {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 
-  // Cleanup speech synthesis on unmount or voice mode off
+  // Cleanup audio on unmount or voice mode off
   useEffect(() => {
     return () => {
-      speechSynthesis.cancel();
+      if (speakingAudioRef.current) {
+        speakingAudioRef.current.pause();
+        speakingAudioRef.current = null;
+      }
     };
   }, []);
 
@@ -201,29 +205,47 @@ export function ScriptChatFloat() {
       .trim();
   };
 
-  /** Get best Portuguese voice */
-  const getBestVoice = () => {
-    const voices = speechSynthesis.getVoices();
-    return voices.find(v => v.lang === 'pt-BR' && v.name.includes('Google'))
-      || voices.find(v => v.lang === 'pt-BR')
-      || voices.find(v => v.lang.startsWith('pt'))
-      || voices.find(v => v.lang.startsWith('es'));
-  };
+  /** Speak a single sentence using ElevenLabs TTS */
+  const speakSentence = async (sentence: string): Promise<void> => {
+    const clean = cleanForSpeech(sentence);
+    if (!clean || clean.length < 2) return;
+    
+    try {
+      const resp = await fetch(TTS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text: clean }),
+      });
 
-  /** Speak a single sentence */
-  const speakSentence = (sentence: string, voice: SpeechSynthesisVoice | null): Promise<void> => {
-    return new Promise((resolve) => {
-      const utt = new SpeechSynthesisUtterance(sentence);
-      utt.lang = 'pt-BR';
-      utt.rate = 1.4;
-      utt.pitch = 1.1;
-      utt.volume = 1.0;
-      if (voice) utt.voice = voice;
-      speakingUtteranceRef.current = utt;
-      utt.onend = () => { setTimeout(resolve, 80); };
-      utt.onerror = () => { setTimeout(resolve, 30); };
-      speechSynthesis.speak(utt);
-    });
+      if (!resp.ok) {
+        console.error('ElevenLabs TTS error:', resp.status);
+        return;
+      }
+
+      const audioBlob = await resp.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      return new Promise<void>((resolve) => {
+        const audio = new Audio(audioUrl);
+        speakingAudioRef.current = audio;
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          speakingAudioRef.current = null;
+          setTimeout(resolve, 80);
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          speakingAudioRef.current = null;
+          resolve();
+        };
+        audio.play().catch(() => resolve());
+      });
+    } catch (err) {
+      console.error('TTS fetch error:', err);
+    }
   };
 
   /** Process the speech queue - speaks sentences as they arrive */
@@ -231,18 +253,16 @@ export function ScriptChatFloat() {
     if (isSpeakingQueueRef.current) return;
     isSpeakingQueueRef.current = true;
     setIsSpeaking(true);
-    const voice = getBestVoice();
 
     while (speechQueueRef.current.length > 0) {
       if (!voiceModeRef.current) break;
       const sentence = speechQueueRef.current.shift()!;
-      const clean = cleanForSpeech(sentence);
-      if (clean) await speakSentence(clean, voice);
+      await speakSentence(sentence);
     }
 
     isSpeakingQueueRef.current = false;
     setIsSpeaking(false);
-    speakingUtteranceRef.current = null;
+    speakingAudioRef.current = null;
   };
 
   /** Feed streaming text to TTS queue - extracts complete sentences and queues them */
@@ -287,12 +307,15 @@ export function ScriptChatFloat() {
     });
   };
 
-  /** Speak text using browser SpeechSynthesis - for non-streaming use */
+  /** Speak text using ElevenLabs TTS - for non-streaming use */
   const speakText = (text: string): Promise<void> => {
     const clean = cleanForSpeech(text);
     if (!clean) return Promise.resolve();
     
-    speechSynthesis.cancel();
+    if (speakingAudioRef.current) {
+      speakingAudioRef.current.pause();
+      speakingAudioRef.current = null;
+    }
     const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     speechQueueRef.current = [...sentences];
     return processSpeechQueue().then(waitForSpeechDone);
@@ -304,7 +327,11 @@ export function ScriptChatFloat() {
       // Stop voice mode
       setVoiceMode(false);
       voiceModeRef.current = false;
-      speechSynthesis.cancel();
+      if (speakingAudioRef.current) {
+        speakingAudioRef.current.pause();
+        speakingAudioRef.current = null;
+      }
+      speechQueueRef.current = [];
       setIsSpeaking(false);
       if (isRecording) stopRecording();
       toast('Modo conversa por voz desativado', { duration: 2000 });
