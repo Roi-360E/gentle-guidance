@@ -153,6 +153,15 @@ async function processApprovedPayment(
   // Update user's plan in video_usage
   const monthYear = new Date().toISOString().substring(0, 7); // YYYY-MM
   
+  // Fetch token allocation from subscription_plans table
+  const { data: planConfig } = await supabase
+    .from("subscription_plans")
+    .select("tokens")
+    .eq("plan_key", payment.plan)
+    .single();
+  
+  const newTokens = planConfig?.tokens || 50;
+
   // Check if usage record exists
   const { data: existing } = await supabase
     .from("video_usage")
@@ -160,13 +169,6 @@ async function processApprovedPayment(
     .eq("user_id", payment.user_id)
     .eq("month_year", monthYear)
     .single();
-
-  // Define token allocation per plan
-  const planTokens: Record<string, number> = {
-    professional: 200,
-    enterprise: 999999, // unlimited
-  };
-  const newTokens = planTokens[payment.plan] || 50;
 
   if (existing) {
     // Renew: reset token balance + video count for the new billing cycle

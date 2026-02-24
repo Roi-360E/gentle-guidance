@@ -17,6 +17,7 @@ import AutoSubtitles from "./pages/AutoSubtitles";
 import InstagramCallback from "./pages/InstagramCallback";
 import ViralFlux from "./pages/ViralFlux";
 import ResetPassword from "./pages/ResetPassword";
+import AdminPlans from "./pages/AdminPlans";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
+              <Route path="/admin/plans" element={<ProtectedRoute><AdminPlans /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
               <Route path="/auto-subtitles" element={<ProtectedRoute><AutoSubtitles /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
