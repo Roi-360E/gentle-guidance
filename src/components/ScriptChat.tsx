@@ -125,6 +125,8 @@ export function ScriptChatFloat() {
   const isSpeakingQueueRef = useRef(false);
   const streamSentenceBufferRef = useRef('');
   const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
+  // ⚡ Flag: set to false to disable ElevenLabs and use free browser voice
+  const USE_ELEVENLABS = false;
 
   // Load plan
   useEffect(() => {
@@ -180,13 +182,14 @@ export function ScriptChatFloat() {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 
-  // Cleanup audio on unmount or voice mode off
+  // Cleanup audio on unmount
   useEffect(() => {
     return () => {
       if (speakingAudioRef.current) {
         speakingAudioRef.current.pause();
         speakingAudioRef.current = null;
       }
+      speechSynthesis.cancel();
     };
   }, []);
 
@@ -212,10 +215,31 @@ export function ScriptChatFloat() {
       .trim();
   };
 
-  /** Fetch audio from ElevenLabs TTS */
+  /** Speak text using browser SpeechSynthesis (free fallback) */
+  const speakWithBrowser = (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = 'pt-BR';
+      utt.rate = 1.3;
+      utt.pitch = 1.05;
+      const voices = speechSynthesis.getVoices();
+      const voice = voices.find(v => v.lang === 'pt-BR' && v.name.includes('Google'))
+        || voices.find(v => v.lang === 'pt-BR')
+        || voices.find(v => v.lang.startsWith('pt'));
+      if (voice) utt.voice = voice;
+      utt.onend = () => resolve();
+      utt.onerror = () => resolve();
+      speechSynthesis.speak(utt);
+    });
+  };
+
+  /** Fetch audio from ElevenLabs TTS or use browser fallback */
   const fetchTtsAudio = async (text: string): Promise<HTMLAudioElement | null> => {
     const clean = cleanForSpeech(text);
     if (!clean || clean.length < 3) return null;
+
+    // Browser fallback when ElevenLabs is disabled
+    if (!USE_ELEVENLABS) return { __browserFallback: true, text: clean } as any;
     
     try {
       const resp = await fetch(TTS_URL, {
@@ -235,7 +259,6 @@ export function ScriptChatFloat() {
       const audioBlob = await resp.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
-      // Pre-load the audio
       await new Promise<void>((resolve) => {
         audio.oncanplaythrough = () => resolve();
         audio.onerror = () => resolve();
@@ -248,8 +271,12 @@ export function ScriptChatFloat() {
     }
   };
 
-  /** Play a pre-loaded audio element */
-  const playAudio = (audio: HTMLAudioElement): Promise<void> => {
+  /** Play a pre-loaded audio element or browser fallback */
+  const playAudio = (audio: any): Promise<void> => {
+    // Browser SpeechSynthesis fallback
+    if (audio?.__browserFallback) {
+      return speakWithBrowser(audio.text);
+    }
     return new Promise<void>((resolve) => {
       speakingAudioRef.current = audio;
       audio.onended = () => {
@@ -390,6 +417,7 @@ export function ScriptChatFloat() {
         speakingAudioRef.current.pause();
         speakingAudioRef.current = null;
       }
+      speechSynthesis.cancel();
       speechQueueRef.current = [];
       setIsSpeaking(false);
       if (isRecording) stopRecording();
