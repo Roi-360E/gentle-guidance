@@ -16,6 +16,7 @@ import Sales from "./pages/Sales";
 import AutoSubtitles from "./pages/AutoSubtitles";
 import InstagramCallback from "./pages/InstagramCallback";
 import ViralFlux from "./pages/ViralFlux";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
           <ProcessingProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
               <Route path="/vendas" element={<Sales />} />
               <Route path="/viral-flux" element={<ViralFlux />} />
