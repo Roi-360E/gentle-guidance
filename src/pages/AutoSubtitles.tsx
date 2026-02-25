@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type, Trash2, Lock, Pencil, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractAudioAsFile, transcribeAudio, type TranscriptionResult, type TranscriptionSegment } from '@/lib/whisper-transcriber';
-import { SUBTITLE_STYLES } from '@/lib/subtitle-styles';
+import { SUBTITLE_STYLES, splitSegmentsIntoWordGroups, type WordGroup } from '@/lib/subtitle-styles';
 import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
 
 type Step = 'upload' | 'transcribing' | 'style' | 'burning' | 'done';
@@ -52,29 +52,35 @@ const AutoSubtitles = () => {
   const [editableSegments, setEditableSegments] = useState<TranscriptionSegment[]>([]);
   const [selectedStyle, setSelectedStyle] = useState('classic');
   const [subtitlePosition, setSubtitlePosition] = useState<'bottom' | 'center' | 'top'>('bottom');
-  const [fontSizePct, setFontSizePct] = useState(5); // 5% of video height
+  const [fontSizePct, setFontSizePct] = useState(5);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [showLivePreview, setShowLivePreview] = useState(true);
 
-  // Current subtitle for live preview
-  const currentSubtitle = useMemo(() => {
-    if (!showLivePreview || editableSegments.length === 0) return null;
+  // Build word groups for live preview
+  const wordGroups = useMemo(() => {
+    if (editableSegments.length === 0) return [];
+    return splitSegmentsIntoWordGroups(editableSegments, 4);
+  }, [editableSegments]);
+
+  // Current word group for live preview (with highlight info)
+  const currentWordGroup = useMemo((): WordGroup | null => {
+    if (!showLivePreview || wordGroups.length === 0) return null;
     const timeMs = currentTime * 1000;
-    return editableSegments.find(seg => timeMs >= seg.fromMs && timeMs <= seg.toMs) || null;
-  }, [currentTime, editableSegments, showLivePreview]);
+    return wordGroups.find(g => timeMs >= g.fromMs && timeMs <= g.toMs) || null;
+  }, [currentTime, wordGroups, showLivePreview]);
+
+  const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!file.type.startsWith('video/')) {
       toast.error('Selecione um arquivo de vídeo');
       return;
     }
-
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
@@ -95,27 +101,22 @@ const AutoSubtitles = () => {
 
   const handleTranscribe = useCallback(async () => {
     if (!videoFile) return;
-
     setStep('transcribing');
     setProgress(0);
     setStatusText('Extraindo áudio do vídeo...');
-
     try {
       const audioFile = await extractAudioAsFile(videoFile);
       setProgress(20);
       setStatusText('Áudio extraído. Iniciando transcrição...');
-
       const result = await transcribeAudio(audioFile, (pct, status) => {
         setProgress(20 + pct * 0.8);
         setStatusText(status);
       });
-
       if (result.segments.length === 0) {
         toast.error('Nenhuma fala detectada no vídeo. Tente com outro arquivo.');
         setStep('upload');
         return;
       }
-
       setTranscription(result);
       setEditableSegments([...result.segments]);
       setStep('style');
@@ -137,14 +138,11 @@ const AutoSubtitles = () => {
 
   const handleBurnSubtitles = useCallback(async () => {
     if (!videoFile || editableSegments.length === 0) return;
-
     setStep('burning');
     setProgress(0);
     setStatusText('Preparando legendas...');
-
     try {
       const style = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
-
       const burnOptions = {
         segments: editableSegments,
         style: {
@@ -157,13 +155,12 @@ const AutoSubtitles = () => {
         },
         fontSizePct,
         position: subtitlePosition,
+        wordsPerGroup: 4,
       };
-
       const outputBlob = await burnSubtitlesIntoVideo(videoFile, burnOptions, (pct, status) => {
         setProgress(pct);
         setStatusText(status);
       });
-
       const url = URL.createObjectURL(outputBlob);
       setOutputUrl(url);
       setStep('done');
@@ -197,36 +194,22 @@ const AutoSubtitles = () => {
     setCurrentTime(0);
   };
 
-  const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
-
-  // Live preview subtitle style
-  const liveSubtitleStyle = useMemo(() => {
-    if (!selectedStyleObj) return {};
-    const isMinimal = selectedStyle === 'minimal';
-    const isNeon = selectedStyle === 'neon';
-    const isFire = selectedStyle === 'fire';
-
+  // Get text shadow/stroke style based on selected style
+  const getTextEffects = useCallback((styleId: string, colors: typeof SUBTITLE_STYLES[0]['colors']) => {
+    const isMinimal = styleId === 'minimal';
+    const isNeon = styleId === 'neon';
+    const isFire = styleId === 'fire';
     return {
-      color: selectedStyleObj.colors.primary,
-      fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
-      fontWeight: 900,
-      textTransform: 'uppercase' as const,
-      letterSpacing: '0.05em',
-      WebkitTextStroke: isMinimal ? 'none' : `${isNeon ? 3 : 2}px ${selectedStyleObj.colors.outline}`,
+      WebkitTextStroke: isMinimal ? 'none' : `${isNeon ? 3 : 2}px ${colors.outline}`,
       textShadow: isNeon
-        ? `0 0 12px ${selectedStyleObj.colors.primary}, 0 0 24px ${selectedStyleObj.colors.outline}, 3px 3px 8px rgba(0,0,0,0.9)`
+        ? `0 0 12px ${colors.primary}, 0 0 24px ${colors.outline}, 3px 3px 8px rgba(0,0,0,0.9)`
         : isFire
-        ? `0 0 10px ${selectedStyleObj.colors.highlight}, 3px 3px 8px rgba(0,0,0,0.9)`
+        ? `0 0 10px ${colors.highlight}, 3px 3px 8px rgba(0,0,0,0.9)`
         : isMinimal
         ? '0 3px 12px rgba(0,0,0,0.8)'
         : `3px 3px 8px rgba(0,0,0,0.95), -1px -1px 4px rgba(0,0,0,0.5)`,
-      backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
-        ? selectedStyleObj.colors.bg
-        : 'transparent',
-      padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 12px' : '0',
-      borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '6px' : '0',
     };
-  }, [selectedStyleObj, selectedStyle, fontSizePct]);
+  }, []);
 
   if (!hasAccess) {
     return (
@@ -264,7 +247,7 @@ const AutoSubtitles = () => {
                 Legendas Automáticas
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground">
-                Profissional & Empresarial • Roda no seu navegador
+                Profissional & Empresarial • Destaque palavra por palavra
               </p>
             </div>
           </div>
@@ -313,7 +296,6 @@ const AutoSubtitles = () => {
                 className="hidden"
                 onChange={handleFileSelect}
               />
-
               {!videoFile ? (
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -326,11 +308,7 @@ const AutoSubtitles = () => {
               ) : (
                 <div className="space-y-4">
                   {videoPreviewUrl && (
-                    <video
-                      src={videoPreviewUrl}
-                      controls
-                      className="w-full max-h-[300px] rounded-xl bg-black object-contain"
-                    />
+                    <video src={videoPreviewUrl} controls className="w-full max-h-[300px] rounded-xl bg-black object-contain" />
                   )}
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground truncate">{videoFile.name}</p>
@@ -361,9 +339,6 @@ const AutoSubtitles = () => {
                 <Progress value={progress} className="max-w-md mx-auto" />
                 <p className="text-xs text-muted-foreground">{Math.round(progress)}%</p>
               </div>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                A transcrição roda 100% no seu navegador. Pode levar de 30s a 2min dependendo do vídeo.
-              </p>
             </CardContent>
           </Card>
         )}
@@ -371,7 +346,7 @@ const AutoSubtitles = () => {
         {/* Style selection step */}
         {step === 'style' && editableSegments.length > 0 && (
           <div className="space-y-6">
-            {/* Live video preview with subtitle overlay */}
+            {/* Live video preview with word-by-word subtitle overlay */}
             {videoPreviewUrl && (
               <Card className="border-border bg-card overflow-hidden">
                 <CardHeader className="pb-2">
@@ -396,23 +371,51 @@ const AutoSubtitles = () => {
                       ref={videoPreviewRef}
                       src={videoPreviewUrl}
                       controls
-                      className="w-full max-h-[400px] object-contain"
+                      className="w-full max-h-[450px] object-contain"
                       onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                     />
-                    {/* Subtitle overlay */}
-                    {currentSubtitle && selectedStyleObj && (
+                    {/* Word-by-word subtitle overlay */}
+                    {currentWordGroup && selectedStyleObj && (
                       <div
-                        className={`absolute inset-x-0 pointer-events-none px-4 text-center ${
+                        className={`absolute inset-x-0 pointer-events-none px-3 text-center transition-all duration-75 ${
                           subtitlePosition === 'top' ? 'top-[8%]'
                           : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2'
-                          : 'bottom-[12%]'
+                          : 'bottom-[10%]'
                         }`}
                       >
                         <span
-                          className="inline-block max-w-[90%]"
-                          style={liveSubtitleStyle}
+                          className="inline-block max-w-[95%]"
+                          style={{
+                            backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
+                              ? selectedStyleObj.colors.bg
+                              : 'transparent',
+                            padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
+                            borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '8px' : '0',
+                          }}
                         >
-                          {currentSubtitle.text.toUpperCase()}
+                          {currentWordGroup.words.map((word, i) => {
+                            const isHighlighted = i === currentWordGroup.highlightIndex;
+                            const effects = getTextEffects(selectedStyle, selectedStyleObj.colors);
+                            return (
+                              <span
+                                key={i}
+                                className="font-black uppercase tracking-wide transition-colors duration-75"
+                                style={{
+                                  color: isHighlighted
+                                    ? selectedStyleObj.colors.highlight
+                                    : selectedStyleObj.colors.primary,
+                                  fontSize: `clamp(16px, ${fontSizePct * 0.7}vw, 48px)`,
+                                  ...effects,
+                                  marginRight: i < currentWordGroup.words.length - 1 ? '0.3em' : '0',
+                                  display: 'inline-block',
+                                  transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
+                                  transition: 'transform 0.1s ease, color 0.1s ease',
+                                }}
+                              >
+                                {word.toUpperCase()}
+                              </span>
+                            );
+                          })}
                         </span>
                       </div>
                     )}
@@ -455,7 +458,7 @@ const AutoSubtitles = () => {
             <Card className="border-border bg-card">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" /> Escolha o estilo
+                  <Sparkles className="w-5 h-5 text-primary" /> Estilo das Legendas
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -475,6 +478,48 @@ const AutoSubtitles = () => {
                     </button>
                   ))}
                 </div>
+
+                {/* Static style preview */}
+                {selectedStyleObj && (
+                  <div
+                    className="rounded-xl bg-black relative overflow-hidden flex items-end justify-center"
+                    style={{ minHeight: '120px', padding: '16px' }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
+                    <div className="relative z-10 text-center">
+                      <span
+                        className="inline-block"
+                        style={{
+                          backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
+                            ? selectedStyleObj.colors.bg : 'transparent',
+                          padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 14px' : '0',
+                          borderRadius: '6px',
+                        }}
+                      >
+                        {['achar', 'que', 'precisa', 'saber'].map((word, i) => {
+                          const isHighlighted = i === 0;
+                          const effects = getTextEffects(selectedStyle, selectedStyleObj.colors);
+                          return (
+                            <span
+                              key={i}
+                              className="font-black uppercase tracking-wide"
+                              style={{
+                                color: isHighlighted
+                                  ? selectedStyleObj.colors.highlight
+                                  : selectedStyleObj.colors.primary,
+                                fontSize: '28px',
+                                ...effects,
+                                marginRight: i < 3 ? '6px' : '0',
+                              }}
+                            >
+                              {word.toUpperCase()}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Position & Size */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -536,12 +581,7 @@ const AutoSubtitles = () => {
               <CardTitle className="text-lg text-center">🎉 Vídeo legendado pronto!</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <video
-                src={outputUrl}
-                controls
-                autoPlay
-                className="w-full max-h-[400px] rounded-xl bg-black object-contain"
-              />
+              <video src={outputUrl} controls autoPlay className="w-full max-h-[400px] rounded-xl bg-black object-contain" />
               <div className="flex gap-3">
                 <Button
                   onClick={handleDownload}
@@ -550,12 +590,7 @@ const AutoSubtitles = () => {
                 >
                   <Download className="w-5 h-5 mr-2" /> Baixar Vídeo
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleReset}
-                  className="rounded-full"
-                  size="lg"
-                >
+                <Button variant="outline" onClick={handleReset} className="rounded-full" size="lg">
                   Novo Vídeo
                 </Button>
               </div>

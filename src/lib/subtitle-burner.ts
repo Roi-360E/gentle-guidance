@@ -1,16 +1,19 @@
 /**
  * CapCut-style subtitle burner using FFmpeg.wasm drawtext filter.
- * Renders bold, UPPERCASE subtitles centered at bottom with strong outline.
  * 
- * KEY FIX: fontSize is now calculated as a percentage of video height
- * to ensure consistent, large, readable text across all resolutions.
+ * KEY FEATURE: Word-by-word highlighting
+ * - Splits segments into word groups (3-4 words)
+ * - Each word gets highlighted in accent color while others stay primary
+ * - Two-layer rendering: base text (primary) + highlighted word overlay
+ * - Font size calculated as % of video height for consistency
  */
 
 import { getFFmpeg } from '@/lib/video-processor';
 import { fetchFile } from '@ffmpeg/util';
 import type { TranscriptionSegment } from './whisper-transcriber';
+import { splitSegmentsIntoWordGroups, type WordGroup } from './subtitle-styles';
 
-interface BurnOptions {
+export interface BurnOptions {
   segments: TranscriptionSegment[];
   style: {
     fontColor: string;
@@ -23,20 +26,18 @@ interface BurnOptions {
   /** fontSize as percentage of video height (e.g. 5 = 5%) */
   fontSizePct: number;
   position: 'bottom' | 'center' | 'top';
+  wordsPerGroup?: number;
 }
 
 const FONT_PATH = '/fonts/Inter-Variable.ttf';
 const FONT_FS_NAME = 'subtitle_font.ttf';
 
 /**
- * Sanitize text for FFmpeg drawtext — remove ALL problematic characters.
+ * Sanitize text for FFmpeg drawtext
  */
 function sanitizeForDrawtext(text: string): string {
   let clean = text.toUpperCase().trim();
-  // Remove characters that break FFmpeg drawtext parsing
-  // Keep only letters, numbers, spaces, and basic punctuation
   clean = clean.replace(/[^A-ZÀ-ÿ0-9 .!?,\-]/gi, '');
-  // Escape special chars for drawtext
   clean = clean.replace(/:/g, '\\:');
   clean = clean.replace(/'/g, '\u2019');
   clean = clean.replace(/%/g, '%%');
@@ -57,7 +58,6 @@ async function probeVideoDimensions(ffmpeg: any, inputName: string): Promise<{ w
 
   return new Promise((resolve) => {
     const handler = ({ message }: { message: string }) => {
-      // Match "Stream #0:0: Video: ... 1080x1920" or similar
       const match = message.match(/(\d{2,5})x(\d{2,5})/);
       if (match) {
         const w = Number(match[1]);
@@ -70,8 +70,6 @@ async function probeVideoDimensions(ffmpeg: any, inputName: string): Promise<{ w
     };
 
     ffmpeg.on('log', handler);
-
-    // Run a quick probe
     ffmpeg.exec(['-i', inputName, '-f', 'null', '-t', '0.01', '-']).catch(() => {}).finally(() => {
       ffmpeg.off('log', handler);
       resolve({ width, height });
@@ -80,22 +78,30 @@ async function probeVideoDimensions(ffmpeg: any, inputName: string): Promise<{ w
 }
 
 /**
- * Build drawtext filter chain for all segments.
- * fontSize is calculated from video height percentage.
+ * Build drawtext filter chain with word-by-word highlighting.
+ * 
+ * Strategy:
+ * For each word group time slice, we render TWO layers:
+ * 1. Base layer: full group text in primary color (centered)
+ * 2. Highlight layer: just the highlighted word in highlight color, 
+ *    positioned to overlap the correct word using character-width approximation
  */
 export function buildDrawtextFilter(
   options: BurnOptions,
   fontFile: string,
   videoHeight: number,
+  videoWidth: number,
 ): string {
-  const { segments, style, fontSizePct, position } = options;
+  const { segments, style, fontSizePct, position, wordsPerGroup = 4 } = options;
 
-  // Calculate actual pixel font size from percentage of video height
-  // e.g. 5% of 1920 = 96px, 5% of 1080 = 54px
   const fontSize = Math.round((fontSizePct / 100) * videoHeight);
-  const borderW = Math.max(style.borderW, Math.round(fontSize * 0.06)); // 6% of font size
+  const borderW = Math.max(style.borderW, Math.round(fontSize * 0.06));
   const shadowDist = Math.max(3, Math.round(fontSize * 0.05));
-  const marginBottom = Math.round(videoHeight * 0.08); // 8% margin from edge
+  const marginBottom = Math.round(videoHeight * 0.08);
+
+  // Approximate character width for Inter Bold uppercase: ~0.58 * fontSize
+  const charWidth = fontSize * 0.58;
+  const spaceWidth = fontSize * 0.25;
 
   const yExpr = position === 'top'
     ? `${marginBottom}`
@@ -103,39 +109,75 @@ export function buildDrawtextFilter(
     ? '(h-text_h)/2'
     : `h-text_h-${marginBottom}`;
 
+  const wordGroups = splitSegmentsIntoWordGroups(segments, wordsPerGroup);
   const filters: string[] = [];
 
-  for (const seg of segments) {
-    const text = sanitizeForDrawtext(seg.text);
-    if (!text) continue;
+  // Common style params
+  const baseParams = (color: string) => [
+    `fontfile=${fontFile}`,
+    `fontsize=${fontSize}`,
+    `fontcolor=${hexToFFmpeg(color)}`,
+    `borderw=${borderW}`,
+    `bordercolor=${hexToFFmpeg(style.borderColor)}`,
+    `shadowcolor=0x000000@0.9`,
+    `shadowx=${shadowDist}`,
+    `shadowy=${shadowDist}`,
+  ];
 
-    const startSec = (seg.fromMs / 1000).toFixed(3);
-    const endSec = (seg.toMs / 1000).toFixed(3);
+  // Build bg params if needed
+  const bgParams: string[] = [];
+  if (style.bgColor !== 'transparent' && style.bgColor !== '#00000000') {
+    const boxPad = Math.round(fontSize * 0.2);
+    bgParams.push(`box=1`, `boxcolor=${hexToFFmpeg(style.bgColor)}@0.8`, `boxborderw=${boxPad}`);
+  }
 
-    const parts = [
-      `drawtext=fontfile=${fontFile}`,
-      `text='${text}'`,
-      `fontsize=${fontSize}`,
-      `fontcolor=${hexToFFmpeg(style.fontColor)}`,
-      `borderw=${borderW}`,
-      `bordercolor=${hexToFFmpeg(style.borderColor)}`,
-      `shadowcolor=0x000000@0.9`,
-      `shadowx=${shadowDist}`,
-      `shadowy=${shadowDist}`,
+  for (const group of wordGroups) {
+    const fullText = sanitizeForDrawtext(group.fullText);
+    if (!fullText) continue;
+
+    const startSec = (group.fromMs / 1000).toFixed(3);
+    const endSec = (group.toMs / 1000).toFixed(3);
+    const enableExpr = `enable='between(t\\,${startSec}\\,${endSec})'`;
+
+    // Layer 1: Full text in primary color (base)
+    const baseParts = [
+      `drawtext=${baseParams(style.fontColor).join(':')}`,
+      `text='${fullText}'`,
       `x=(w-text_w)/2`,
       `y=${yExpr}`,
-      `enable='between(t\\,${startSec}\\,${endSec})'`,
+      enableExpr,
+      ...bgParams,
     ];
+    filters.push(baseParts.join(':'));
 
-    // Add background box if style requires it
-    if (style.bgColor !== 'transparent' && style.bgColor !== '#00000000') {
-      const boxPad = Math.round(fontSize * 0.2);
-      parts.push(`box=1`);
-      parts.push(`boxcolor=${hexToFFmpeg(style.bgColor)}@0.8`);
-      parts.push(`boxborderw=${boxPad}`);
+    // Layer 2: Highlighted word overlay in highlight color
+    const highlightedWord = sanitizeForDrawtext(group.words[group.highlightIndex] || '');
+    if (!highlightedWord) continue;
+
+    // Calculate x offset for the highlighted word within the centered text
+    // Total text width approximation
+    const sanitizedWords = group.words.map(w => sanitizeForDrawtext(w));
+    const totalTextWidth = sanitizedWords.reduce((sum, w) => sum + w.length * charWidth, 0) 
+      + (sanitizedWords.length - 1) * spaceWidth;
+
+    // Offset to the highlighted word start
+    let offsetToWord = 0;
+    for (let i = 0; i < group.highlightIndex; i++) {
+      offsetToWord += sanitizedWords[i].length * charWidth + spaceWidth;
     }
 
-    filters.push(parts.join(':'));
+    // Center the full text, then offset to the word
+    // x = (w - totalTextWidth) / 2 + offsetToWord
+    const xExpr = `(w-${Math.round(totalTextWidth)})/2+${Math.round(offsetToWord)}`;
+
+    const highlightParts = [
+      `drawtext=${baseParams(style.highlightColor).join(':')}`,
+      `text='${highlightedWord}'`,
+      `x=${xExpr}`,
+      `y=${yExpr}`,
+      enableExpr,
+    ];
+    filters.push(highlightParts.join(':'));
   }
 
   return filters.join(',');
@@ -170,13 +212,13 @@ export async function burnSubtitlesIntoVideo(
   onProgress?.(10, 'Carregando vídeo...');
   await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-  // Probe video dimensions to calculate correct font size
   onProgress?.(12, 'Analisando dimensões do vídeo...');
-  const { height: videoHeight } = await probeVideoDimensions(ffmpeg, inputName);
-  console.log('[SubtitleBurner] Video height:', videoHeight, 'fontSizePct:', options.fontSizePct);
+  const { width: videoWidth, height: videoHeight } = await probeVideoDimensions(ffmpeg, inputName);
+  console.log('[SubtitleBurner] Video:', videoWidth, 'x', videoHeight, 'fontSizePct:', options.fontSizePct);
 
-  const filterStr = buildDrawtextFilter(options, fontFile, videoHeight);
-  console.log('[SubtitleBurner] Filter segments:', options.segments.length, 'Calculated font size:', Math.round((options.fontSizePct / 100) * videoHeight), 'px');
+  const filterStr = buildDrawtextFilter(options, fontFile, videoHeight, videoWidth);
+  const wordGroups = splitSegmentsIntoWordGroups(options.segments, options.wordsPerGroup || 4);
+  console.log('[SubtitleBurner] Word groups:', wordGroups.length, 'Filter length:', filterStr.length);
 
   let duration = 0;
   let lastError = '';
@@ -193,7 +235,7 @@ export async function burnSubtitlesIntoVideo(
     if (timeMatch && duration > 0) {
       const current = Number(timeMatch[1]) * 3600 + Number(timeMatch[2]) * 60 + Number(timeMatch[3]);
       const pct = Math.min(95, 20 + (current / duration) * 75);
-      onProgress?.(Math.round(pct), 'Gravando legendas...');
+      onProgress?.(Math.round(pct), 'Gravando legendas com destaque...');
     }
   };
 
@@ -242,7 +284,6 @@ export async function burnSubtitlesIntoVideo(
     throw new Error('Vídeo de saída está vazio ou corrompido.');
   }
 
-  // Cleanup
   try {
     await ffmpeg.deleteFile(inputName);
     await ffmpeg.deleteFile(outputName);
