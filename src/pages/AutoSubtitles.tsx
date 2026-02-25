@@ -49,7 +49,7 @@ const AutoSubtitles = () => {
   const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
   const [selectedStyle, setSelectedStyle] = useState('classic');
   const [subtitlePosition, setSubtitlePosition] = useState<'bottom' | 'center' | 'top'>('bottom');
-  const [fontSize, setFontSize] = useState(48);
+  const [fontSize, setFontSize] = useState(96);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
@@ -131,7 +131,7 @@ const AutoSubtitles = () => {
           highlightColor: style.colors.highlight,
           borderColor: style.colors.outline,
           bgColor: style.colors.bg,
-          borderW: selectedStyle === 'minimal' ? 0 : selectedStyle === 'neon' ? 5 : 4,
+          borderW: selectedStyle === 'minimal' ? 2 : selectedStyle === 'neon' ? 7 : 5,
           bold: true,
         },
         fontSize,
@@ -380,10 +380,10 @@ const AutoSubtitles = () => {
                     <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="32">Pequeno</SelectItem>
-                        <SelectItem value="48">Médio</SelectItem>
-                        <SelectItem value="64">Grande</SelectItem>
-                        <SelectItem value="80">Extra Grande</SelectItem>
+                        <SelectItem value="48">Pequeno</SelectItem>
+                        <SelectItem value="64">Médio</SelectItem>
+                        <SelectItem value="96">Grande</SelectItem>
+                        <SelectItem value="128">Extra Grande</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

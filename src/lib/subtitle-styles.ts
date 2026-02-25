@@ -142,7 +142,7 @@ interface GenerateAssOptions {
 export function generateAssFile({
   segments,
   styleId,
-  fontSize = 48,
+  fontSize = 96,
   position = 'bottom',
   resX = 1080,
   resY = 1920,

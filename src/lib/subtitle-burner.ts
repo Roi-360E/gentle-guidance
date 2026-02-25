@@ -56,12 +56,13 @@ function hexToFFmpeg(hex: string): string {
 export function buildDrawtextFilter(options: BurnOptions, fontFile: string): string {
   const { segments, style, fontSize, position } = options;
 
-  // CapCut positions text near the bottom with good margin
+  // Scale fontSize relative to video height (designed for 1920h, scale proportionally)
+  // CapCut positions text near the bottom with generous margin
   const yExpr = position === 'top'
-    ? `${Math.round(fontSize * 0.8)}`
+    ? `${Math.round(fontSize * 1.2)}`
     : position === 'center'
     ? '(h-text_h)/2'
-    : `h-text_h-${Math.round(fontSize * 0.5)}`;
+    : `h-text_h-${Math.round(fontSize * 1.5)}`;
 
   const filters: string[] = [];
 
@@ -73,16 +74,20 @@ export function buildDrawtextFilter(options: BurnOptions, fontFile: string): str
     const endSec = (seg.toMs / 1000).toFixed(3);
 
     // Build the drawtext filter — use semicolons-free, colon-separated format
+    // Scale font dynamically based on video height for consistent visibility
+    const fontSizeExpr = `'if(gt(h,1000),${fontSize},${Math.round(fontSize * 0.6)})'`;
+    const borderW = Math.max(style.borderW, 3); // minimum 3px border for visibility
+
     const parts = [
       `drawtext=fontfile=${fontFile}`,
       `text='${text}'`,
-      `fontsize=${fontSize}`,
+      `fontsize=${fontSizeExpr}`,
       `fontcolor=${hexToFFmpeg(style.fontColor)}`,
-      `borderw=${style.borderW}`,
+      `borderw=${borderW}`,
       `bordercolor=${hexToFFmpeg(style.borderColor)}`,
-      `shadowcolor=0x000000@0.8`,
-      `shadowx=3`,
-      `shadowy=3`,
+      `shadowcolor=0x000000@0.9`,
+      `shadowx=4`,
+      `shadowy=4`,
       `x=(w-text_w)/2`,
       `y=${yExpr}`,
       `enable='between(t\\,${startSec}\\,${endSec})'`,
