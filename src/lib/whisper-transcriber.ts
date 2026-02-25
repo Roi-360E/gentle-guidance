@@ -88,30 +88,63 @@ export async function transcribeVideo(
 
   // Extrair áudio leve (~200KB) via FFmpeg.wasm (já pré-carregado)
   const audioFile = await extractAudioAsFile(videoFile);
-
-  onProgress?.(30, 'Enviando áudio para transcrição...');
-
   const formData = new FormData();
   formData.append('audio', audioFile);
 
   const { data: { session } } = await supabase.auth.getSession();
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      body: formData,
-    },
-  );
+  const MAX_ATTEMPTS = 2;
+  let response: Response | null = null;
 
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error('Transcription API error:', errText);
-    throw new Error(`Transcription failed: ${response.status}`);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      onProgress?.(30, attempt === 1 ? 'Enviando áudio para nuvem...' : 'Tentando novamente na nuvem...');
+
+      response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: formData,
+          signal: controller.signal,
+        },
+      );
+
+      if (response.ok) {
+        break;
+      }
+
+      const errText = await response.text();
+      const canRetry = response.status === 546 || response.status >= 500;
+
+      if (!canRetry || attempt === MAX_ATTEMPTS) {
+        console.error('Transcription API error:', errText);
+        throw new Error(`Transcription failed: ${response.status}`);
+      }
+
+      await new Promise((r) => setTimeout(r, 600));
+    } catch (err) {
+      const canRetry = attempt < MAX_ATTEMPTS;
+      if (!canRetry) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error('Transcription timeout');
+        }
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 600));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  if (!response || !response.ok) {
+    throw new Error('Transcription failed');
   }
 
   onProgress?.(80, 'Processando resultado...');
