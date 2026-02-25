@@ -14,6 +14,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -21,19 +28,40 @@ serve(async (req) => {
 
   try {
     const formData = await req.formData();
-    // Aceita tanto "audio" quanto "video" como campo do FormData
-    const mediaFile = (formData.get("video") || formData.get("audio")) as File;
 
+    const audioFile = formData.get("audio") as File | null;
+    const videoFile = formData.get("video") as File | null;
+
+    // Segurança de memória: nesta função aceitamos apenas áudio leve.
+    if (!audioFile && videoFile) {
+      return jsonResponse(
+        {
+          code: "VIDEO_PAYLOAD_NOT_ALLOWED",
+          message: "Send extracted audio in the 'audio' field to avoid worker memory limits.",
+        },
+        413,
+      );
+    }
+
+    const mediaFile = audioFile;
     if (!mediaFile) {
-      return new Response(JSON.stringify({ error: "No media file provided" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "No audio file provided" }, 400);
+    }
+
+    // Proteção contra OOM (Edge runtime)
+    const maxBytes = 8 * 1024 * 1024;
+    if (mediaFile.size > maxBytes) {
+      return jsonResponse(
+        {
+          code: "AUDIO_TOO_LARGE",
+          message: "Audio payload too large. Keep audio under 8MB.",
+        },
+        413,
+      );
     }
 
     const mediaBytes = new Uint8Array(await mediaFile.arrayBuffer());
     const base64Media = base64Encode(mediaBytes as unknown as ArrayBuffer);
-    // Detectar MIME automaticamente (video/mp4, audio/wav, etc.)
     const mimeType = mediaFile.type || "audio/wav";
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
@@ -41,7 +69,6 @@ serve(async (req) => {
       throw new Error("GEMINI_API_KEY not configured");
     }
 
-    // Gemini 2.5 Flash processa vídeo/áudio nativamente com timestamps
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
@@ -95,7 +122,6 @@ Return this exact JSON format:
     const data = await response.json();
     const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    // Parse JSON from response (handle potential markdown wrapping)
     let parsed;
     try {
       const jsonMatch = textContent.match(/\{[\s\S]*\}/);
@@ -109,17 +135,9 @@ Return this exact JSON format:
       throw new Error("Failed to parse transcription response");
     }
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(parsed);
   } catch (error) {
     console.error("Transcription error:", error);
-    return new Response(
-      JSON.stringify({ error: (error as Error).message || "Transcription failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return jsonResponse({ error: (error as Error).message || "Transcription failed" }, 500);
   }
 });

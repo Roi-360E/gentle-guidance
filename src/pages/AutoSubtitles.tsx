@@ -37,6 +37,7 @@ import {
 } from '@/lib/whisper-transcriber';
 import { SUBTITLE_STYLES, splitSegmentsIntoWordGroups, type WordGroup } from '@/lib/subtitle-styles';
 import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
+import { cloudPreprocessFiles } from '@/lib/cloud-preprocess';
 import {
   getFFmpeg,
   preProcessBatch,
@@ -261,7 +262,7 @@ const AutoSubtitles = () => {
     setSectionStarted(prev => { const u = [...prev]; u[sectionIndex] = false; return u; });
   }, []);
 
-  /* ──── Pré-processamento por seção (mesma lógica do concatenador) ──── */
+  /* ──── Pré-processamento por seção (modo nuvem/VPS + fallback local) ──── */
   const handlePreprocessSection = useCallback(async (sectionIndex: number) => {
     const section = sections[sectionIndex];
     if (section.videos.length === 0) return;
@@ -277,30 +278,89 @@ const AutoSubtitles = () => {
         updated[sectionIndex] = {
           ...updated[sectionIndex],
           videos: updated[sectionIndex].videos.map(v => ({
-            ...v, status: 'idle' as VideoStatus, progress: 5, statusText: 'Normalizando...',
+            ...v,
+            status: 'idle' as VideoStatus,
+            progress: 5,
+            statusText: 'Normalizando na nuvem...'
           })),
         };
         return updated;
       });
 
       const rawFiles = section.videos.map(v => v.file);
-      await preProcessBatch(rawFiles, section.label, defaultSettings, (fileIndex, status, pct) => {
+      const cloudSettings: ProcessingSettings = {
+        ...defaultSettings,
+        useCloud: true,
+        videoFormat: '9:16',
+      };
+
+      try {
+        const results = await cloudPreprocessFiles(rawFiles, cloudSettings, (fileIndex, status, pct) => {
+          setSections(prev => {
+            const updated = [...prev];
+            const videos = [...updated[sectionIndex].videos];
+            const statusMap: Record<string, string> = {
+              uploading: 'Enviando para nuvem...',
+              processing: 'Normalizando na VPS...',
+              downloading: 'Baixando otimizado...',
+              done: 'Normalizado ✅',
+            };
+            const progressMap = {
+              uploading: Math.round(10 + pct * 0.3),
+              processing: Math.round(40 + pct * 0.45),
+              downloading: Math.round(85 + pct * 0.14),
+              done: 100,
+            } as const;
+
+            videos[fileIndex] = {
+              ...videos[fileIndex],
+              progress: progressMap[status] ?? pct,
+              statusText: statusMap[status] ?? 'Normalizando na nuvem...'
+            };
+            updated[sectionIndex] = { ...updated[sectionIndex], videos };
+            return updated;
+          });
+        });
+
+        // Substituir arquivo pelo normalizado vindo da nuvem
         setSections(prev => {
           const updated = [...prev];
           const videos = [...updated[sectionIndex].videos];
-          if (status === 'done') {
-            videos[fileIndex] = { ...videos[fileIndex], progress: 100, statusText: 'Normalizado ✅' };
-          } else {
-            videos[fileIndex] = { ...videos[fileIndex], progress: pct, statusText: 'Normalizando...' };
+          for (const result of results) {
+            const idx = videos.findIndex(v => v.file === result.originalFile);
+            if (idx !== -1) {
+              videos[idx] = {
+                ...videos[idx],
+                file: result.normalizedFile,
+                progress: 100,
+                statusText: 'Normalizado ✅',
+              };
+            }
           }
           updated[sectionIndex] = { ...updated[sectionIndex], videos };
           return updated;
         });
-      });
+      } catch (cloudErr) {
+        console.warn('[AutoSubtitles] Cloud preprocess falhou, usando fallback local:', cloudErr);
+
+        await preProcessBatch(rawFiles, section.label, defaultSettings, (fileIndex, status, pct) => {
+          setSections(prev => {
+            const updated = [...prev];
+            const videos = [...updated[sectionIndex].videos];
+            if (status === 'done') {
+              videos[fileIndex] = { ...videos[fileIndex], progress: 100, statusText: 'Normalizado ✅' };
+            } else {
+              videos[fileIndex] = { ...videos[fileIndex], progress: pct, statusText: 'Normalizando local...' };
+            }
+            updated[sectionIndex] = { ...updated[sectionIndex], videos };
+            return updated;
+          });
+        });
+      }
 
       setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
       const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
-      toast.success(`${section.label}: normalização concluída em ${elapsed}s! ✅`);
+      toast.success(`${section.label}: normalização concluída em ${elapsed}s ⚡`);
     } catch (err) {
       console.error('Preprocess error:', err);
       setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
@@ -321,36 +381,51 @@ const AutoSubtitles = () => {
     });
   }, []);
 
-  /* ──── STEP 2: Transcrição em batch (envio direto ao Gemini, sem extração de áudio) ──── */
+  /* ──── STEP 2: Transcrição em batch (modo turbo com paralelismo) ──── */
   const handleTranscribeAll = useCallback(async () => {
     if (totalVideos === 0) return;
     setMainStep('transcribing');
     setIsProcessing(true);
     cancelRef.current = false;
     setOverallProgress(0);
-    setOverallStatus('Iniciando transcrição em lote...');
+    setOverallStatus('Iniciando transcrição turbo...');
+
+    const jobs: { si: number; vi: number }[] = [];
+    sections.forEach((section, si) => {
+      section.videos.forEach((video, vi) => {
+        if (video.status !== 'transcribed' && video.status !== 'done') {
+          jobs.push({ si, vi });
+        }
+      });
+    });
+
+    if (jobs.length === 0) {
+      setIsProcessing(false);
+      setMainStep('style');
+      return;
+    }
 
     let completed = 0;
+    let cursor = 0;
+    const MAX_PARALLEL = Math.min(3, jobs.length);
 
-    // Processar seção por seção, vídeo por vídeo
-    for (let si = 0; si < sections.length; si++) {
-      const section = sections[si];
-      for (let vi = 0; vi < section.videos.length; vi++) {
-        if (cancelRef.current) break;
+    const runWorker = async () => {
+      while (!cancelRef.current) {
+        const currentIndex = cursor;
+        cursor += 1;
+        if (currentIndex >= jobs.length) break;
+
+        const { si, vi } = jobs[currentIndex];
+        const section = sections[si];
         const video = section.videos[vi];
-        if (video.status === 'transcribed' || video.status === 'done') {
-          completed++;
-          continue;
-        }
 
         updateVideo(si, vi, {
           status: 'transcribing',
-          progress: 10,
-          statusText: 'Enviando para IA...',
+          progress: 8,
+          statusText: 'Transcrição turbo em andamento...',
         });
 
         try {
-          // Enviar vídeo diretamente ao Gemini (sem extração de áudio)
           const result = await transcribeVideo(video.file, (pct, status) => {
             updateVideo(si, vi, {
               progress: pct,
@@ -373,21 +448,24 @@ const AutoSubtitles = () => {
             });
           }
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          const workerLimit = message.includes('546') || message.includes('WORKER_LIMIT');
           console.error(`Transcription error [${section.label} #${vi + 1}]:`, err);
           updateVideo(si, vi, {
             status: 'error',
             progress: 100,
-            statusText: 'Erro na transcrição',
+            statusText: workerLimit ? 'Limite de recursos na nuvem' : 'Erro na transcrição',
           });
         }
 
         completed++;
-        const pct = Math.round((completed / totalVideos) * 100);
+        const pct = Math.round((completed / jobs.length) * 100);
         setOverallProgress(pct);
-        setOverallStatus(`Transcrito ${completed}/${totalVideos} vídeos`);
+        setOverallStatus(`Transcrito ${completed}/${jobs.length} vídeos`);
       }
-      if (cancelRef.current) break;
-    }
+    };
+
+    await Promise.all(Array.from({ length: MAX_PARALLEL }, runWorker));
 
     setIsProcessing(false);
     if (!cancelRef.current) {
@@ -478,7 +556,7 @@ const AutoSubtitles = () => {
       setMainStep('style');
       toast.info('Processamento cancelado.');
     }
-  }, [sections, selectedStyle, fontSizePct, subtitlePosition, updateVideo]);
+  }, [sections, selectedStyle, fontSizePct, subtitlePosition, updateVideo, effectiveColors, useBold]);
 
   /* ──── Cancelar processamento ──── */
   const handleCancel = useCallback(() => {
