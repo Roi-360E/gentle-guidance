@@ -37,7 +37,7 @@ import {
 } from '@/lib/whisper-transcriber';
 import { SUBTITLE_STYLES, splitSegmentsIntoWordGroups, type WordGroup } from '@/lib/subtitle-styles';
 import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
-import { cloudPreprocessFiles } from '@/lib/cloud-preprocess';
+
 import {
   getFFmpeg,
   preProcessBatch,
@@ -281,82 +281,27 @@ const AutoSubtitles = () => {
             ...v,
             status: 'idle' as VideoStatus,
             progress: 5,
-            statusText: 'Normalizando na nuvem...'
+            statusText: 'Normalizando...'
           })),
         };
         return updated;
       });
 
       const rawFiles = section.videos.map(v => v.file);
-      const cloudSettings: ProcessingSettings = {
-        ...defaultSettings,
-        useCloud: true,
-        videoFormat: '9:16',
-      };
 
-      try {
-        const results = await cloudPreprocessFiles(rawFiles, cloudSettings, (fileIndex, status, pct) => {
-          setSections(prev => {
-            const updated = [...prev];
-            const videos = [...updated[sectionIndex].videos];
-            const statusMap: Record<string, string> = {
-              uploading: 'Enviando para nuvem...',
-              processing: 'Normalizando na VPS...',
-              downloading: 'Baixando otimizado...',
-              done: 'Normalizado ✅',
-            };
-            const progressMap = {
-              uploading: Math.round(10 + pct * 0.3),
-              processing: Math.round(40 + pct * 0.45),
-              downloading: Math.round(85 + pct * 0.14),
-              done: 100,
-            } as const;
-
-            videos[fileIndex] = {
-              ...videos[fileIndex],
-              progress: progressMap[status] ?? pct,
-              statusText: statusMap[status] ?? 'Normalizando na nuvem...'
-            };
-            updated[sectionIndex] = { ...updated[sectionIndex], videos };
-            return updated;
-          });
-        });
-
-        // Substituir arquivo pelo normalizado vindo da nuvem
+      await preProcessBatch(rawFiles, section.label, defaultSettings, (fileIndex, status, pct) => {
         setSections(prev => {
           const updated = [...prev];
           const videos = [...updated[sectionIndex].videos];
-          for (const result of results) {
-            const idx = videos.findIndex(v => v.file === result.originalFile);
-            if (idx !== -1) {
-              videos[idx] = {
-                ...videos[idx],
-                file: result.normalizedFile,
-                progress: 100,
-                statusText: 'Normalizado ✅',
-              };
-            }
+          if (status === 'done') {
+            videos[fileIndex] = { ...videos[fileIndex], progress: 100, statusText: 'Normalizado ✅' };
+          } else {
+            videos[fileIndex] = { ...videos[fileIndex], progress: pct, statusText: 'Normalizando...' };
           }
           updated[sectionIndex] = { ...updated[sectionIndex], videos };
           return updated;
         });
-      } catch (cloudErr) {
-        console.warn('[AutoSubtitles] Cloud preprocess falhou, usando fallback local:', cloudErr);
-
-        await preProcessBatch(rawFiles, section.label, defaultSettings, (fileIndex, status, pct) => {
-          setSections(prev => {
-            const updated = [...prev];
-            const videos = [...updated[sectionIndex].videos];
-            if (status === 'done') {
-              videos[fileIndex] = { ...videos[fileIndex], progress: 100, statusText: 'Normalizado ✅' };
-            } else {
-              videos[fileIndex] = { ...videos[fileIndex], progress: pct, statusText: 'Normalizando local...' };
-            }
-            updated[sectionIndex] = { ...updated[sectionIndex], videos };
-            return updated;
-          });
-        });
-      }
+      });
 
       setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
       const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
