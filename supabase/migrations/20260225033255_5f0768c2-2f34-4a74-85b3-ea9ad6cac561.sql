@@ -1,0 +1,1 @@
+ALTER TABLE public.subscription_plans ADD COLUMN has_auto_subtitles boolean NOT NULL DEFAULT false;
