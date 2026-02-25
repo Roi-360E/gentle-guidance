@@ -118,6 +118,27 @@ export interface WordGroup {
   fullText: string;
 }
 
+/**
+ * Max characters per line to ensure subtitles never exceed 2 lines.
+ * Based on typical 1080px width with Inter Bold at ~5% font size.
+ */
+const MAX_CHARS_PER_LINE = 20;
+
+/**
+ * Format a group of words into at most 2 lines, splitting at the
+ * midpoint when the total length exceeds MAX_CHARS_PER_LINE.
+ */
+function formatTwoLines(words: string[]): string {
+  const full = words.join(' ');
+  if (full.length <= MAX_CHARS_PER_LINE) return full;
+
+  // Split roughly in half by word count
+  const mid = Math.ceil(words.length / 2);
+  const line1 = words.slice(0, mid).join(' ');
+  const line2 = words.slice(mid).join(' ');
+  return line2 ? `${line1}\n${line2}` : line1;
+}
+
 export function splitSegmentsIntoWordGroups(
   segments: TranscriptionSegment[],
   wordsPerGroup: number = 3
@@ -147,7 +168,7 @@ export function splitSegmentsIntoWordGroups(
           highlightIndex: wi,
           fromMs: wordStartMs,
           toMs: wordEndMs,
-          fullText: groupWords.join(' '),
+          fullText: formatTwoLines(groupWords),
         });
       }
     }
@@ -222,7 +243,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
     .map(seg => {
       const start = msToAss(seg.fromMs);
       const end = msToAss(seg.toMs);
-      const text = seg.text.replace(/\n/g, '\\N');
+      // Ensure max 2 lines: split long text at midpoint
+      let text = seg.text.trim();
+      const words = text.split(/\s+/);
+      if (!text.includes('\n') && text.length > MAX_CHARS_PER_LINE && words.length > 1) {
+        const mid = Math.ceil(words.length / 2);
+        text = words.slice(0, mid).join(' ') + '\n' + words.slice(mid).join(' ');
+      }
+      // Limit to 2 lines max
+      const lines = text.split('\n');
+      if (lines.length > 2) {
+        text = lines.slice(0, 2).join('\n');
+      }
+      text = text.replace(/\n/g, '\\N');
       return `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`;
     })
     .join('\n');
