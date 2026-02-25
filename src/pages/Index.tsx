@@ -17,7 +17,7 @@ import {
   type ProcessingSettings,
   type VideoFormat,
 } from '@/lib/video-processor';
-import { cloudPreprocessFiles } from '@/lib/cloud-preprocess';
+
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
@@ -157,48 +157,6 @@ const Index = () => {
     const sectionStart = performance.now();
 
     try {
-      // ─── Cloud pre-processing (server-side, much faster) ───
-      if (settings.useCloud) {
-        console.log(`[Preprocess] ☁️ Using cloud pre-processing for ${sectionLabel}`);
-        
-        setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'processing' as const, preprocessProgress: 10 })));
-
-        const rawFiles = files.map(f => f.file);
-        const results = await cloudPreprocessFiles(rawFiles, settings, (fileIndex, status, pct) => {
-          setter(prev => {
-            const updated = [...prev];
-            const progressMap = { uploading: 10 + pct * 0.3, processing: 40 + pct * 0.4, downloading: 80 + pct * 0.15, done: 100 };
-            const progress = Math.round(progressMap[status] ?? pct);
-            updated[fileIndex] = { ...updated[fileIndex], preprocessProgress: progress };
-            if (status === 'done') {
-              updated[fileIndex] = { ...updated[fileIndex], preprocessStatus: 'done', preprocessProgress: 100 };
-            }
-            return updated;
-          });
-        });
-
-        setter(prev => {
-          const updated = [...prev];
-          for (const result of results) {
-            const idx = updated.findIndex(f => f.file === result.originalFile);
-            if (idx !== -1) {
-              updated[idx] = {
-                ...updated[idx],
-                file: result.normalizedFile,
-                preprocessStatus: 'done',
-                preprocessProgress: 100,
-              };
-            }
-          }
-          return updated;
-        });
-
-        setDone(true);
-        const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
-        toast.success(`${sectionLabel}: normalização na nuvem concluída em ${elapsed}s! ⚡`);
-        return;
-      }
-
       // ─── Local: optimized batch preprocessing (parallel I/O + sequential FFmpeg) ───
       // Mark all files as processing immediately
       setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'processing' as const, preprocessProgress: 5 })));

@@ -303,13 +303,45 @@ export async function preProcessBatch(
   await Promise.all(fetchPromises);
   console.log(`[VideoProcessor] 📦 All ${files.length} files loaded into memory in ${((performance.now() - totalStart) / 1000).toFixed(2)}s`);
 
-  // Now process sequentially on FFmpeg (wasm is single-threaded)
-  const ff = await getFFmpeg();
+  // Process sequentially with memory recycling every 5 files to prevent OOM
+  const RECYCLE_EVERY = 5;
   for (let i = 0; i < files.length; i++) {
     checkAbort(abortSignal);
     onFileProgress?.(i, 'processing', 30);
+
+    // Recycle FFmpeg periodically to free wasm memory
+    if (i > 0 && i % RECYCLE_EVERY === 0) {
+      console.log(`[VideoProcessor] ♻️ Recycling FFmpeg at file ${i} to free memory`);
+      await terminateFFmpeg();
+    }
+
+    const ff = await getFFmpeg();
     const rawName = `raw_batch_${sectionLabel.toLowerCase()}_${i}.mp4`;
-    await preProcessInputCached(ff, files[i], rawName, settings, abortSignal);
+
+    // Retry with FFmpeg restart on OOM
+    const MAX_RETRIES = 3;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const currentFf = await getFFmpeg();
+        await preProcessInputCached(currentFf, files[i], rawName, settings, abortSignal);
+        break;
+      } catch (err) {
+        const isOOM = err instanceof Error && (
+          err.message.includes('memory') || err.message.includes('RuntimeError')
+        );
+        if (isOOM && attempt < MAX_RETRIES) {
+          console.warn(`[VideoProcessor] ⚠️ OOM on file ${i}, recycling FFmpeg (attempt ${attempt}/${MAX_RETRIES})`);
+          await terminateFFmpeg();
+          continue;
+        }
+        if (attempt === MAX_RETRIES) {
+          console.error(`[VideoProcessor] ❌ Failed to process file ${i} after ${MAX_RETRIES} attempts, skipping`);
+          break; // Skip this file instead of crashing the whole batch
+        }
+        throw err;
+      }
+    }
+
     onFileProgress?.(i, 'done', 100);
   }
 
