@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import {
   Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
   Lock, Eye, CheckCircle2, X, Film, Play, Square,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -143,6 +144,31 @@ const AutoSubtitles = () => {
   const hasVideos = totalVideos > 0;
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
+
+  /* ──── Carrossel de preview na etapa de estilo ──── */
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [previewTime, setPreviewTime] = useState(0);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Lista flat de vídeos transcritos para o carrossel
+  const transcribedVideos = useMemo(() =>
+    allVideos.filter(v => v.transcription && v.transcription.segments.length > 0),
+    [allVideos]
+  );
+
+  // Word groups do vídeo atual no carrossel
+  const carouselWordGroups = useMemo(() => {
+    const video = transcribedVideos[carouselIndex];
+    if (!video?.transcription) return [];
+    return splitSegmentsIntoWordGroups(video.transcription.segments, 4);
+  }, [transcribedVideos, carouselIndex]);
+
+  // Word group ativo baseado no tempo do preview
+  const activeWordGroup = useMemo((): WordGroup | null => {
+    if (carouselWordGroups.length === 0) return null;
+    const timeMs = previewTime * 1000;
+    return carouselWordGroups.find(g => timeMs >= g.fromMs && timeMs <= g.toMs) || null;
+  }, [previewTime, carouselWordGroups]);
 
   /* ──── Handlers de Upload ──── */
 
@@ -688,6 +714,116 @@ const AutoSubtitles = () => {
         {/* ════════ STEP 3: Seleção de estilo ════════ */}
         {mainStep === 'style' && (
           <div className="space-y-6">
+            {/* ── Carrossel de preview dos vídeos com legenda ao vivo ── */}
+            {transcribedVideos.length > 0 && selectedStyleObj && (
+              <Card className="border-border bg-card overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Eye className="w-5 h-5 text-primary" /> Preview ao Vivo
+                    </CardTitle>
+                    <span className="text-sm text-muted-foreground font-mono">
+                      {carouselIndex + 1}/{transcribedVideos.length}
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* Player com overlay de legenda */}
+                  {(() => {
+                    const video = transcribedVideos[carouselIndex];
+                    if (!video) return null;
+                    return (
+                      <div className="flex justify-center">
+                        <div
+                          className="relative"
+                          style={{
+                            maxHeight: '450px',
+                            maxWidth: '100%',
+                            aspectRatio: video.dimensions
+                              ? `${video.dimensions.width}/${video.dimensions.height}`
+                              : 'auto',
+                          }}
+                        >
+                          <video
+                            ref={previewVideoRef}
+                            src={video.previewUrl}
+                            controls
+                            className="w-full h-full rounded-lg"
+                            style={{ display: 'block' }}
+                            onTimeUpdate={(e) => setPreviewTime(e.currentTarget.currentTime)}
+                          />
+                          {/* Overlay de legenda sincronizada */}
+                          {activeWordGroup && (
+                            <div
+                              className={`absolute inset-x-0 pointer-events-none px-[5%] text-center ${
+                                subtitlePosition === 'top' ? 'top-[8%]'
+                                : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2'
+                                : 'bottom-[8%]'
+                              }`}
+                            >
+                              <span
+                                className="inline-block max-w-[90%]"
+                                style={{
+                                  backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
+                                    ? selectedStyleObj.colors.bg : 'transparent',
+                                  padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
+                                  borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '8px' : '0',
+                                }}
+                              >
+                                {activeWordGroup.words.map((word, i) => {
+                                  const isHighlighted = i === activeWordGroup.highlightIndex;
+                                  const effects = getTextEffects(selectedStyle, selectedStyleObj.colors);
+                                  return (
+                                    <span
+                                      key={i}
+                                      className="font-black uppercase tracking-wide transition-colors duration-75"
+                                      style={{
+                                        color: isHighlighted
+                                          ? selectedStyleObj.colors.highlight
+                                          : selectedStyleObj.colors.primary,
+                                        fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
+                                        ...effects,
+                                        marginRight: i < activeWordGroup.words.length - 1 ? '0.3em' : '0',
+                                        display: 'inline-block',
+                                        transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
+                                        transition: 'transform 0.1s ease, color 0.1s ease',
+                                      }}
+                                    >
+                                      {word.toUpperCase()}
+                                    </span>
+                                  );
+                                })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Navegação do carrossel */}
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="outline" size="sm" className="rounded-full gap-1"
+                      disabled={carouselIndex <= 0}
+                      onClick={() => { setCarouselIndex(i => i - 1); setPreviewTime(0); }}
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Anterior
+                    </Button>
+                    <p className="text-sm text-muted-foreground truncate max-w-[200px] text-center">
+                      {transcribedVideos[carouselIndex]?.name}
+                    </p>
+                    <Button
+                      variant="outline" size="sm" className="rounded-full gap-1"
+                      disabled={carouselIndex >= transcribedVideos.length - 1}
+                      onClick={() => { setCarouselIndex(i => i + 1); setPreviewTime(0); }}
+                    >
+                      Próximo <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             <Card className="border-border bg-card">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
