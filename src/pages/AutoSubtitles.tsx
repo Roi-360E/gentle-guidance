@@ -107,24 +107,75 @@ function detectVideoDimensions(file: File): Promise<{ width: number; height: num
 const AutoSubtitles = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [plan, setPlan] = useState<string>('free');
+  const [hasAccess, setHasAccess] = useState(false);
+  const [allowedPlanNames, setAllowedPlanNames] = useState<string[]>([]);
+  const [isAccessLoading, setIsAccessLoading] = useState(true);
 
-  // Carregar plano do usuário
+  // Carregar acesso de legendas automáticas baseado na configuração do plano
   useEffect(() => {
-    if (!user) return;
-    const monthYear = new Date().toISOString().slice(0, 7);
-    supabase
-      .from('video_usage')
-      .select('plan')
-      .eq('user_id', user.id)
-      .eq('month_year', monthYear)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setPlan(data.plan);
-      });
-  }, [user]);
+    let isMounted = true;
 
-  const hasAccess = plan === 'professional' || plan === 'enterprise';
+    const loadAccess = async () => {
+      if (!user) {
+        if (!isMounted) return;
+        setHasAccess(false);
+        setAllowedPlanNames([]);
+        setIsAccessLoading(false);
+        return;
+      }
+
+      setIsAccessLoading(true);
+      const monthYear = new Date().toISOString().slice(0, 7);
+
+      const [usageRes, enabledPlansRes] = await Promise.all([
+        supabase
+          .from('video_usage')
+          .select('plan')
+          .eq('user_id', user.id)
+          .eq('month_year', monthYear)
+          .maybeSingle(),
+        supabase
+          .from('subscription_plans')
+          .select('name')
+          .eq('is_active', true)
+          .eq('has_auto_subtitles', true)
+          .order('sort_order', { ascending: true }),
+      ]);
+
+      if (usageRes.error) {
+        console.error('Erro ao carregar plano atual:', usageRes.error);
+      }
+
+      if (enabledPlansRes.error) {
+        console.error('Erro ao carregar planos com legendas automáticas:', enabledPlansRes.error);
+      }
+
+      const currentPlanKey = usageRes.data?.plan ?? 'free';
+
+      const { data: currentPlan, error: currentPlanError } = await supabase
+        .from('subscription_plans')
+        .select('has_auto_subtitles')
+        .eq('plan_key', currentPlanKey)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (currentPlanError) {
+        console.error('Erro ao validar acesso de legendas automáticas:', currentPlanError);
+      }
+
+      if (!isMounted) return;
+
+      setHasAccess(Boolean(currentPlan?.has_auto_subtitles));
+      setAllowedPlanNames((enabledPlansRes.data ?? []).map((p) => p.name));
+      setIsAccessLoading(false);
+    };
+
+    void loadAccess();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   /* ──── State central do batch ──── */
   const [sections, setSections] = useState<BatchSection[]>([
@@ -608,7 +659,18 @@ const AutoSubtitles = () => {
     };
   }, []);
 
+  const allowedPlansText =
+    allowedPlanNames.length > 0 ? allowedPlanNames.join(', ') : 'nenhum plano ativo no momento';
+
   /* ──── Tela de bloqueio por plano ──── */
+  if (isAccessLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   if (!hasAccess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -618,7 +680,7 @@ const AutoSubtitles = () => {
           </div>
           <h2 className="text-2xl font-bold text-foreground">Recurso Exclusivo</h2>
           <p className="text-muted-foreground">
-            As Legendas Automáticas estão disponíveis apenas para os planos <strong>Profissional</strong> e <strong>Empresarial</strong>.
+            As Legendas Automáticas estão disponíveis para os planos: <strong>{allowedPlansText}</strong>.
           </p>
           <div className="flex gap-3 justify-center">
             <Button variant="outline" onClick={() => navigate('/')}>
