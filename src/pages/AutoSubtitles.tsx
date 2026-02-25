@@ -11,7 +11,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import {
   Select,
@@ -24,7 +27,7 @@ import { Label } from '@/components/ui/label';
 import {
   Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
   Lock, Eye, CheckCircle2, X, Film, Play, Square, Clock,
-  ChevronLeft, ChevronRight, AlertCircle,
+  ChevronLeft, ChevronRight, AlertCircle, Bold, Palette, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -133,6 +136,9 @@ const AutoSubtitles = () => {
   const [selectedStyle, setSelectedStyle] = useState('classic');
   const [subtitlePosition, setSubtitlePosition] = useState<'bottom' | 'center' | 'top'>('bottom');
   const [fontSizePct, setFontSizePct] = useState(5);
+  const [useBold, setUseBold] = useState(true);
+  const [customPrimaryColor, setCustomPrimaryColor] = useState('');
+  const [customHighlightColor, setCustomHighlightColor] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
   const [overallStatus, setOverallStatus] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -156,6 +162,16 @@ const AutoSubtitles = () => {
   const allPreprocessed = sectionPreprocessed.every(Boolean) && hasVideos;
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
+
+  // Effective colors (custom overrides style defaults)
+  const effectiveColors = useMemo(() => {
+    if (!selectedStyleObj) return { primary: '#FFFFFF', highlight: '#FFD700', outline: '#000000', bg: 'transparent' };
+    return {
+      ...selectedStyleObj.colors,
+      primary: customPrimaryColor || selectedStyleObj.colors.primary,
+      highlight: customHighlightColor || selectedStyleObj.colors.highlight,
+    };
+  }, [selectedStyleObj, customPrimaryColor, customHighlightColor]);
 
   /* ──── Carrossel de preview na etapa de estilo ──── */
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -416,12 +432,12 @@ const AutoSubtitles = () => {
         const burnOptions = {
           segments: video.transcription!.segments,
           style: {
-            fontColor: style.colors.primary,
-            highlightColor: style.colors.highlight,
-            borderColor: style.colors.outline,
-            bgColor: style.colors.bg,
+            fontColor: effectiveColors.primary,
+            highlightColor: effectiveColors.highlight,
+            borderColor: effectiveColors.outline,
+            bgColor: effectiveColors.bg,
             borderW: selectedStyle === 'minimal' ? 2 : selectedStyle === 'neon' ? 7 : 5,
-            bold: true,
+            bold: useBold,
           },
           fontSizePct,
           position: subtitlePosition,
@@ -494,7 +510,45 @@ const AutoSubtitles = () => {
     setOverallStatus('');
     setIsProcessing(false);
     cancelRef.current = false;
+    setCustomPrimaryColor('');
+    setCustomHighlightColor('');
   }, [allVideos]);
+
+  /* ──── Edição manual da transcrição ──── */
+  const handleUpdateTranscriptionText = useCallback((sectionIdx: number, videoIdx: number, newText: string) => {
+    setSections(prev => {
+      const updated = [...prev];
+      const videos = [...updated[sectionIdx].videos];
+      const video = videos[videoIdx];
+      if (!video.transcription) return prev;
+      
+      // Parse the edited text back into segments preserving timing
+      const lines = newText.split('\n').filter(l => l.trim());
+      const oldSegments = video.transcription.segments;
+      const newSegments = lines.map((line, i) => {
+        const existing = oldSegments[i];
+        if (existing) {
+          return { ...existing, text: line.trim() };
+        }
+        // New lines beyond original segments: use last segment's timing
+        const last = oldSegments[oldSegments.length - 1];
+        return {
+          from: last?.from || '00:00:00.000',
+          to: last?.to || '00:00:01.000',
+          fromMs: last?.fromMs || 0,
+          toMs: last?.toMs || 1000,
+          text: line.trim(),
+        };
+      });
+      
+      videos[videoIdx] = {
+        ...video,
+        transcription: { ...video.transcription, segments: newSegments },
+      };
+      updated[sectionIdx] = { ...updated[sectionIdx], videos };
+      return updated;
+    });
+  }, []);
 
   /* ──── Efeito de estilo para preview ──── */
   const getTextEffects = useCallback((styleId: string, colors: typeof SUBTITLE_STYLES[0]['colors']) => {
@@ -919,23 +973,23 @@ const AutoSubtitles = () => {
                               <span
                                 className="inline-block max-w-[90%]"
                                 style={{
-                                  backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
-                                    ? selectedStyleObj.colors.bg : 'transparent',
-                                  padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
-                                  borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '8px' : '0',
+                                  backgroundColor: effectiveColors.bg !== 'transparent'
+                                    ? effectiveColors.bg : 'transparent',
+                                  padding: effectiveColors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
+                                  borderRadius: effectiveColors.bg !== 'transparent' ? '8px' : '0',
                                 }}
                               >
                                 {activeWordGroup.words.map((word, i) => {
                                   const isHighlighted = i === activeWordGroup.highlightIndex;
-                                  const effects = getTextEffects(selectedStyle, selectedStyleObj.colors);
+                                  const effects = getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors });
                                   return (
                                     <span
                                       key={i}
-                                      className="font-black uppercase tracking-wide transition-colors duration-75"
+                                      className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide transition-colors duration-75`}
                                       style={{
                                         color: isHighlighted
-                                          ? selectedStyleObj.colors.highlight
-                                          : selectedStyleObj.colors.primary,
+                                          ? effectiveColors.highlight
+                                          : effectiveColors.primary,
                                         fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
                                         ...effects,
                                         marginRight: i < activeWordGroup.words.length - 1 ? '0.3em' : '0',
@@ -979,6 +1033,52 @@ const AutoSubtitles = () => {
                 </CardContent>
               </Card>
             )}
+
+            {/* ── Editor de Transcrição ── */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Pencil className="w-5 h-5 text-primary" /> Editar Legendas
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  Corrija a transcrição gerada pela IA. Cada linha será um segmento de legenda.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="max-h-[400px] overflow-y-auto space-y-4 pr-1">
+                  {sections.map((section, si) => {
+                    const vidsWithTranscription = section.videos
+                      .map((v, vi) => ({ v, vi }))
+                      .filter(({ v }) => v.transcription && v.transcription.segments.length > 0);
+                    if (vidsWithTranscription.length === 0) return null;
+                    return (
+                      <div key={si} className="space-y-3">
+                        <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${section.accentColor}`} />
+                          {section.label}
+                        </h4>
+                        {vidsWithTranscription.map(({ v, vi }) => (
+                          <div key={vi} className="space-y-1.5">
+                            <Label className="text-xs text-foreground flex items-center gap-1.5">
+                              <Film className="w-3 h-3" />
+                              {v.name}
+                            </Label>
+                            <Textarea
+                              className="min-h-[80px] text-sm font-mono bg-muted/30 border-border"
+                              value={v.transcription!.segments.map(s => s.text).join('\n')}
+                              onChange={(e) => handleUpdateTranscriptionText(si, vi, e.target.value)}
+                              placeholder="Uma linha por segmento de legenda..."
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Estilo das Legendas ── */}
             <Card className="border-border bg-card">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -987,19 +1087,19 @@ const AutoSubtitles = () => {
               </CardHeader>
               <CardContent className="space-y-5">
                 {/* Grid de estilos */}
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
                   {SUBTITLE_STYLES.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => setSelectedStyle(s.id)}
-                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all ${
+                      onClick={() => { setSelectedStyle(s.id); setCustomPrimaryColor(''); setCustomHighlightColor(''); }}
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all ${
                         selectedStyle === s.id
                           ? 'border-primary bg-primary/10 scale-105'
                           : 'border-border hover:border-primary/40'
                       }`}
                     >
                       <span className="text-2xl">{s.preview}</span>
-                      <span className="text-xs font-medium text-foreground">{s.name}</span>
+                      <span className="text-[10px] sm:text-xs font-medium text-foreground leading-tight text-center">{s.name}</span>
                     </button>
                   ))}
                 </div>
@@ -1007,31 +1107,31 @@ const AutoSubtitles = () => {
                 {/* Preview estático */}
                 {selectedStyleObj && (
                   <div
-                    className="rounded-xl bg-black relative overflow-hidden flex items-end justify-center"
-                    style={{ minHeight: '120px', padding: '16px' }}
+                    className="rounded-xl relative overflow-hidden flex items-end justify-center"
+                    style={{ minHeight: '120px', padding: '16px', backgroundColor: '#000' }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
                     <div className="relative z-10 text-center">
                       <span
                         className="inline-block"
                         style={{
-                          backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
-                            ? selectedStyleObj.colors.bg : 'transparent',
-                          padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 14px' : '0',
+                          backgroundColor: effectiveColors.bg !== 'transparent'
+                            ? effectiveColors.bg : 'transparent',
+                          padding: effectiveColors.bg !== 'transparent' ? '4px 14px' : '0',
                           borderRadius: '6px',
                         }}
                       >
                         {['ESCALE', 'SEUS', 'CRIATIVOS', 'AGORA'].map((word, i) => {
                           const isHighlighted = i === 0;
-                          const effects = getTextEffects(selectedStyle, selectedStyleObj.colors);
+                          const effects = getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors });
                           return (
                             <span
                               key={i}
-                              className="font-black uppercase tracking-wide"
+                              className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide`}
                               style={{
                                 color: isHighlighted
-                                  ? selectedStyleObj.colors.highlight
-                                  : selectedStyleObj.colors.primary,
+                                  ? effectiveColors.highlight
+                                  : effectiveColors.primary,
                                 fontSize: '28px',
                                 ...effects,
                                 marginRight: i < 3 ? '6px' : '0',
@@ -1045,6 +1145,59 @@ const AutoSubtitles = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Negrito toggle */}
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <Bold className="w-4 h-4 text-foreground" />
+                    <Label className="cursor-pointer">Texto em Negrito</Label>
+                  </div>
+                  <Switch checked={useBold} onCheckedChange={setUseBold} />
+                </div>
+
+                {/* Cores personalizadas */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-primary" />
+                    <Label className="text-sm font-semibold">Cores Personalizadas</Label>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Cor do Texto</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={effectiveColors.primary}
+                          onChange={(e) => setCustomPrimaryColor(e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={customPrimaryColor || selectedStyleObj?.colors.primary || ''}
+                          onChange={(e) => setCustomPrimaryColor(e.target.value)}
+                          placeholder={selectedStyleObj?.colors.primary}
+                          className="font-mono text-xs h-10"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Cor do Destaque</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={effectiveColors.highlight}
+                          onChange={(e) => setCustomHighlightColor(e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={customHighlightColor || selectedStyleObj?.colors.highlight || ''}
+                          onChange={(e) => setCustomHighlightColor(e.target.value)}
+                          placeholder={selectedStyleObj?.colors.highlight}
+                          className="font-mono text-xs h-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Posição & Tamanho */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

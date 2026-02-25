@@ -61,6 +61,48 @@ export const SUBTITLE_STYLES: SubtitleStyle[] = [
     preview: '🎤',
     colors: { primary: '#FFFFFF', highlight: '#00FF88', outline: '#000000', bg: 'transparent' },
   },
+  {
+    id: 'glitch',
+    name: 'Glitch',
+    description: 'Efeito digital distorcido — cyberpunk',
+    preview: '👾',
+    colors: { primary: '#00FFFF', highlight: '#FF0066', outline: '#110033', bg: 'transparent' },
+  },
+  {
+    id: 'pastel',
+    name: 'Pastel',
+    description: 'Cores suaves com fundo arredondado — aesthetic',
+    preview: '🌸',
+    colors: { primary: '#2D2D2D', highlight: '#FF69B4', outline: '#00000000', bg: '#FFFFFFDD' },
+  },
+  {
+    id: 'retro',
+    name: 'Retrô',
+    description: 'Estilo VHS vintage — nostalgia',
+    preview: '📼',
+    colors: { primary: '#FFE066', highlight: '#FF6B6B', outline: '#1A1A2E', bg: 'transparent' },
+  },
+  {
+    id: 'gradient',
+    name: 'Gradiente',
+    description: 'Azul para rosa — moderno e vibrante',
+    preview: '🌈',
+    colors: { primary: '#4FC3F7', highlight: '#E040FB', outline: '#000000', bg: 'transparent' },
+  },
+  {
+    id: 'comic',
+    name: 'HQ / Comic',
+    description: 'Estilo quadrinho com fundo colorido',
+    preview: '💥',
+    colors: { primary: '#000000', highlight: '#FF0000', outline: '#FFFFFF', bg: '#FFEB3BEE' },
+  },
+  {
+    id: 'luxury',
+    name: 'Luxo',
+    description: 'Dourado elegante — premium e sofisticado',
+    preview: '👑',
+    colors: { primary: '#F5E6CA', highlight: '#FFD700', outline: '#3D2B1F', bg: 'transparent' },
+  },
 ];
 
 /**
