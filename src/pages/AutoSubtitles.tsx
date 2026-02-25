@@ -292,17 +292,6 @@ const AutoSubtitles = () => {
       toast.warning(`${section.label}: normalização concluída com avisos.`);
     } finally {
       setPreprocessingSection(null);
-      // Reset status text
-      setSections(prev => {
-        const updated = [...prev];
-        updated[sectionIndex] = {
-          ...updated[sectionIndex],
-          videos: updated[sectionIndex].videos.map(v => ({
-            ...v, progress: 0, statusText: '',
-          })),
-        };
-        return updated;
-      });
     }
   }, [sections]);
 
@@ -666,6 +655,10 @@ const AutoSubtitles = () => {
                             <Wand2 className="w-5 h-5 text-accent shrink-0 mt-0.5" />
                           ) : video.status === 'error' ? (
                             <X className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                          ) : video.statusText === 'Normalizando...' ? (
+                            <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0 mt-0.5" />
+                          ) : sectionPreprocessed[si] ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
                           ) : (
                             <Film className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
                           )}
@@ -691,7 +684,7 @@ const AutoSubtitles = () => {
                           </span>
                           <span className="font-mono text-foreground">#{vi + 1}</span>
                         </div>
-                        {(video.status === 'transcribing' || video.status === 'burning') && (
+                        {(video.status === 'transcribing' || video.status === 'burning' || video.statusText === 'Normalizando...') && (
                           <Progress value={video.progress} className="h-1.5" />
                         )}
                       </div>
