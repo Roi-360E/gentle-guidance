@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,9 +13,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type, Trash2, Lock } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type, Trash2, Lock, Pencil, Eye } from 'lucide-react';
 import { toast } from 'sonner';
-import { extractAudioAsFile, transcribeAudio, type TranscriptionResult } from '@/lib/whisper-transcriber';
+import { extractAudioAsFile, transcribeAudio, type TranscriptionResult, type TranscriptionSegment } from '@/lib/whisper-transcriber';
 import { SUBTITLE_STYLES } from '@/lib/subtitle-styles';
 import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
 
@@ -42,17 +43,28 @@ const AutoSubtitles = () => {
   const hasAccess = plan === 'professional' || plan === 'enterprise';
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
 
   const [step, setStep] = useState<Step>('upload');
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
+  const [editableSegments, setEditableSegments] = useState<TranscriptionSegment[]>([]);
   const [selectedStyle, setSelectedStyle] = useState('classic');
   const [subtitlePosition, setSubtitlePosition] = useState<'bottom' | 'center' | 'top'>('bottom');
-  const [fontSize, setFontSize] = useState(96);
+  const [fontSizePct, setFontSizePct] = useState(5); // 5% of video height
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [showLivePreview, setShowLivePreview] = useState(true);
+
+  // Current subtitle for live preview
+  const currentSubtitle = useMemo(() => {
+    if (!showLivePreview || editableSegments.length === 0) return null;
+    const timeMs = currentTime * 1000;
+    return editableSegments.find(seg => timeMs >= seg.fromMs && timeMs <= seg.toMs) || null;
+  }, [currentTime, editableSegments, showLivePreview]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,7 +75,6 @@ const AutoSubtitles = () => {
       return;
     }
 
-    // Limit 60s
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
@@ -75,6 +86,7 @@ const AutoSubtitles = () => {
       setVideoFile(file);
       setVideoPreviewUrl(URL.createObjectURL(file));
       setTranscription(null);
+      setEditableSegments([]);
       setOutputUrl(null);
       setStep('upload');
     };
@@ -105,6 +117,7 @@ const AutoSubtitles = () => {
       }
 
       setTranscription(result);
+      setEditableSegments([...result.segments]);
       setStep('style');
       toast.success(`Transcrição concluída! ${result.segments.length} segmentos detectados.`);
     } catch (err) {
@@ -114,8 +127,16 @@ const AutoSubtitles = () => {
     }
   }, [videoFile]);
 
+  const handleSegmentTextChange = useCallback((index: number, newText: string) => {
+    setEditableSegments(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], text: newText };
+      return updated;
+    });
+  }, []);
+
   const handleBurnSubtitles = useCallback(async () => {
-    if (!videoFile || !transcription) return;
+    if (!videoFile || editableSegments.length === 0) return;
 
     setStep('burning');
     setProgress(0);
@@ -125,7 +146,7 @@ const AutoSubtitles = () => {
       const style = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
 
       const burnOptions = {
-        segments: transcription.segments,
+        segments: editableSegments,
         style: {
           fontColor: style.colors.primary,
           highlightColor: style.colors.highlight,
@@ -134,7 +155,7 @@ const AutoSubtitles = () => {
           borderW: selectedStyle === 'minimal' ? 2 : selectedStyle === 'neon' ? 7 : 5,
           bold: true,
         },
-        fontSize,
+        fontSizePct,
         position: subtitlePosition,
       };
 
@@ -152,7 +173,7 @@ const AutoSubtitles = () => {
       toast.error('Erro ao gravar legendas. Tente novamente.');
       setStep('style');
     }
-  }, [videoFile, transcription, selectedStyle, fontSize, subtitlePosition]);
+  }, [videoFile, editableSegments, selectedStyle, fontSizePct, subtitlePosition]);
 
   const handleDownload = () => {
     if (!outputUrl || !videoFile) return;
@@ -168,13 +189,44 @@ const AutoSubtitles = () => {
     setVideoFile(null);
     setVideoPreviewUrl(null);
     setTranscription(null);
+    setEditableSegments([]);
     setOutputUrl(null);
     setStep('upload');
     setProgress(0);
     setStatusText('');
+    setCurrentTime(0);
   };
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
+
+  // Live preview subtitle style
+  const liveSubtitleStyle = useMemo(() => {
+    if (!selectedStyleObj) return {};
+    const isMinimal = selectedStyle === 'minimal';
+    const isNeon = selectedStyle === 'neon';
+    const isFire = selectedStyle === 'fire';
+
+    return {
+      color: selectedStyleObj.colors.primary,
+      fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
+      fontWeight: 900,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.05em',
+      WebkitTextStroke: isMinimal ? 'none' : `${isNeon ? 3 : 2}px ${selectedStyleObj.colors.outline}`,
+      textShadow: isNeon
+        ? `0 0 12px ${selectedStyleObj.colors.primary}, 0 0 24px ${selectedStyleObj.colors.outline}, 3px 3px 8px rgba(0,0,0,0.9)`
+        : isFire
+        ? `0 0 10px ${selectedStyleObj.colors.highlight}, 3px 3px 8px rgba(0,0,0,0.9)`
+        : isMinimal
+        ? '0 3px 12px rgba(0,0,0,0.8)'
+        : `3px 3px 8px rgba(0,0,0,0.95), -1px -1px 4px rgba(0,0,0,0.5)`,
+      backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
+        ? selectedStyleObj.colors.bg
+        : 'transparent',
+      padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 12px' : '0',
+      borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '6px' : '0',
+    };
+  }, [selectedStyleObj, selectedStyle, fontSizePct]);
 
   if (!hasAccess) {
     return (
@@ -317,22 +369,85 @@ const AutoSubtitles = () => {
         )}
 
         {/* Style selection step */}
-        {step === 'style' && transcription && (
+        {step === 'style' && editableSegments.length > 0 && (
           <div className="space-y-6">
-            {/* Transcription preview */}
+            {/* Live video preview with subtitle overlay */}
+            {videoPreviewUrl && (
+              <Card className="border-border bg-card overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Eye className="w-5 h-5 text-primary" /> Preview ao Vivo
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowLivePreview(!showLivePreview)}
+                      className={showLivePreview ? 'text-primary' : 'text-muted-foreground'}
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      {showLivePreview ? 'ON' : 'OFF'}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="relative bg-black">
+                    <video
+                      ref={videoPreviewRef}
+                      src={videoPreviewUrl}
+                      controls
+                      className="w-full max-h-[400px] object-contain"
+                      onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    />
+                    {/* Subtitle overlay */}
+                    {currentSubtitle && selectedStyleObj && (
+                      <div
+                        className={`absolute inset-x-0 pointer-events-none px-4 text-center ${
+                          subtitlePosition === 'top' ? 'top-[8%]'
+                          : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2'
+                          : 'bottom-[12%]'
+                        }`}
+                      >
+                        <span
+                          className="inline-block max-w-[90%]"
+                          style={liveSubtitleStyle}
+                        >
+                          {currentSubtitle.text.toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Editable transcription */}
             <Card className="border-border bg-card">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Transcrição ({transcription.segments.length} segmentos)</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Pencil className="w-5 h-5 text-primary" />
+                  Editar Transcrição ({editableSegments.length} segmentos)
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="max-h-40 overflow-y-auto rounded-lg bg-muted/30 p-3 text-sm text-foreground space-y-1">
-                  {transcription.segments.map((seg, i) => (
-                    <p key={i}>
-                      <span className="text-xs text-muted-foreground font-mono mr-2">{seg.from.split(',')[0]}</span>
-                      {seg.text}
-                    </p>
+                <div className="max-h-60 overflow-y-auto rounded-lg bg-muted/30 p-3 space-y-3">
+                  {editableSegments.map((seg, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <span className="text-[10px] text-muted-foreground font-mono mt-2 min-w-[70px] shrink-0">
+                        {seg.from.split(',')[0]}
+                      </span>
+                      <Textarea
+                        value={seg.text}
+                        onChange={(e) => handleSegmentTextChange(i, e.target.value)}
+                        className="min-h-[36px] h-9 py-1.5 text-sm resize-none bg-background border-border"
+                        rows={1}
+                      />
+                    </div>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  ✏️ Clique em qualquer segmento para corrigir o texto antes de gravar
+                </p>
               </CardContent>
             </Card>
 
@@ -344,20 +459,19 @@ const AutoSubtitles = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                   {SUBTITLE_STYLES.map((s) => (
                     <button
                       key={s.id}
                       onClick={() => setSelectedStyle(s.id)}
-                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
+                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all ${
                         selectedStyle === s.id
                           ? 'border-primary bg-primary/10 scale-105'
                           : 'border-border hover:border-primary/40'
                       }`}
                     >
                       <span className="text-2xl">{s.preview}</span>
-                      <span className="text-sm font-medium text-foreground">{s.name}</span>
-                      <span className="text-[10px] text-muted-foreground text-center leading-tight">{s.description}</span>
+                      <span className="text-xs font-medium text-foreground">{s.name}</span>
                     </button>
                   ))}
                 </div>
@@ -377,64 +491,17 @@ const AutoSubtitles = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Tamanho da Fonte</Label>
-                    <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
+                    <Select value={String(fontSizePct)} onValueChange={(v) => setFontSizePct(Number(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="48">Pequeno</SelectItem>
-                        <SelectItem value="64">Médio</SelectItem>
-                        <SelectItem value="96">Grande</SelectItem>
-                        <SelectItem value="128">Extra Grande</SelectItem>
+                        <SelectItem value="3">Pequeno (3%)</SelectItem>
+                        <SelectItem value="5">Médio (5%)</SelectItem>
+                        <SelectItem value="7">Grande (7%)</SelectItem>
+                        <SelectItem value="9">Extra Grande (9%)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-
-                {/* Preview — CapCut style */}
-                {selectedStyleObj && (
-                  <div
-                    className="rounded-xl bg-black relative overflow-hidden"
-                    style={{ minHeight: '200px' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70" />
-                    
-                    <div className={`absolute inset-x-0 ${subtitlePosition === 'top' ? 'top-4' : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-3'} px-4 text-center`}>
-                      <span
-                        className="inline-block px-3 py-1"
-                        style={{
-                          backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
-                            ? selectedStyleObj.colors.bg
-                            : 'transparent',
-                          borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '6px' : '0',
-                        }}
-                      >
-                        {['TEMPLATE', 'DESSE', 'ROBOZINHO'].map((word, i) => (
-                          <span
-                            key={i}
-                            className="font-extrabold uppercase tracking-wide"
-                            style={{
-                              color: i === 1 ? selectedStyleObj.colors.highlight : selectedStyleObj.colors.primary,
-                              fontSize: `${Math.min(fontSize / 1.2, 44)}px`,
-                              WebkitTextStroke: selectedStyleObj.id === 'minimal'
-                                ? 'none'
-                                : `${selectedStyleObj.id === 'neon' ? 2.5 : 2}px ${selectedStyleObj.colors.outline}`,
-                              textShadow: selectedStyleObj.id === 'neon'
-                                ? `0 0 12px ${selectedStyleObj.colors.primary}, 0 0 24px ${selectedStyleObj.colors.outline}`
-                                : selectedStyleObj.id === 'fire'
-                                ? `0 0 10px ${selectedStyleObj.colors.highlight}, 3px 3px 6px #000`
-                                : selectedStyleObj.id === 'minimal'
-                                ? '0 3px 10px rgba(0,0,0,0.7)'
-                                : `3px 3px 6px rgba(0,0,0,0.95)`,
-                              marginRight: '8px',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            {word}
-                          </span>
-                        ))}
-                      </span>
-                    </div>
-                  </div>
-                )}
 
                 <Button
                   onClick={handleBurnSubtitles}

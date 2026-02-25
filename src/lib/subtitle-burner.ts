@@ -1,7 +1,9 @@
 /**
  * CapCut-style subtitle burner using FFmpeg.wasm drawtext filter.
  * Renders bold, UPPERCASE subtitles centered at bottom with strong outline.
- * Optimized for maximum speed (ultrafast preset, low CRF).
+ * 
+ * KEY FIX: fontSize is now calculated as a percentage of video height
+ * to ensure consistent, large, readable text across all resolutions.
  */
 
 import { getFFmpeg } from '@/lib/video-processor';
@@ -18,7 +20,8 @@ interface BurnOptions {
     borderW: number;
     bold: boolean;
   };
-  fontSize: number;
+  /** fontSize as percentage of video height (e.g. 5 = 5%) */
+  fontSizePct: number;
   position: 'bottom' | 'center' | 'top';
 }
 
@@ -27,19 +30,16 @@ const FONT_FS_NAME = 'subtitle_font.ttf';
 
 /**
  * Sanitize text for FFmpeg drawtext — remove ALL problematic characters.
- * This prevents filter parsing errors entirely.
  */
 function sanitizeForDrawtext(text: string): string {
-  // Force uppercase for CapCut style
   let clean = text.toUpperCase().trim();
   // Remove characters that break FFmpeg drawtext parsing
   // Keep only letters, numbers, spaces, and basic punctuation
   clean = clean.replace(/[^A-ZÀ-ÿ0-9 .!?,\-]/gi, '');
-  // Escape remaining special chars for drawtext
+  // Escape special chars for drawtext
   clean = clean.replace(/:/g, '\\:');
   clean = clean.replace(/'/g, '\u2019');
   clean = clean.replace(/%/g, '%%');
-  clean = clean.replace(/\\/g, '\\\\');
   return clean;
 }
 
@@ -49,20 +49,59 @@ function hexToFFmpeg(hex: string): string {
 }
 
 /**
- * Build a single drawtext filter string for all segments.
- * Each segment is a separate drawtext entry chained with commas.
- * Text is forced to UPPERCASE for CapCut style readability.
+ * Probe video dimensions using FFmpeg
  */
-export function buildDrawtextFilter(options: BurnOptions, fontFile: string): string {
-  const { segments, style, fontSize, position } = options;
+async function probeVideoDimensions(ffmpeg: any, inputName: string): Promise<{ width: number; height: number }> {
+  let width = 1080;
+  let height = 1920;
 
-  // Scale fontSize relative to video height (designed for 1920h, scale proportionally)
-  // CapCut positions text near the bottom with generous margin
+  return new Promise((resolve) => {
+    const handler = ({ message }: { message: string }) => {
+      // Match "Stream #0:0: Video: ... 1080x1920" or similar
+      const match = message.match(/(\d{2,5})x(\d{2,5})/);
+      if (match) {
+        const w = Number(match[1]);
+        const h = Number(match[2]);
+        if (w > 100 && h > 100) {
+          width = w;
+          height = h;
+        }
+      }
+    };
+
+    ffmpeg.on('log', handler);
+
+    // Run a quick probe
+    ffmpeg.exec(['-i', inputName, '-f', 'null', '-t', '0.01', '-']).catch(() => {}).finally(() => {
+      ffmpeg.off('log', handler);
+      resolve({ width, height });
+    });
+  });
+}
+
+/**
+ * Build drawtext filter chain for all segments.
+ * fontSize is calculated from video height percentage.
+ */
+export function buildDrawtextFilter(
+  options: BurnOptions,
+  fontFile: string,
+  videoHeight: number,
+): string {
+  const { segments, style, fontSizePct, position } = options;
+
+  // Calculate actual pixel font size from percentage of video height
+  // e.g. 5% of 1920 = 96px, 5% of 1080 = 54px
+  const fontSize = Math.round((fontSizePct / 100) * videoHeight);
+  const borderW = Math.max(style.borderW, Math.round(fontSize * 0.06)); // 6% of font size
+  const shadowDist = Math.max(3, Math.round(fontSize * 0.05));
+  const marginBottom = Math.round(videoHeight * 0.08); // 8% margin from edge
+
   const yExpr = position === 'top'
-    ? `${Math.round(fontSize * 1.2)}`
+    ? `${marginBottom}`
     : position === 'center'
     ? '(h-text_h)/2'
-    : `h-text_h-${Math.round(fontSize * 1.5)}`;
+    : `h-text_h-${marginBottom}`;
 
   const filters: string[] = [];
 
@@ -73,21 +112,16 @@ export function buildDrawtextFilter(options: BurnOptions, fontFile: string): str
     const startSec = (seg.fromMs / 1000).toFixed(3);
     const endSec = (seg.toMs / 1000).toFixed(3);
 
-    // Build the drawtext filter — use semicolons-free, colon-separated format
-    // Scale font dynamically based on video height for consistent visibility
-    const fontSizeExpr = `'if(gt(h,1000),${fontSize},${Math.round(fontSize * 0.6)})'`;
-    const borderW = Math.max(style.borderW, 3); // minimum 3px border for visibility
-
     const parts = [
       `drawtext=fontfile=${fontFile}`,
       `text='${text}'`,
-      `fontsize=${fontSizeExpr}`,
+      `fontsize=${fontSize}`,
       `fontcolor=${hexToFFmpeg(style.fontColor)}`,
       `borderw=${borderW}`,
       `bordercolor=${hexToFFmpeg(style.borderColor)}`,
       `shadowcolor=0x000000@0.9`,
-      `shadowx=4`,
-      `shadowy=4`,
+      `shadowx=${shadowDist}`,
+      `shadowy=${shadowDist}`,
       `x=(w-text_w)/2`,
       `y=${yExpr}`,
       `enable='between(t\\,${startSec}\\,${endSec})'`,
@@ -95,15 +129,15 @@ export function buildDrawtextFilter(options: BurnOptions, fontFile: string): str
 
     // Add background box if style requires it
     if (style.bgColor !== 'transparent' && style.bgColor !== '#00000000') {
+      const boxPad = Math.round(fontSize * 0.2);
       parts.push(`box=1`);
       parts.push(`boxcolor=${hexToFFmpeg(style.bgColor)}@0.8`);
-      parts.push(`boxborderw=12`);
+      parts.push(`boxborderw=${boxPad}`);
     }
 
     filters.push(parts.join(':'));
   }
 
-  // Chain all drawtext filters with comma (FFmpeg filter separator)
   return filters.join(',');
 }
 
@@ -111,9 +145,10 @@ async function loadFontIntoFS(ffmpeg: any): Promise<string> {
   try {
     const fontData = await fetchFile(FONT_PATH);
     await ffmpeg.writeFile(FONT_FS_NAME, fontData);
+    console.log('[SubtitleBurner] Font loaded, size:', fontData.length);
     return FONT_FS_NAME;
   } catch (err) {
-    console.warn('[SubtitleBurner] Failed to load font, using default:', err);
+    console.warn('[SubtitleBurner] Failed to load font:', err);
     return FONT_FS_NAME;
   }
 }
@@ -135,8 +170,13 @@ export async function burnSubtitlesIntoVideo(
   onProgress?.(10, 'Carregando vídeo...');
   await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-  const filterStr = buildDrawtextFilter(options, fontFile);
-  console.log('[SubtitleBurner] Filter segments:', options.segments.length, 'Filter length:', filterStr.length);
+  // Probe video dimensions to calculate correct font size
+  onProgress?.(12, 'Analisando dimensões do vídeo...');
+  const { height: videoHeight } = await probeVideoDimensions(ffmpeg, inputName);
+  console.log('[SubtitleBurner] Video height:', videoHeight, 'fontSizePct:', options.fontSizePct);
+
+  const filterStr = buildDrawtextFilter(options, fontFile, videoHeight);
+  console.log('[SubtitleBurner] Filter segments:', options.segments.length, 'Calculated font size:', Math.round((options.fontSizePct / 100) * videoHeight), 'px');
 
   let duration = 0;
   let lastError = '';
@@ -161,7 +201,6 @@ export async function burnSubtitlesIntoVideo(
   onProgress?.(20, 'Gravando legendas no vídeo...');
 
   try {
-    // Primary: render with drawtext filter
     try {
       await ffmpeg.exec([
         '-i', inputName,
@@ -169,17 +208,16 @@ export async function burnSubtitlesIntoVideo(
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-tune', 'fastdecode',
-        '-crf', '26',
+        '-crf', '24',
         '-c:a', 'copy',
         '-movflags', '+faststart',
         '-y', outputName,
       ]);
     } catch (filterErr) {
-      // Fallback: copy video without subtitles if filter fails
       console.error('[SubtitleBurner] drawtext failed, copying original:', filterErr, 'Last FFmpeg error:', lastError);
       await ffmpeg.exec([
         '-i', inputName,
-        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '26',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24',
         '-c:a', 'copy', '-movflags', '+faststart',
         '-y', outputName,
       ]);
