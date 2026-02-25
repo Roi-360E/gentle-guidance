@@ -29,6 +29,7 @@ interface Plan {
   sort_order: number;
   is_active: boolean;
   has_ai_chat: boolean;
+  has_auto_subtitles: boolean;
 }
 
 interface UserRow {
@@ -99,6 +100,7 @@ export default function AdminPlans() {
         ...p,
         features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
         has_ai_chat: p.has_ai_chat ?? false,
+        has_auto_subtitles: p.has_auto_subtitles ?? false,
       })));
     }
     setLoading(false);
@@ -257,6 +259,7 @@ export default function AdminPlans() {
       sort_order: plans.length,
       is_active: true,
       has_ai_chat: false,
+      has_auto_subtitles: false,
     };
     setPlans([...plans, newPlan]);
   };
@@ -323,6 +326,7 @@ export default function AdminPlans() {
           sort_order: i,
           is_active: plan.is_active,
           has_ai_chat: plan.has_ai_chat,
+          has_auto_subtitles: plan.has_auto_subtitles,
         };
 
         if (plan.id) {
@@ -539,6 +543,15 @@ export default function AdminPlans() {
                         />
                         <Label className="text-xs flex items-center gap-1">
                           <MessageSquare className="w-3 h-3" /> Chat RoteiroPRO IA
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={plan.has_auto_subtitles}
+                          onCheckedChange={v => updatePlan(index, 'has_auto_subtitles', v)}
+                        />
+                        <Label className="text-xs flex items-center gap-1">
+                          Legendas Automáticas
                         </Label>
                       </div>
                     </div>

@@ -215,6 +215,7 @@ export type Database = {
           created_at: string
           features: Json
           has_ai_chat: boolean
+          has_auto_subtitles: boolean
           icon: string
           id: string
           is_active: boolean
@@ -232,6 +233,7 @@ export type Database = {
           created_at?: string
           features?: Json
           has_ai_chat?: boolean
+          has_auto_subtitles?: boolean
           icon?: string
           id?: string
           is_active?: boolean
@@ -249,6 +251,7 @@ export type Database = {
           created_at?: string
           features?: Json
           has_ai_chat?: boolean
+          has_auto_subtitles?: boolean
           icon?: string
           id?: string
           is_active?: boolean
