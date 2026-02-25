@@ -58,6 +58,7 @@ const AutoSubtitles = () => {
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [showLivePreview, setShowLivePreview] = useState(true);
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // Build word groups for live preview
   const wordGroups = useMemo(() => {
@@ -84,17 +85,19 @@ const AutoSubtitles = () => {
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
-      URL.revokeObjectURL(video.src);
       if (video.duration > 120) {
+        URL.revokeObjectURL(video.src);
         toast.error('Vídeo muito longo. Máximo: 2 minutos.');
         return;
       }
+      setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
       setVideoFile(file);
       setVideoPreviewUrl(URL.createObjectURL(file));
       setTranscription(null);
       setEditableSegments([]);
       setOutputUrl(null);
       setStep('upload');
+      URL.revokeObjectURL(video.src);
     };
     video.src = URL.createObjectURL(file);
   }, []);
@@ -192,6 +195,7 @@ const AutoSubtitles = () => {
     setProgress(0);
     setStatusText('');
     setCurrentTime(0);
+    setVideoDimensions(null);
   };
 
   // Get text shadow/stroke style based on selected style
@@ -308,7 +312,18 @@ const AutoSubtitles = () => {
               ) : (
                 <div className="space-y-4">
                   {videoPreviewUrl && (
-                    <video src={videoPreviewUrl} controls className="w-full max-h-[300px] rounded-xl bg-black object-contain" />
+                    <div className="flex justify-center">
+                      <video
+                        src={videoPreviewUrl}
+                        controls
+                        className="rounded-xl bg-black"
+                        style={{
+                          maxHeight: '400px',
+                          maxWidth: '100%',
+                          aspectRatio: videoDimensions ? `${videoDimensions.width}/${videoDimensions.height}` : 'auto',
+                        }}
+                      />
+                    </div>
                   )}
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground truncate">{videoFile.name}</p>
@@ -365,26 +380,34 @@ const AutoSubtitles = () => {
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="p-0">
-                  <div className="relative bg-black">
+                <CardContent className="p-0 flex justify-center bg-muted/30">
+                  <div
+                    className="relative"
+                    style={{
+                      maxHeight: '500px',
+                      maxWidth: '100%',
+                      aspectRatio: videoDimensions ? `${videoDimensions.width}/${videoDimensions.height}` : 'auto',
+                    }}
+                  >
                     <video
                       ref={videoPreviewRef}
                       src={videoPreviewUrl}
                       controls
-                      className="w-full max-h-[450px] object-contain"
+                      className="w-full h-full rounded-none"
+                      style={{ display: 'block' }}
                       onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                     />
-                    {/* Word-by-word subtitle overlay */}
+                    {/* Word-by-word subtitle overlay - positioned inside video bounds */}
                     {currentWordGroup && selectedStyleObj && (
                       <div
-                        className={`absolute inset-x-0 pointer-events-none px-3 text-center transition-all duration-75 ${
+                        className={`absolute inset-x-0 pointer-events-none px-[5%] text-center ${
                           subtitlePosition === 'top' ? 'top-[8%]'
                           : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2'
-                          : 'bottom-[10%]'
+                          : 'bottom-[8%]'
                         }`}
                       >
                         <span
-                          className="inline-block max-w-[95%]"
+                          className="inline-block max-w-[90%]"
                           style={{
                             backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
                               ? selectedStyleObj.colors.bg
@@ -404,7 +427,7 @@ const AutoSubtitles = () => {
                                   color: isHighlighted
                                     ? selectedStyleObj.colors.highlight
                                     : selectedStyleObj.colors.primary,
-                                  fontSize: `clamp(16px, ${fontSizePct * 0.7}vw, 48px)`,
+                                  fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
                                   ...effects,
                                   marginRight: i < currentWordGroup.words.length - 1 ? '0.3em' : '0',
                                   display: 'inline-block',
@@ -581,7 +604,19 @@ const AutoSubtitles = () => {
               <CardTitle className="text-lg text-center">🎉 Vídeo legendado pronto!</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <video src={outputUrl} controls autoPlay className="w-full max-h-[400px] rounded-xl bg-black object-contain" />
+              <div className="flex justify-center">
+                <video
+                  src={outputUrl}
+                  controls
+                  autoPlay
+                  className="rounded-xl bg-black"
+                  style={{
+                    maxHeight: '400px',
+                    maxWidth: '100%',
+                    aspectRatio: videoDimensions ? `${videoDimensions.width}/${videoDimensions.height}` : 'auto',
+                  }}
+                />
+              </div>
               <div className="flex gap-3">
                 <Button
                   onClick={handleDownload}
