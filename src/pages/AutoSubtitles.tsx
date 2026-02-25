@@ -35,6 +35,12 @@ import {
 } from '@/lib/whisper-transcriber';
 import { SUBTITLE_STYLES, splitSegmentsIntoWordGroups, type WordGroup } from '@/lib/subtitle-styles';
 import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
+import {
+  getFFmpeg,
+  preProcessBatch,
+  defaultSettings,
+  type ProcessingSettings,
+} from '@/lib/video-processor';
 
 /* ───────────── Types ───────────── */
 
@@ -136,12 +142,19 @@ const AutoSubtitles = () => {
   // Ref para inputs de file
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
 
+  /* ──── Pré-processamento por seção (mesma lógica do concatenador) ──── */
+  const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
+  const [sectionPreprocessed, setSectionPreprocessed] = useState<boolean[]>([false, false, false]);
+  const [sectionStarted, setSectionStarted] = useState<boolean[]>([false, false, false]);
+  // allPreprocessed computed after hasVideos below
+
   /* ──── Contagens derivadas ──── */
   const allVideos = useMemo(() => sections.flatMap(s => s.videos), [sections]);
   const totalVideos = allVideos.length;
   const transcribedCount = allVideos.filter(v => v.status === 'transcribed' || v.status === 'done').length;
   const doneCount = allVideos.filter(v => v.status === 'done').length;
   const hasVideos = totalVideos > 0;
+  const allPreprocessed = sectionPreprocessed.every(Boolean) && hasVideos;
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
 
@@ -169,6 +182,13 @@ const AutoSubtitles = () => {
     const timeMs = previewTime * 1000;
     return carouselWordGroups.find(g => timeMs >= g.fromMs && timeMs <= g.toMs) || null;
   }, [previewTime, carouselWordGroups]);
+
+  // Eagerly pre-load FFmpeg on first file upload
+  useEffect(() => {
+    if (totalVideos > 0) {
+      getFFmpeg().then(() => console.log('[AutoSubtitles] FFmpeg pre-loaded')).catch(() => {});
+    }
+  }, [totalVideos > 0]);
 
   /* ──── Handlers de Upload ──── */
 
@@ -204,6 +224,9 @@ const AutoSubtitles = () => {
       };
       return updated;
     });
+    // Reset preprocessing for this section when files change
+    setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = false; return u; });
+    setSectionStarted(prev => { const u = [...prev]; u[sectionIndex] = false; return u; });
   }, [sections]);
 
   const handleRemoveFile = useCallback((sectionIndex: number, videoIndex: number) => {
@@ -218,7 +241,70 @@ const AutoSubtitles = () => {
       };
       return updated;
     });
+    // Reset preprocessing for this section
+    setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = false; return u; });
+    setSectionStarted(prev => { const u = [...prev]; u[sectionIndex] = false; return u; });
   }, []);
+
+  /* ──── Pré-processamento por seção (mesma lógica do concatenador) ──── */
+  const handlePreprocessSection = useCallback(async (sectionIndex: number) => {
+    const section = sections[sectionIndex];
+    if (section.videos.length === 0) return;
+
+    setSectionStarted(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
+    setPreprocessingSection(section.label);
+    const sectionStart = performance.now();
+
+    try {
+      // Marcar todos como processing
+      setSections(prev => {
+        const updated = [...prev];
+        updated[sectionIndex] = {
+          ...updated[sectionIndex],
+          videos: updated[sectionIndex].videos.map(v => ({
+            ...v, status: 'idle' as VideoStatus, progress: 5, statusText: 'Normalizando...',
+          })),
+        };
+        return updated;
+      });
+
+      const rawFiles = section.videos.map(v => v.file);
+      await preProcessBatch(rawFiles, section.label, defaultSettings, (fileIndex, status, pct) => {
+        setSections(prev => {
+          const updated = [...prev];
+          const videos = [...updated[sectionIndex].videos];
+          if (status === 'done') {
+            videos[fileIndex] = { ...videos[fileIndex], progress: 100, statusText: 'Normalizado ✅' };
+          } else {
+            videos[fileIndex] = { ...videos[fileIndex], progress: pct, statusText: 'Normalizando...' };
+          }
+          updated[sectionIndex] = { ...updated[sectionIndex], videos };
+          return updated;
+        });
+      });
+
+      setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
+      const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
+      toast.success(`${section.label}: normalização concluída em ${elapsed}s! ✅`);
+    } catch (err) {
+      console.error('Preprocess error:', err);
+      setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
+      toast.warning(`${section.label}: normalização concluída com avisos.`);
+    } finally {
+      setPreprocessingSection(null);
+      // Reset status text
+      setSections(prev => {
+        const updated = [...prev];
+        updated[sectionIndex] = {
+          ...updated[sectionIndex],
+          videos: updated[sectionIndex].videos.map(v => ({
+            ...v, progress: 0, statusText: '',
+          })),
+        };
+        return updated;
+      });
+    }
+  }, [sections]);
 
   /* ──── Helper para atualizar um vídeo específico ──── */
   const updateVideo = useCallback((sectionIdx: number, videoIdx: number, patch: Partial<BatchVideo>) => {
@@ -637,6 +723,35 @@ const AutoSubtitles = () => {
                     />
                   </>
                 )}
+
+                {/* Botão de pré-processamento por seção */}
+                {section.videos.length > 0 && !sectionPreprocessed[si] && (
+                  <Button
+                    className="w-full rounded-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
+                    disabled={preprocessingSection !== null || sectionStarted[si]}
+                    onClick={() => handlePreprocessSection(si)}
+                  >
+                    {preprocessingSection === section.label || sectionStarted[si] ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Pré-processando {section.label.toLowerCase()}...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Pré-processar {section.label}
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                {/* Indicador de seção pronta */}
+                {sectionPreprocessed[si] && section.videos.length > 0 && (
+                  <div className="flex items-center justify-center gap-2 text-sm font-semibold text-green-500 bg-green-500/10 border border-green-500/20 rounded-full py-2 px-4">
+                    <CheckCircle2 className="w-5 h-5" />
+                    Pré-processado!
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -656,9 +771,15 @@ const AutoSubtitles = () => {
               size="lg"
               className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-xl gap-2"
               onClick={handleTranscribeAll}
+              disabled={!allPreprocessed}
             >
               <Wand2 className="w-5 h-5" /> Transcrever Todos com IA
             </Button>
+            {!allPreprocessed && (
+              <p className="text-xs text-muted-foreground text-center">
+                Pré-processe todas as seções acima para habilitar a transcrição
+              </p>
+            )}
           </div>
         )}
 
