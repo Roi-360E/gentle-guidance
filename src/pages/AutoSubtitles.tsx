@@ -545,21 +545,39 @@ const AutoSubtitles = () => {
       const video = videos[videoIdx];
       if (!video.transcription) return prev;
       
-      // Parse the edited text back into segments preserving timing
       const lines = newText.split('\n').filter(l => l.trim());
+      if (lines.length === 0) return prev;
+
       const oldSegments = video.transcription.segments;
+      
+      // Usar o intervalo total do áudio original para redistribuir
+      const totalStartMs = oldSegments[0]?.fromMs ?? 0;
+      const totalEndMs = oldSegments[oldSegments.length - 1]?.toMs ?? 1000;
+      const totalDuration = totalEndMs - totalStartMs;
+      const sliceDuration = totalDuration / lines.length;
+
+      // Helper para formatar ms → SRT timestamp
+      const msToSrt = (ms: number) => {
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        const msPart = Math.round(ms % 1000);
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(msPart).padStart(3, '0')}`;
+      };
+
       const newSegments = lines.map((line, i) => {
-        const existing = oldSegments[i];
-        if (existing) {
-          return { ...existing, text: line.trim() };
+        // Se o número de linhas não mudou, preservar timing original
+        if (lines.length === oldSegments.length && oldSegments[i]) {
+          return { ...oldSegments[i], text: line.trim() };
         }
-        // New lines beyond original segments: use last segment's timing
-        const last = oldSegments[oldSegments.length - 1];
+        // Caso contrário, redistribuir uniformemente
+        const fromMs = Math.round(totalStartMs + i * sliceDuration);
+        const toMs = Math.round(totalStartMs + (i + 1) * sliceDuration);
         return {
-          from: last?.from || '00:00:00.000',
-          to: last?.to || '00:00:01.000',
-          fromMs: last?.fromMs || 0,
-          toMs: last?.toMs || 1000,
+          from: msToSrt(fromMs),
+          to: msToSrt(toMs),
+          fromMs,
+          toMs,
           text: line.trim(),
         };
       });
