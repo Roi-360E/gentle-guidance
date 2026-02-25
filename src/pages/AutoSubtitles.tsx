@@ -1,3 +1,11 @@
+/**
+ * Legendas Automáticas em Massa
+ * 
+ * Fluxo: Upload (3 seções: Ganchos 10, Corpos 5, CTAs 2) → Transcrever → Estilo → Download
+ * Segue a mesma lógica de seções do concatenador (Index.tsx)
+ * Cada vídeo passa por: extração de áudio → transcrição IA → burn de legendas com FFmpeg
+ */
+
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,19 +21,85 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type, Trash2, Lock, Pencil, Eye } from 'lucide-react';
+import {
+  Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
+  Lock, Eye, CheckCircle2, X, Film, Play, Square,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { extractAudioAsFile, transcribeAudio, type TranscriptionResult, type TranscriptionSegment } from '@/lib/whisper-transcriber';
+import {
+  extractAudioAsFile,
+  transcribeAudio,
+  type TranscriptionResult,
+  type TranscriptionSegment,
+} from '@/lib/whisper-transcriber';
 import { SUBTITLE_STYLES, splitSegmentsIntoWordGroups, type WordGroup } from '@/lib/subtitle-styles';
 import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
 
-type Step = 'upload' | 'transcribing' | 'style' | 'burning' | 'done';
+/* ───────────── Types ───────────── */
+
+/** Status de cada vídeo no pipeline */
+type VideoStatus = 'idle' | 'transcribing' | 'transcribed' | 'burning' | 'done' | 'error';
+
+/** Cada vídeo rastreado no batch */
+interface BatchVideo {
+  file: File;
+  name: string;
+  previewUrl: string;
+  status: VideoStatus;
+  progress: number;
+  statusText: string;
+  transcription: TranscriptionResult | null;
+  outputUrl: string | null;
+  /** Dimensões do vídeo (detectadas no upload) */
+  dimensions: { width: number; height: number } | null;
+}
+
+/** Seção do batch (Ganchos, Corpos, CTAs) */
+interface BatchSection {
+  label: string;
+  description: string;
+  maxFiles: number;
+  videos: BatchVideo[];
+  accentColor: string;
+}
+
+/** Steps do fluxo principal */
+type MainStep = 'upload' | 'transcribing' | 'style' | 'burning' | 'done';
+
+/* ───────────── Helpers ───────────── */
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Detecta dimensões de um arquivo de vídeo via elemento <video>
+ */
+function detectVideoDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      resolve({ width: video.videoWidth, height: video.videoHeight });
+      URL.revokeObjectURL(video.src);
+    };
+    video.onerror = () => {
+      resolve({ width: 1080, height: 1920 }); // fallback vertical
+      URL.revokeObjectURL(video.src);
+    };
+    video.src = URL.createObjectURL(file);
+  });
+}
+
+/* ───────────── Component ───────────── */
 
 const AutoSubtitles = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [plan, setPlan] = useState<string>('free');
 
+  // Carregar plano do usuário
   useEffect(() => {
     if (!user) return;
     const monthYear = new Date().toISOString().slice(0, 7);
@@ -41,168 +115,299 @@ const AutoSubtitles = () => {
   }, [user]);
 
   const hasAccess = plan === 'professional' || plan === 'enterprise';
-  const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoPreviewRef = useRef<HTMLVideoElement>(null);
 
-  const [step, setStep] = useState<Step>('upload');
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
-  const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
-  const [editableSegments, setEditableSegments] = useState<TranscriptionSegment[]>([]);
+  /* ──── State central do batch ──── */
+  const [sections, setSections] = useState<BatchSection[]>([
+    { label: 'Ganchos', description: 'Até 10 vídeos de abertura', maxFiles: 10, videos: [], accentColor: 'bg-primary' },
+    { label: 'Corpos', description: 'Até 5 vídeos de conteúdo', maxFiles: 5, videos: [], accentColor: 'bg-accent' },
+    { label: 'CTAs', description: 'Até 2 vídeos de chamada', maxFiles: 2, videos: [], accentColor: 'bg-primary' },
+  ]);
+
+  const [mainStep, setMainStep] = useState<MainStep>('upload');
   const [selectedStyle, setSelectedStyle] = useState('classic');
   const [subtitlePosition, setSubtitlePosition] = useState<'bottom' | 'center' | 'top'>('bottom');
   const [fontSizePct, setFontSizePct] = useState(5);
-  const [progress, setProgress] = useState(0);
-  const [statusText, setStatusText] = useState('');
-  const [outputUrl, setOutputUrl] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [showLivePreview, setShowLivePreview] = useState(true);
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [overallStatus, setOverallStatus] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const cancelRef = useRef(false);
 
-  // Build word groups for live preview
-  const wordGroups = useMemo(() => {
-    if (editableSegments.length === 0) return [];
-    return splitSegmentsIntoWordGroups(editableSegments, 4);
-  }, [editableSegments]);
+  // Ref para inputs de file
+  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
 
-  // Current word group for live preview (with highlight info)
-  const currentWordGroup = useMemo((): WordGroup | null => {
-    if (!showLivePreview || wordGroups.length === 0) return null;
-    const timeMs = currentTime * 1000;
-    return wordGroups.find(g => timeMs >= g.fromMs && timeMs <= g.toMs) || null;
-  }, [currentTime, wordGroups, showLivePreview]);
+  /* ──── Contagens derivadas ──── */
+  const allVideos = useMemo(() => sections.flatMap(s => s.videos), [sections]);
+  const totalVideos = allVideos.length;
+  const transcribedCount = allVideos.filter(v => v.status === 'transcribed' || v.status === 'done').length;
+  const doneCount = allVideos.filter(v => v.status === 'done').length;
+  const hasVideos = totalVideos > 0;
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('video/')) {
-      toast.error('Selecione um arquivo de vídeo');
-      return;
-    }
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      if (video.duration > 120) {
-        URL.revokeObjectURL(video.src);
-        toast.error('Vídeo muito longo. Máximo: 2 minutos.');
-        return;
-      }
-      setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
-      setVideoFile(file);
-      setVideoPreviewUrl(URL.createObjectURL(file));
-      setTranscription(null);
-      setEditableSegments([]);
-      setOutputUrl(null);
-      setStep('upload');
-      URL.revokeObjectURL(video.src);
-    };
-    video.src = URL.createObjectURL(file);
-  }, []);
+  /* ──── Handlers de Upload ──── */
 
-  const handleTranscribe = useCallback(async () => {
-    if (!videoFile) return;
-    setStep('transcribing');
-    setProgress(0);
-    setStatusText('Extraindo áudio do vídeo...');
-    try {
-      const audioFile = await extractAudioAsFile(videoFile);
-      setProgress(20);
-      setStatusText('Áudio extraído. Iniciando transcrição...');
-      const result = await transcribeAudio(audioFile, (pct, status) => {
-        setProgress(20 + pct * 0.8);
-        setStatusText(status);
+  const handleAddFiles = useCallback(async (sectionIndex: number, fileList: FileList | null) => {
+    if (!fileList) return;
+    const section = sections[sectionIndex];
+    const remaining = section.maxFiles - section.videos.length;
+    const newFiles = Array.from(fileList).slice(0, remaining);
+
+    // Validar duração (max 2 min) e detectar dimensões em paralelo
+    const validated: BatchVideo[] = [];
+    for (const file of newFiles) {
+      if (!file.type.startsWith('video/')) continue;
+      const dims = await detectVideoDimensions(file);
+      validated.push({
+        file,
+        name: file.name,
+        previewUrl: URL.createObjectURL(file),
+        status: 'idle',
+        progress: 0,
+        statusText: '',
+        transcription: null,
+        outputUrl: null,
+        dimensions: dims,
       });
-      if (result.segments.length === 0) {
-        toast.error('Nenhuma fala detectada no vídeo. Tente com outro arquivo.');
-        setStep('upload');
-        return;
-      }
-      setTranscription(result);
-      setEditableSegments([...result.segments]);
-      setStep('style');
-      toast.success(`Transcrição concluída! ${result.segments.length} segmentos detectados.`);
-    } catch (err) {
-      console.error('Transcription error:', err);
-      toast.error('Erro na transcrição. Tente novamente.');
-      setStep('upload');
     }
-  }, [videoFile]);
 
-  const handleSegmentTextChange = useCallback((index: number, newText: string) => {
-    setEditableSegments(prev => {
+    setSections(prev => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], text: newText };
+      updated[sectionIndex] = {
+        ...updated[sectionIndex],
+        videos: [...updated[sectionIndex].videos, ...validated],
+      };
+      return updated;
+    });
+  }, [sections]);
+
+  const handleRemoveFile = useCallback((sectionIndex: number, videoIndex: number) => {
+    setSections(prev => {
+      const updated = [...prev];
+      const video = updated[sectionIndex].videos[videoIndex];
+      URL.revokeObjectURL(video.previewUrl);
+      if (video.outputUrl) URL.revokeObjectURL(video.outputUrl);
+      updated[sectionIndex] = {
+        ...updated[sectionIndex],
+        videos: updated[sectionIndex].videos.filter((_, i) => i !== videoIndex),
+      };
       return updated;
     });
   }, []);
 
-  const handleBurnSubtitles = useCallback(async () => {
-    if (!videoFile || editableSegments.length === 0) return;
-    setStep('burning');
-    setProgress(0);
-    setStatusText('Preparando legendas...');
-    try {
-      const style = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
-      const burnOptions = {
-        segments: editableSegments,
-        style: {
-          fontColor: style.colors.primary,
-          highlightColor: style.colors.highlight,
-          borderColor: style.colors.outline,
-          bgColor: style.colors.bg,
-          borderW: selectedStyle === 'minimal' ? 2 : selectedStyle === 'neon' ? 7 : 5,
-          bold: true,
-        },
-        fontSizePct,
-        position: subtitlePosition,
-        wordsPerGroup: 4,
-      };
-      const outputBlob = await burnSubtitlesIntoVideo(videoFile, burnOptions, (pct, status) => {
-        setProgress(pct);
-        setStatusText(status);
-      });
-      const url = URL.createObjectURL(outputBlob);
-      setOutputUrl(url);
-      setStep('done');
-      toast.success('Legendas gravadas com sucesso! 🎉');
-    } catch (err) {
-      console.error('Burn subtitles error:', err);
-      toast.error('Erro ao gravar legendas. Tente novamente.');
-      setStep('style');
+  /* ──── Helper para atualizar um vídeo específico ──── */
+  const updateVideo = useCallback((sectionIdx: number, videoIdx: number, patch: Partial<BatchVideo>) => {
+    setSections(prev => {
+      const updated = [...prev];
+      const videos = [...updated[sectionIdx].videos];
+      videos[videoIdx] = { ...videos[videoIdx], ...patch };
+      updated[sectionIdx] = { ...updated[sectionIdx], videos };
+      return updated;
+    });
+  }, []);
+
+  /* ──── STEP 2: Transcrição em batch ──── */
+  const handleTranscribeAll = useCallback(async () => {
+    if (totalVideos === 0) return;
+    setMainStep('transcribing');
+    setIsProcessing(true);
+    cancelRef.current = false;
+    setOverallProgress(0);
+    setOverallStatus('Iniciando transcrição em lote...');
+
+    let completed = 0;
+
+    // Processar seção por seção, vídeo por vídeo (para não sobrecarregar)
+    for (let si = 0; si < sections.length; si++) {
+      const section = sections[si];
+      for (let vi = 0; vi < section.videos.length; vi++) {
+        if (cancelRef.current) break;
+        const video = section.videos[vi];
+        if (video.status === 'transcribed' || video.status === 'done') {
+          completed++;
+          continue;
+        }
+
+        updateVideo(si, vi, {
+          status: 'transcribing',
+          progress: 10,
+          statusText: 'Extraindo áudio...',
+        });
+
+        try {
+          // Extrair áudio
+          const audioFile = await extractAudioAsFile(video.file);
+
+          if (cancelRef.current) break;
+
+          updateVideo(si, vi, { progress: 30, statusText: 'Transcrevendo com IA...' });
+
+          // Transcrever
+          const result = await transcribeAudio(audioFile, (pct, status) => {
+            updateVideo(si, vi, {
+              progress: 30 + pct * 0.6,
+              statusText: status,
+            });
+          });
+
+          if (result.segments.length === 0) {
+            updateVideo(si, vi, {
+              status: 'error',
+              progress: 100,
+              statusText: 'Nenhuma fala detectada',
+            });
+          } else {
+            updateVideo(si, vi, {
+              status: 'transcribed',
+              progress: 100,
+              statusText: `${result.segments.length} segmentos`,
+              transcription: result,
+            });
+          }
+        } catch (err) {
+          console.error(`Transcription error [${section.label} #${vi + 1}]:`, err);
+          updateVideo(si, vi, {
+            status: 'error',
+            progress: 100,
+            statusText: 'Erro na transcrição',
+          });
+        }
+
+        completed++;
+        const pct = Math.round((completed / totalVideos) * 100);
+        setOverallProgress(pct);
+        setOverallStatus(`Transcrito ${completed}/${totalVideos} vídeos`);
+      }
+      if (cancelRef.current) break;
     }
-  }, [videoFile, editableSegments, selectedStyle, fontSizePct, subtitlePosition]);
 
-  const handleDownload = () => {
-    if (!outputUrl || !videoFile) return;
+    setIsProcessing(false);
+    if (!cancelRef.current) {
+      setMainStep('style');
+      toast.success(`Transcrição concluída! ${completed} vídeos processados.`);
+    } else {
+      setMainStep('upload');
+      toast.info('Transcrição cancelada.');
+    }
+  }, [sections, totalVideos, updateVideo]);
+
+  /* ──── STEP 4: Burn legendas em batch ──── */
+  const handleBurnAll = useCallback(async () => {
+    const style = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
+    setMainStep('burning');
+    setIsProcessing(true);
+    cancelRef.current = false;
+    setOverallProgress(0);
+
+    // Filtrar apenas vídeos com transcrição bem-sucedida
+    const videosToProcess: { si: number; vi: number; video: BatchVideo }[] = [];
+    sections.forEach((sec, si) => {
+      sec.videos.forEach((v, vi) => {
+        if (v.transcription && v.transcription.segments.length > 0) {
+          videosToProcess.push({ si, vi, video: v });
+        }
+      });
+    });
+
+    let completed = 0;
+
+    for (const { si, vi, video } of videosToProcess) {
+      if (cancelRef.current) break;
+
+      updateVideo(si, vi, {
+        status: 'burning',
+        progress: 5,
+        statusText: 'Gravando legendas...',
+      });
+
+      try {
+        const burnOptions = {
+          segments: video.transcription!.segments,
+          style: {
+            fontColor: style.colors.primary,
+            highlightColor: style.colors.highlight,
+            borderColor: style.colors.outline,
+            bgColor: style.colors.bg,
+            borderW: selectedStyle === 'minimal' ? 2 : selectedStyle === 'neon' ? 7 : 5,
+            bold: true,
+          },
+          fontSizePct,
+          position: subtitlePosition,
+          wordsPerGroup: 4,
+        };
+
+        const outputBlob = await burnSubtitlesIntoVideo(video.file, burnOptions, (pct, status) => {
+          updateVideo(si, vi, { progress: pct, statusText: status });
+        });
+
+        const url = URL.createObjectURL(outputBlob);
+        updateVideo(si, vi, {
+          status: 'done',
+          progress: 100,
+          statusText: 'Pronto!',
+          outputUrl: url,
+        });
+      } catch (err) {
+        console.error(`Burn error [${sections[si].label} #${vi + 1}]:`, err);
+        updateVideo(si, vi, {
+          status: 'error',
+          progress: 100,
+          statusText: 'Erro ao gravar legendas',
+        });
+      }
+
+      completed++;
+      const pct = Math.round((completed / videosToProcess.length) * 100);
+      setOverallProgress(pct);
+      setOverallStatus(`Legendado ${completed}/${videosToProcess.length} vídeos`);
+    }
+
+    setIsProcessing(false);
+    if (!cancelRef.current) {
+      setMainStep('done');
+      toast.success(`🎉 Legendas gravadas em ${completed} vídeos!`);
+    } else {
+      setMainStep('style');
+      toast.info('Processamento cancelado.');
+    }
+  }, [sections, selectedStyle, fontSizePct, subtitlePosition, updateVideo]);
+
+  /* ──── Cancelar processamento ──── */
+  const handleCancel = useCallback(() => {
+    cancelRef.current = true;
+  }, []);
+
+  /* ──── Download individual e em lote ──── */
+  const handleDownload = useCallback((video: BatchVideo) => {
+    if (!video.outputUrl) return;
     const a = document.createElement('a');
-    a.href = outputUrl;
-    a.download = `legendado_${videoFile.name}`;
+    a.href = video.outputUrl;
+    a.download = `legendado_${video.name}`;
     a.click();
-  };
+  }, []);
 
-  const handleReset = () => {
-    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-    if (outputUrl) URL.revokeObjectURL(outputUrl);
-    setVideoFile(null);
-    setVideoPreviewUrl(null);
-    setTranscription(null);
-    setEditableSegments([]);
-    setOutputUrl(null);
-    setStep('upload');
-    setProgress(0);
-    setStatusText('');
-    setCurrentTime(0);
-    setVideoDimensions(null);
-  };
+  const handleDownloadAll = useCallback(() => {
+    allVideos.filter(v => v.outputUrl).forEach(handleDownload);
+  }, [allVideos, handleDownload]);
 
-  // Get text shadow/stroke style based on selected style
+  /* ──── Reset total ──── */
+  const handleReset = useCallback(() => {
+    allVideos.forEach(v => {
+      URL.revokeObjectURL(v.previewUrl);
+      if (v.outputUrl) URL.revokeObjectURL(v.outputUrl);
+    });
+    setSections(prev => prev.map(s => ({ ...s, videos: [] })));
+    setMainStep('upload');
+    setOverallProgress(0);
+    setOverallStatus('');
+    setIsProcessing(false);
+    cancelRef.current = false;
+  }, [allVideos]);
+
+  /* ──── Efeito de estilo para preview ──── */
   const getTextEffects = useCallback((styleId: string, colors: typeof SUBTITLE_STYLES[0]['colors']) => {
-    const isMinimal = styleId === 'minimal';
     const isNeon = styleId === 'neon';
     const isFire = styleId === 'fire';
+    const isMinimal = styleId === 'minimal';
     return {
       WebkitTextStroke: isMinimal ? 'none' : `${isNeon ? 3 : 2}px ${colors.outline}`,
       textShadow: isNeon
@@ -215,6 +420,7 @@ const AutoSubtitles = () => {
     };
   }, []);
 
+  /* ──── Tela de bloqueio por plano ──── */
   if (!hasAccess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -243,15 +449,15 @@ const AutoSubtitles = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Type className="w-7 h-7 text-primary" />
             <div>
               <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-primary uppercase">
-                Legendas Automáticas
+                Legendas em Massa
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground">
-                Profissional & Empresarial • Destaque palavra por palavra
+                Ganchos + Corpos + CTAs • Destaque palavra por palavra
               </p>
             </div>
           </div>
@@ -261,21 +467,21 @@ const AutoSubtitles = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6">
+      <main className="max-w-6xl mx-auto px-4 py-6 sm:py-8 space-y-6">
         {/* Step indicator */}
-        <div className="flex items-center justify-center gap-2 text-sm">
+        <div className="flex items-center justify-center gap-2 text-sm flex-wrap">
           {[
             { key: 'upload', label: '1. Upload' },
             { key: 'transcribing', label: '2. Transcrever' },
             { key: 'style', label: '3. Estilo' },
             { key: 'done', label: '4. Download' },
           ].map((s, i) => {
-            const steps: Step[] = ['upload', 'transcribing', 'style', 'done'];
-            const currentIdx = steps.indexOf(step === 'burning' ? 'done' : step);
+            const steps: MainStep[] = ['upload', 'transcribing', 'style', 'done'];
+            const currentIdx = steps.indexOf(mainStep === 'burning' ? 'done' : mainStep);
             const isActive = i <= currentIdx;
             return (
               <div key={s.key} className="flex items-center gap-2">
-                {i > 0 && <div className={`w-8 h-0.5 ${isActive ? 'bg-primary' : 'bg-border'}`} />}
+                {i > 0 && <div className={`w-6 sm:w-8 h-0.5 ${isActive ? 'bg-primary' : 'bg-border'}`} />}
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                   {s.label}
                 </span>
@@ -284,200 +490,204 @@ const AutoSubtitles = () => {
           })}
         </div>
 
-        {/* Upload step */}
-        {step === 'upload' && (
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="w-5 h-5 text-primary" /> Envie seu vídeo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-              {!videoFile ? (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary/50 transition-colors"
-                >
-                  <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-foreground font-medium">Clique para selecionar um vídeo</p>
-                  <p className="text-sm text-muted-foreground mt-1">MP4, MOV, WebM • Máx. 2 minutos</p>
-                </button>
-              ) : (
-                <div className="space-y-4">
-                  {videoPreviewUrl && (
-                    <div className="flex justify-center">
-                      <video
-                        src={videoPreviewUrl}
-                        controls
-                        className="rounded-xl bg-black"
-                        style={{
-                          maxHeight: '400px',
-                          maxWidth: '100%',
-                          aspectRatio: videoDimensions ? `${videoDimensions.width}/${videoDimensions.height}` : 'auto',
-                        }}
-                      />
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground truncate">{videoFile.name}</p>
-                    <Button variant="ghost" size="sm" onClick={handleReset}>
-                      <Trash2 className="w-4 h-4 mr-1" /> Trocar vídeo
-                    </Button>
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex items-center gap-3">
+            <div className="bg-primary/10 rounded-lg p-2">
+              <Upload className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-xl sm:text-2xl font-bold">{totalVideos}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Enviados</p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex items-center gap-3">
+            <div className="bg-accent/10 rounded-lg p-2">
+              <Wand2 className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
+            </div>
+            <div>
+              <p className="text-xl sm:text-2xl font-bold">{transcribedCount}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Transcritos</p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex items-center gap-3">
+            <div className="bg-primary/10 rounded-lg p-2">
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
+            </div>
+            <div>
+              <p className="text-xl sm:text-2xl font-bold">{doneCount}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Legendados</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ════════ STEP 1: Upload — 3 seções ════════ */}
+        {(mainStep === 'upload') && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {sections.map((section, si) => (
+              <div key={section.label} className="rounded-xl border border-border bg-card p-5 space-y-4">
+                {/* Header da seção */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-card-foreground text-lg flex items-center gap-2">
+                      <span className={`inline-block w-3 h-3 rounded-full ${section.accentColor}`} />
+                      {section.label}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">{section.description}</p>
                   </div>
-                  <Button
-                    onClick={handleTranscribe}
-                    className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-full"
-                    size="lg"
-                  >
-                    <Wand2 className="w-5 h-5 mr-2" /> Transcrever Áudio com IA
-                  </Button>
+                  <span className="text-sm font-mono text-muted-foreground">
+                    {section.videos.length}/{section.maxFiles}
+                  </span>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+
+                {/* Lista de arquivos */}
+                {section.videos.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {section.videos.map((video, vi) => (
+                      <div key={vi} className="rounded-lg bg-muted/50 border border-border p-3 space-y-2 relative group">
+                        <div className="flex items-start gap-2">
+                          {video.status === 'done' ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                          ) : video.status === 'transcribing' || video.status === 'burning' ? (
+                            <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0 mt-0.5" />
+                          ) : video.status === 'transcribed' ? (
+                            <Wand2 className="w-5 h-5 text-accent shrink-0 mt-0.5" />
+                          ) : video.status === 'error' ? (
+                            <X className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                          ) : (
+                            <Film className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{video.name}</p>
+                            {video.statusText && (
+                              <p className="text-[10px] text-muted-foreground truncate">{video.statusText}</p>
+                            )}
+                          </div>
+                          {!isProcessing && (
+                            <Button
+                              variant="ghost" size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                              onClick={() => handleRemoveFile(si, vi)}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span className="inline-flex items-center bg-background border border-border rounded-md px-2 py-0.5 font-mono text-foreground">
+                            {formatFileSize(video.file.size)}
+                          </span>
+                          <span className="font-mono text-foreground">#{vi + 1}</span>
+                        </div>
+                        {(video.status === 'transcribing' || video.status === 'burning') && (
+                          <Progress value={video.progress} className="h-1.5" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Botão de upload */}
+                {section.videos.length < section.maxFiles && (
+                  <>
+                    <button
+                      onClick={() => fileInputRefs.current[si]?.click()}
+                      className="w-full border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer"
+                    >
+                      <Upload className="w-7 h-7" />
+                      <span className="text-sm font-medium">Enviar vídeos</span>
+                      <span className="text-xs">MP4, MOV, WebM</span>
+                    </button>
+                    <input
+                      ref={el => { fileInputRefs.current[si] = el; }}
+                      type="file"
+                      accept="video/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        handleAddFiles(si, e.target.files);
+                        e.target.value = '';
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
         )}
 
-        {/* Transcribing step */}
-        {step === 'transcribing' && (
+        {/* Botão para iniciar transcrição */}
+        {mainStep === 'upload' && hasVideos && (
+          <div className="max-w-md mx-auto space-y-3">
+            <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">Total de vídeos para legendar:</p>
+              <p className="text-5xl font-extrabold text-primary">{totalVideos}</p>
+              <p className="text-sm text-muted-foreground">
+                {sections.map(s => `${s.videos.length} ${s.label.toLowerCase()}`).join(' + ')}
+              </p>
+            </div>
+            <Button
+              size="lg"
+              className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-xl gap-2"
+              onClick={handleTranscribeAll}
+            >
+              <Wand2 className="w-5 h-5" /> Transcrever Todos com IA
+            </Button>
+          </div>
+        )}
+
+        {/* ════════ STEP 2: Transcrição em andamento ════════ */}
+        {mainStep === 'transcribing' && (
           <Card className="border-border bg-card">
-            <CardContent className="py-12 text-center space-y-6">
-              <Loader2 className="w-12 h-12 mx-auto text-primary animate-spin" />
-              <div className="space-y-2">
-                <p className="text-foreground font-medium">{statusText}</p>
-                <Progress value={progress} className="max-w-md mx-auto" />
-                <p className="text-xs text-muted-foreground">{Math.round(progress)}%</p>
+            <CardContent className="py-8 space-y-6">
+              <div className="text-center space-y-2">
+                <Loader2 className="w-12 h-12 mx-auto text-primary animate-spin" />
+                <p className="text-foreground font-medium">{overallStatus}</p>
+                <Progress value={overallProgress} className="max-w-md mx-auto" />
+                <p className="text-xs text-muted-foreground">{overallProgress}%</p>
+              </div>
+
+              {/* Grid de status por vídeo */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                {sections.map((section, si) => (
+                  <div key={si} className="space-y-2">
+                    <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${section.accentColor}`} />
+                      {section.label}
+                    </h4>
+                    {section.videos.map((v, vi) => (
+                      <div key={vi} className="flex items-center gap-2 text-xs p-2 rounded-lg bg-muted/30">
+                        {v.status === 'transcribed' || v.status === 'done' ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                        ) : v.status === 'transcribing' ? (
+                          <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+                        ) : v.status === 'error' ? (
+                          <X className="w-4 h-4 text-destructive shrink-0" />
+                        ) : (
+                          <Film className="w-4 h-4 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="truncate flex-1 text-foreground">{v.name}</span>
+                        {v.status === 'transcribing' && (
+                          <span className="text-muted-foreground">{Math.round(v.progress)}%</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center">
+                <Button variant="destructive" onClick={handleCancel} className="rounded-xl">
+                  <Square className="w-4 h-4 mr-2" /> Cancelar
+                </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Style selection step */}
-        {step === 'style' && editableSegments.length > 0 && (
+        {/* ════════ STEP 3: Seleção de estilo ════════ */}
+        {mainStep === 'style' && (
           <div className="space-y-6">
-            {/* Live video preview with word-by-word subtitle overlay */}
-            {videoPreviewUrl && (
-              <Card className="border-border bg-card overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Eye className="w-5 h-5 text-primary" /> Preview ao Vivo
-                    </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowLivePreview(!showLivePreview)}
-                      className={showLivePreview ? 'text-primary' : 'text-muted-foreground'}
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      {showLivePreview ? 'ON' : 'OFF'}
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 flex justify-center bg-muted/30">
-                  <div
-                    className="relative"
-                    style={{
-                      maxHeight: '500px',
-                      maxWidth: '100%',
-                      aspectRatio: videoDimensions ? `${videoDimensions.width}/${videoDimensions.height}` : 'auto',
-                    }}
-                  >
-                    <video
-                      ref={videoPreviewRef}
-                      src={videoPreviewUrl}
-                      controls
-                      className="w-full h-full rounded-none"
-                      style={{ display: 'block' }}
-                      onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                    />
-                    {/* Word-by-word subtitle overlay - positioned inside video bounds */}
-                    {currentWordGroup && selectedStyleObj && (
-                      <div
-                        className={`absolute inset-x-0 pointer-events-none px-[5%] text-center ${
-                          subtitlePosition === 'top' ? 'top-[8%]'
-                          : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2'
-                          : 'bottom-[8%]'
-                        }`}
-                      >
-                        <span
-                          className="inline-block max-w-[90%]"
-                          style={{
-                            backgroundColor: selectedStyleObj.colors.bg !== 'transparent'
-                              ? selectedStyleObj.colors.bg
-                              : 'transparent',
-                            padding: selectedStyleObj.colors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
-                            borderRadius: selectedStyleObj.colors.bg !== 'transparent' ? '8px' : '0',
-                          }}
-                        >
-                          {currentWordGroup.words.map((word, i) => {
-                            const isHighlighted = i === currentWordGroup.highlightIndex;
-                            const effects = getTextEffects(selectedStyle, selectedStyleObj.colors);
-                            return (
-                              <span
-                                key={i}
-                                className="font-black uppercase tracking-wide transition-colors duration-75"
-                                style={{
-                                  color: isHighlighted
-                                    ? selectedStyleObj.colors.highlight
-                                    : selectedStyleObj.colors.primary,
-                                  fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
-                                  ...effects,
-                                  marginRight: i < currentWordGroup.words.length - 1 ? '0.3em' : '0',
-                                  display: 'inline-block',
-                                  transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
-                                  transition: 'transform 0.1s ease, color 0.1s ease',
-                                }}
-                              >
-                                {word.toUpperCase()}
-                              </span>
-                            );
-                          })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Editable transcription */}
-            <Card className="border-border bg-card">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Pencil className="w-5 h-5 text-primary" />
-                  Editar Transcrição ({editableSegments.length} segmentos)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-60 overflow-y-auto rounded-lg bg-muted/30 p-3 space-y-3">
-                  {editableSegments.map((seg, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <span className="text-[10px] text-muted-foreground font-mono mt-2 min-w-[70px] shrink-0">
-                        {seg.from.split(',')[0]}
-                      </span>
-                      <Textarea
-                        value={seg.text}
-                        onChange={(e) => handleSegmentTextChange(i, e.target.value)}
-                        className="min-h-[36px] h-9 py-1.5 text-sm resize-none bg-background border-border"
-                        rows={1}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  ✏️ Clique em qualquer segmento para corrigir o texto antes de gravar
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Style picker */}
             <Card className="border-border bg-card">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -485,6 +695,7 @@ const AutoSubtitles = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
+                {/* Grid de estilos */}
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                   {SUBTITLE_STYLES.map((s) => (
                     <button
@@ -502,7 +713,7 @@ const AutoSubtitles = () => {
                   ))}
                 </div>
 
-                {/* Static style preview */}
+                {/* Preview estático */}
                 {selectedStyleObj && (
                   <div
                     className="rounded-xl bg-black relative overflow-hidden flex items-end justify-center"
@@ -519,7 +730,7 @@ const AutoSubtitles = () => {
                           borderRadius: '6px',
                         }}
                       >
-                        {['achar', 'que', 'precisa', 'saber'].map((word, i) => {
+                        {['ESCALE', 'SEUS', 'CRIATIVOS', 'AGORA'].map((word, i) => {
                           const isHighlighted = i === 0;
                           const effects = getTextEffects(selectedStyle, selectedStyleObj.colors);
                           return (
@@ -535,7 +746,7 @@ const AutoSubtitles = () => {
                                 marginRight: i < 3 ? '6px' : '0',
                               }}
                             >
-                              {word.toUpperCase()}
+                              {word}
                             </span>
                           );
                         })}
@@ -544,7 +755,7 @@ const AutoSubtitles = () => {
                   </div>
                 )}
 
-                {/* Position & Size */}
+                {/* Posição & Tamanho */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Posição</Label>
@@ -572,65 +783,131 @@ const AutoSubtitles = () => {
                 </div>
 
                 <Button
-                  onClick={handleBurnSubtitles}
+                  onClick={handleBurnAll}
                   className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-full"
                   size="lg"
                 >
-                  <Wand2 className="w-5 h-5 mr-2" /> Gravar Legendas no Vídeo
+                  <Wand2 className="w-5 h-5 mr-2" /> Gravar Legendas em {allVideos.filter(v => v.transcription).length} Vídeos
                 </Button>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Burning step */}
-        {step === 'burning' && (
+        {/* ════════ STEP 3.5: Burning em andamento ════════ */}
+        {mainStep === 'burning' && (
           <Card className="border-border bg-card">
-            <CardContent className="py-12 text-center space-y-6">
-              <Loader2 className="w-12 h-12 mx-auto text-primary animate-spin" />
-              <div className="space-y-2">
-                <p className="text-foreground font-medium">{statusText}</p>
-                <Progress value={progress} className="max-w-md mx-auto" />
-                <p className="text-xs text-muted-foreground">{Math.round(progress)}%</p>
+            <CardContent className="py-8 space-y-6">
+              <div className="text-center space-y-2">
+                <Loader2 className="w-12 h-12 mx-auto text-primary animate-spin" />
+                <p className="text-foreground font-medium">{overallStatus}</p>
+                <Progress value={overallProgress} className="max-w-md mx-auto" />
+                <p className="text-xs text-muted-foreground">{overallProgress}%</p>
+              </div>
+
+              {/* Status por vídeo */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                {sections.map((section, si) => (
+                  <div key={si} className="space-y-2">
+                    <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${section.accentColor}`} />
+                      {section.label}
+                    </h4>
+                    {section.videos.map((v, vi) => (
+                      <div key={vi} className="flex items-center gap-2 text-xs p-2 rounded-lg bg-muted/30">
+                        {v.status === 'done' ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                        ) : v.status === 'burning' ? (
+                          <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+                        ) : v.status === 'error' ? (
+                          <X className="w-4 h-4 text-destructive shrink-0" />
+                        ) : (
+                          <Film className="w-4 h-4 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="truncate flex-1 text-foreground">{v.name}</span>
+                        {v.status === 'burning' && (
+                          <span className="text-muted-foreground">{Math.round(v.progress)}%</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center">
+                <Button variant="destructive" onClick={handleCancel} className="rounded-xl">
+                  <Square className="w-4 h-4 mr-2" /> Cancelar
+                </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Done step */}
-        {step === 'done' && outputUrl && (
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle className="text-lg text-center">🎉 Vídeo legendado pronto!</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-center">
-                <video
-                  src={outputUrl}
-                  controls
-                  autoPlay
-                  className="rounded-xl bg-black"
-                  style={{
-                    maxHeight: '400px',
-                    maxWidth: '100%',
-                    aspectRatio: videoDimensions ? `${videoDimensions.width}/${videoDimensions.height}` : 'auto',
-                  }}
-                />
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  onClick={handleDownload}
-                  className="flex-1 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-full"
-                  size="lg"
-                >
-                  <Download className="w-5 h-5 mr-2" /> Baixar Vídeo
-                </Button>
-                <Button variant="outline" onClick={handleReset} className="rounded-full" size="lg">
-                  Novo Vídeo
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        {/* ════════ STEP 4: Resultados / Downloads ════════ */}
+        {mainStep === 'done' && (
+          <div className="space-y-6">
+            {/* Botão download all + reset */}
+            <div className="flex gap-3 justify-center">
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-full gap-2"
+                onClick={handleDownloadAll}
+              >
+                <Download className="w-5 h-5" /> Baixar Todos ({doneCount})
+              </Button>
+              <Button variant="outline" size="lg" className="rounded-full" onClick={handleReset}>
+                Novo Lote
+              </Button>
+            </div>
+
+            {/* Grid de vídeos prontos por seção */}
+            {sections.map((section, si) => {
+              const doneVideos = section.videos.filter(v => v.status === 'done');
+              if (doneVideos.length === 0) return null;
+              return (
+                <Card key={si} className="border-border bg-card">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${section.accentColor}`} />
+                      {section.label} ({doneVideos.length} legendados)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {section.videos.map((video, vi) => {
+                        if (video.status !== 'done' || !video.outputUrl) return null;
+                        return (
+                          <div key={vi} className="rounded-xl border border-border bg-muted/30 overflow-hidden">
+                            <video
+                              src={video.outputUrl}
+                              controls
+                              className="w-full bg-black"
+                              style={{
+                                maxHeight: '280px',
+                                aspectRatio: video.dimensions
+                                  ? `${video.dimensions.width}/${video.dimensions.height}`
+                                  : 'auto',
+                              }}
+                            />
+                            <div className="p-3 flex items-center justify-between">
+                              <p className="text-sm font-medium text-foreground truncate flex-1">{video.name}</p>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="text-primary shrink-0"
+                                onClick={() => handleDownload(video)}
+                              >
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         )}
       </main>
     </div>
