@@ -23,13 +23,12 @@ import {
 import { Label } from '@/components/ui/label';
 import {
   Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
-  Lock, Eye, CheckCircle2, X, Film, Play, Square,
-  ChevronLeft, ChevronRight,
+  Lock, Eye, CheckCircle2, X, Film, Play, Square, Clock,
+  ChevronLeft, ChevronRight, AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  extractAudioAsFile,
-  transcribeAudio,
+  transcribeVideo,
   type TranscriptionResult,
   type TranscriptionSegment,
 } from '@/lib/whisper-transcriber';
@@ -306,7 +305,7 @@ const AutoSubtitles = () => {
     });
   }, []);
 
-  /* ──── STEP 2: Transcrição em batch ──── */
+  /* ──── STEP 2: Transcrição em batch (envio direto ao Gemini, sem extração de áudio) ──── */
   const handleTranscribeAll = useCallback(async () => {
     if (totalVideos === 0) return;
     setMainStep('transcribing');
@@ -317,7 +316,7 @@ const AutoSubtitles = () => {
 
     let completed = 0;
 
-    // Processar seção por seção, vídeo por vídeo (para não sobrecarregar)
+    // Processar seção por seção, vídeo por vídeo
     for (let si = 0; si < sections.length; si++) {
       const section = sections[si];
       for (let vi = 0; vi < section.videos.length; vi++) {
@@ -331,21 +330,14 @@ const AutoSubtitles = () => {
         updateVideo(si, vi, {
           status: 'transcribing',
           progress: 10,
-          statusText: 'Extraindo áudio...',
+          statusText: 'Enviando para IA...',
         });
 
         try {
-          // Extrair áudio
-          const audioFile = await extractAudioAsFile(video.file);
-
-          if (cancelRef.current) break;
-
-          updateVideo(si, vi, { progress: 30, statusText: 'Transcrevendo com IA...' });
-
-          // Transcrever
-          const result = await transcribeAudio(audioFile, (pct, status) => {
+          // Enviar vídeo diretamente ao Gemini (sem extração de áudio)
+          const result = await transcribeVideo(video.file, (pct, status) => {
             updateVideo(si, vi, {
-              progress: 30 + pct * 0.6,
+              progress: pct,
               statusText: status,
             });
           });
@@ -776,53 +768,102 @@ const AutoSubtitles = () => {
           </div>
         )}
 
-        {/* ════════ STEP 2: Transcrição em andamento ════════ */}
+        {/* ════════ STEP 2: Transcrição — Layout estilo CombinationList ════════ */}
         {mainStep === 'transcribing' && (
-          <Card className="border-border bg-card">
-            <CardContent className="py-8 space-y-6">
-              <div className="text-center space-y-2">
-                <Loader2 className="w-12 h-12 mx-auto text-primary animate-spin" />
-                <p className="text-foreground font-medium">{overallStatus}</p>
-                <Progress value={overallProgress} className="max-w-md mx-auto" />
-                <p className="text-xs text-muted-foreground">{overallProgress}%</p>
+          <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-lg text-foreground">
+                  Transcrição ({totalVideos} vídeos)
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {transcribedCount} concluído(s) · {allVideos.filter(v => v.status === 'error').length > 0 ? `${allVideos.filter(v => v.status === 'error').length} erro(s) · ` : ''}{totalVideos - transcribedCount - allVideos.filter(v => v.status === 'error').length} restante(s)
+                </p>
               </div>
+            </div>
 
-              {/* Grid de status por vídeo */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                {sections.map((section, si) => (
-                  <div key={si} className="space-y-2">
-                    <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${section.accentColor}`} />
-                      {section.label}
-                    </h4>
-                    {section.videos.map((v, vi) => (
-                      <div key={vi} className="flex items-center gap-2 text-xs p-2 rounded-lg bg-muted/30">
-                        {v.status === 'transcribed' || v.status === 'done' ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                        ) : v.status === 'transcribing' ? (
-                          <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
-                        ) : v.status === 'error' ? (
-                          <X className="w-4 h-4 text-destructive shrink-0" />
-                        ) : (
-                          <Film className="w-4 h-4 text-muted-foreground shrink-0" />
-                        )}
-                        <span className="truncate flex-1 text-foreground">{v.name}</span>
-                        {v.status === 'transcribing' && (
-                          <span className="text-muted-foreground">{Math.round(v.progress)}%</span>
-                        )}
-                      </div>
-                    ))}
+            {/* Overall progress */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Progresso geral</span>
+                <span>{overallProgress}%</span>
+              </div>
+              <Progress value={overallProgress} className="h-2" />
+            </div>
+
+            {/* Current processing item highlight */}
+            {(() => {
+              const processingVideo = allVideos.find(v => v.status === 'transcribing');
+              if (!processingVideo) return null;
+              return (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                    <span className="text-sm font-medium text-primary">
+                      Transcrevendo: {processingVideo.name}
+                    </span>
+                    <span className="ml-auto text-sm font-bold text-primary">
+                      {processingVideo.progress > 0 ? `${Math.round(processingVideo.progress)}%` : 'Iniciando...'}
+                    </span>
                   </div>
-                ))}
-              </div>
+                  <Progress value={processingVideo.progress > 0 ? processingVideo.progress : undefined} className={`h-1.5 ${processingVideo.progress === 0 ? 'animate-pulse' : ''}`} />
+                  <p className="text-xs text-muted-foreground">
+                    {processingVideo.statusText || 'Enviando para IA...'}
+                  </p>
+                </div>
+              );
+            })()}
 
-              <div className="text-center">
-                <Button variant="destructive" onClick={handleCancel} className="rounded-xl">
-                  <Square className="w-4 h-4 mr-2" /> Cancelar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            {/* Scrollable list */}
+            <div className="max-h-[400px] overflow-y-auto space-y-1.5 pr-1">
+              {sections.map((section, si) => (
+                section.videos.map((v, vi) => (
+                  <div
+                    key={`${si}-${vi}`}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all ${
+                      v.status === 'transcribing' ? 'bg-primary/10 border border-primary/30 ring-1 ring-primary/20' :
+                      v.status === 'error' ? 'bg-destructive/10 border border-destructive/30' :
+                      v.status === 'transcribed' || v.status === 'done' ? 'bg-accent/10 border border-accent/30' :
+                      'bg-muted/30'
+                    }`}
+                  >
+                    {v.status === 'idle' && <Clock className="w-4 h-4 text-muted-foreground shrink-0" />}
+                    {v.status === 'transcribing' && <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />}
+                    {(v.status === 'transcribed' || v.status === 'done') && <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />}
+                    {v.status === 'error' && <AlertCircle className="w-4 h-4 text-destructive shrink-0" />}
+
+                    <span className="font-mono truncate flex-1 text-xs text-foreground">
+                      {v.name}
+                    </span>
+
+                    <span className="text-muted-foreground text-xs hidden sm:inline">
+                      {section.label}
+                    </span>
+
+                    {v.status === 'transcribing' && (
+                      <span className="text-primary text-xs font-semibold">{Math.round(v.progress)}%</span>
+                    )}
+
+                    {v.status === 'transcribed' && v.transcription && (
+                      <span className="text-accent text-xs">{v.transcription.segments.length} seg.</span>
+                    )}
+
+                    {v.status === 'error' && (
+                      <span className="text-destructive text-xs truncate max-w-[150px]">{v.statusText}</span>
+                    )}
+                  </div>
+                ))
+              ))}
+            </div>
+
+            {/* Cancel button */}
+            <div className="text-center">
+              <Button variant="destructive" onClick={handleCancel} className="rounded-xl w-full max-w-xs">
+                <Square className="w-4 h-4 mr-2" /> Cancelar
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* ════════ STEP 3: Seleção de estilo ════════ */}
