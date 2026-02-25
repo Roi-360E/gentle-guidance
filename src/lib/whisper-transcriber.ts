@@ -41,8 +41,8 @@ export function msToAss(ms: number): string {
 }
 
 /**
- * Extract audio from video as a WAV File object using FFmpeg.wasm
- * @deprecated Use transcribeVideo() para enviar o vídeo diretamente ao Gemini
+ * Extract audio from video as a lightweight WAV (mono 16kHz, ~200KB)
+ * Used to avoid memory limits on the edge function.
  */
 export async function extractAudioAsFile(videoFile: File): Promise<File> {
   const { getFFmpeg } = await import('@/lib/video-processor');
@@ -77,17 +77,22 @@ export async function extractAudioAsFile(videoFile: File): Promise<File> {
 }
 
 /**
- * Transcreve um vídeo enviando-o diretamente ao Gemini (sem extração de áudio).
- * Isso elimina o gargalo do FFmpeg.wasm e reduz o tempo total para < 3s.
+ * Transcreve um vídeo extraindo áudio leve (mono 16kHz) antes de enviar ao Gemini.
+ * Isso evita "Memory limit exceeded" na edge function.
  */
 export async function transcribeVideo(
   videoFile: File,
   onProgress?: (pct: number, status: string) => void,
 ): Promise<TranscriptionResult> {
-  onProgress?.(10, 'Enviando vídeo para transcrição...');
+  onProgress?.(5, 'Extraindo áudio do vídeo...');
+
+  // Extrair áudio leve (~200KB) via FFmpeg.wasm (já pré-carregado)
+  const audioFile = await extractAudioAsFile(videoFile);
+
+  onProgress?.(30, 'Enviando áudio para transcrição...');
 
   const formData = new FormData();
-  formData.append('video', videoFile);
+  formData.append('audio', audioFile);
 
   const { data: { session } } = await supabase.auth.getSession();
 
