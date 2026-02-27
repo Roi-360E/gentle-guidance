@@ -686,3 +686,50 @@ export function revokeBlobUrls(combinations: Combination[]): void {
     }
   }
 }
+
+/**
+ * Remove existing subtitles from a video using FFmpeg's delogo filter.
+ * Applies interpolation-based removal to the bottom region of the video.
+ *
+ * @param file - The video file to process
+ * @param regionPct - Percentage of video height from the bottom to clean (default 15%)
+ * @param videoDimensions - Video width/height (needed to calculate the region)
+ * @returns A new File with subtitles removed
+ */
+export async function removeSubtitlesFromFile(
+  file: File,
+  regionPct: number = 15,
+  videoDimensions: { width: number; height: number },
+): Promise<File> {
+  const ff = await getFFmpeg();
+  const inputName = `delogo_in_${Date.now()}.mp4`;
+  const outputName = `delogo_out_${Date.now()}.mp4`;
+
+  const data = await fetchFileCached(file);
+  await ff.writeFile(inputName, data);
+
+  const { width, height } = videoDimensions;
+  const regionH = Math.round(height * (regionPct / 100));
+  const regionY = height - regionH;
+
+  // delogo filter: interpolates the region to remove text
+  const exitCode = await ff.exec([
+    '-i', inputName,
+    '-vf', `delogo=x=0:y=${regionY}:w=${width}:h=${regionH}:show=0`,
+    '-c:a', 'copy',
+    '-preset', 'ultrafast',
+    '-y', outputName,
+  ]);
+
+  try { await ff.deleteFile(inputName); } catch {}
+
+  if (exitCode !== 0) {
+    throw new Error(`Falha ao remover legendas de ${file.name}`);
+  }
+
+  const outputData = await ff.readFile(outputName);
+  try { await ff.deleteFile(outputName); } catch {}
+
+  const blob = new Blob([new Uint8Array(outputData as Uint8Array)], { type: 'video/mp4' });
+  return new File([blob], file.name, { type: 'video/mp4' });
+}
