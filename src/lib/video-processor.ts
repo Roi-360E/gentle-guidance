@@ -240,12 +240,14 @@ export async function preProcessInputCached(
   }
 
   // ─── Re-encode with optional scaling (done ONCE per unique file, so concat can stream-copy) ───
-  const vf = scale ? [`-vf`, `scale=${scale}:flags=fast_bilinear,setsar=1`] : [];
+  // Use 'neighbor' (nearest-neighbor) scaling — fastest possible in FFmpeg.wasm
+  const vf = scale ? [`-vf`, `scale=${scale}:flags=neighbor,setsar=1`] : [];
   const args: string[] = ['-i', rawName,
     ...vf,
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode',
-    '-crf', '28', '-r', '24', '-g', '48', '-bf', '0',
-    '-c:a', 'aac', '-b:a', '96k', '-ar', '44100', '-ac', '2',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
+    '-crf', '35', '-r', '24', '-g', '24', '-bf', '0',
+    '-x264-params', 'ref=1:me=dia:subme=0:trellis=0:8x8dct=0:weightp=0',
+    '-c:a', 'aac', '-b:a', '64k', '-ar', '22050', '-ac', '1',
     '-threads', '0', '-movflags', '+faststart', '-y', outputName,
   ];
 
@@ -255,8 +257,10 @@ export async function preProcessInputCached(
   if (exitCode !== 0) {
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
     const args2: string[] = ['-i', rawName, ...vf,
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode',
-      '-crf', '28', '-r', '24', '-an', '-threads', '0',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
+      '-crf', '35', '-r', '24', '-g', '24', '-bf', '0',
+      '-x264-params', 'ref=1:me=dia:subme=0:trellis=0:8x8dct=0:weightp=0',
+      '-an', '-threads', '0',
       '-movflags', '+faststart', '-y', outputName,
     ];
     exitCode = await ff.exec(args2);
