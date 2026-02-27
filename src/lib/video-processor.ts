@@ -408,21 +408,24 @@ export async function concatenateVideos(
 
       const outputFile = `out_${combination.id}.mp4`;
       const scale = getScale(settings);
+      // Speed-optimized encoding params: max speed, acceptable quality
+      const FAST_ENC = ['-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '36', '-r', '24', '-g', '48', '-bf', '0', '-threads', '0'];
+      const FAST_AUDIO = ['-c:a', 'aac', '-b:a', '64k', '-ar', '22050', '-ac', '1'];
 
       let exitCode: number;
 
       if (scale) {
-        // When scaling is needed (e.g. vertical/story), use filter_complex to scale + concat
+        // Scale + concat in one pass
         console.log(`[VideoProcessor] Concat with scale=${scale} for combo ${combination.id}`);
         exitCode = await ff.exec([
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
           '-filter_complex',
-          `[0:v]scale=${scale},setsar=1[v0];` +
-          `[1:v]scale=${scale},setsar=1[v1];` +
-          `[2:v]scale=${scale},setsar=1[v2];` +
+          `[0:v]scale=${scale}:flags=fast_bilinear,setsar=1[v0];` +
+          `[1:v]scale=${scale}:flags=fast_bilinear,setsar=1[v1];` +
+          `[2:v]scale=${scale}:flags=fast_bilinear,setsar=1[v2];` +
           `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+          ...FAST_ENC, ...FAST_AUDIO,
           '-movflags', '+faststart', '-y', outputFile,
         ]);
         checkAbort(abortSignal);
@@ -432,18 +435,18 @@ export async function concatenateVideos(
           exitCode = await ff.exec([
             '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
             '-filter_complex',
-            `[0:v]scale=${scale},setsar=1[v0];` +
-            `[1:v]scale=${scale},setsar=1[v1];` +
-            `[2:v]scale=${scale},setsar=1[v2];` +
+            `[0:v]scale=${scale}:flags=fast_bilinear,setsar=1[v0];` +
+            `[1:v]scale=${scale}:flags=fast_bilinear,setsar=1[v1];` +
+            `[2:v]scale=${scale}:flags=fast_bilinear,setsar=1[v2];` +
             `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            ...FAST_ENC, '-an',
             '-movflags', '+faststart', '-y', outputFile,
           ]);
           checkAbort(abortSignal);
         }
       } else {
-        // No scaling needed – try fast stream copy concat first
+        // No scaling – try fast stream copy concat first
         const concatList = `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`;
         await ff.writeFile('concat.txt', concatList);
 
@@ -460,7 +463,7 @@ export async function concatenateVideos(
             '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
             '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
             '-map', '[outv]', '-map', '[outa]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+            ...FAST_ENC, ...FAST_AUDIO,
             '-y', outputFile,
           ]);
           checkAbort(abortSignal);
@@ -472,7 +475,7 @@ export async function concatenateVideos(
             '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
             '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            ...FAST_ENC, '-an',
             '-y', outputFile,
           ]);
           checkAbort(abortSignal);
@@ -498,18 +501,20 @@ export async function concatenateVideos(
 
       const scale = getScale(settings);
       const outputFile = 'output.mp4';
+      const FAST_ENC = ['-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '36', '-r', '24', '-g', '48', '-bf', '0', '-threads', '0'];
+      const FAST_AUDIO = ['-c:a', 'aac', '-b:a', '64k', '-ar', '22050', '-ac', '1'];
       let exitCode: number;
 
       if (scale) {
         exitCode = await ff.exec([
           '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
           '-filter_complex',
-          `[0:v]scale=${scale},setsar=1[v0];` +
-          `[1:v]scale=${scale},setsar=1[v1];` +
-          `[2:v]scale=${scale},setsar=1[v2];` +
+          `[0:v]scale=${scale}:flags=fast_bilinear,setsar=1[v0];` +
+          `[1:v]scale=${scale}:flags=fast_bilinear,setsar=1[v1];` +
+          `[2:v]scale=${scale}:flags=fast_bilinear,setsar=1[v2];` +
           `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+          ...FAST_ENC, ...FAST_AUDIO,
           '-y', outputFile,
         ]);
       } else {
@@ -517,7 +522,7 @@ export async function concatenateVideos(
           '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
           '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+          ...FAST_ENC, ...FAST_AUDIO,
           '-y', outputFile,
         ]);
       }
@@ -529,12 +534,12 @@ export async function concatenateVideos(
           exitCode = await ff.exec([
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex',
-            `[0:v]scale=${scale},setsar=1[v0];` +
-            `[1:v]scale=${scale},setsar=1[v1];` +
-            `[2:v]scale=${scale},setsar=1[v2];` +
+            `[0:v]scale=${scale}:flags=fast_bilinear,setsar=1[v0];` +
+            `[1:v]scale=${scale}:flags=fast_bilinear,setsar=1[v1];` +
+            `[2:v]scale=${scale}:flags=fast_bilinear,setsar=1[v2];` +
             `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            ...FAST_ENC, '-an',
             '-y', outputFile,
           ]);
         } else {
@@ -542,7 +547,7 @@ export async function concatenateVideos(
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            ...FAST_ENC, '-an',
             '-y', outputFile,
           ]);
         }
