@@ -170,8 +170,8 @@ async function processApprovedPayment(
     .eq("month_year", monthYear)
     .single();
 
-  // TTS credits: unlimited plan gets 50 credits per cycle
-  const ttsCredits = payment.plan === "unlimited" ? 50 : 0;
+  // TTS credits: unlimited plan gets 1000 credits per cycle
+  const ttsCredits = payment.plan === "unlimited" ? 1000 : 0;
 
   if (existing) {
     // Renew: reset token balance + video count + TTS credits for the new billing cycle
