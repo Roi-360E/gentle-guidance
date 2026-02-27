@@ -66,6 +66,67 @@ const VoiceRewrite = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cloneInputRef = useRef<HTMLInputElement>(null);
 
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<NodeJS.Timer | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const file = new File([blob], `gravacao-voz-${Date.now()}.webm`, { type: 'audio/webm' });
+        setRecordedBlob(blob);
+        setRecordedUrl(URL.createObjectURL(blob));
+        setCloneFile(file);
+        toast.success('Gravação finalizada!');
+      };
+
+      mediaRecorder.start(250);
+      setIsRecording(true);
+      setRecordingTime(0);
+      setRecordedBlob(null);
+      if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+      setRecordedUrl(null);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Mic error:', err);
+      toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
+    }
+  }, [recordedUrl]);
+
+  const stopRecording = useCallback(() => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current as unknown as number);
+      recordingIntervalRef.current = null;
+    }
+  }, []);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
   // Check access (unlimited plan only) + load TTS credits
   useEffect(() => {
     if (!user) return;
@@ -639,11 +700,62 @@ const VoiceRewrite = () => {
                   value={cloneName}
                   onChange={(e) => setCloneName(e.target.value)}
                 />
+
+                {/* Record audio directly */}
+                <div className="rounded-xl border-2 border-border p-5 space-y-4">
+                  <p className="text-sm font-medium text-foreground text-center">🎙️ Grave sua voz</p>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Grave pelo menos 30 segundos falando naturalmente para melhor qualidade de clonagem.
+                  </p>
+
+                  <div className="flex flex-col items-center gap-3">
+                    {isRecording && (
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-destructive animate-pulse" />
+                        <span className="text-lg font-mono font-bold text-foreground">{formatTime(recordingTime)}</span>
+                        {recordingTime < 30 && (
+                          <span className="text-xs text-muted-foreground">(mín. 30s)</span>
+                        )}
+                      </div>
+                    )}
+
+                    <Button
+                      variant={isRecording ? 'destructive' : 'outline'}
+                      size="lg"
+                      className="w-full max-w-xs"
+                      onClick={isRecording ? stopRecording : startRecording}
+                    >
+                      {isRecording ? (
+                        <><Pause className="w-4 h-4 mr-2" /> Parar Gravação</>
+                      ) : (
+                        <><Mic className="w-4 h-4 mr-2" /> Iniciar Gravação</>
+                      )}
+                    </Button>
+
+                    {recordedUrl && !isRecording && (
+                      <div className="w-full space-y-2">
+                        <audio src={recordedUrl} controls className="w-full h-10 rounded-lg" />
+                        <p className="text-xs text-muted-foreground text-center">
+                          Duração: {formatTime(recordingTime)} • Pronto para clonar
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">ou envie um arquivo</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Upload file */}
                 <div
                   onClick={() => cloneInputRef.current?.click()}
                   className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
                 >
-                  {cloneFile ? (
+                  {cloneFile && !recordedBlob ? (
                     <div className="flex items-center justify-center gap-2">
                       <Check className="w-4 h-4 text-primary" />
                       <span className="text-sm text-foreground">{cloneFile.name}</span>
@@ -651,9 +763,17 @@ const VoiceRewrite = () => {
                         <X className="w-3 h-3" />
                       </Button>
                     </div>
+                  ) : cloneFile && recordedBlob ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Check className="w-4 h-4 text-primary" />
+                      <span className="text-sm text-foreground">Áudio gravado ({formatTime(recordingTime)})</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setCloneFile(null); setRecordedBlob(null); if (recordedUrl) URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); setRecordingTime(0); }}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
                   ) : (
                     <>
-                      <Mic className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                      <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm text-muted-foreground">Envie um áudio com sua voz (mín. 30s)</p>
                       <p className="text-xs text-muted-foreground mt-1">MP3, WAV, M4A</p>
                     </>
@@ -664,7 +784,7 @@ const VoiceRewrite = () => {
                   type="file"
                   accept="audio/*"
                   className="hidden"
-                  onChange={(e) => setCloneFile(e.target.files?.[0] || null)}
+                  onChange={(e) => { setRecordedBlob(null); if (recordedUrl) URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); setCloneFile(e.target.files?.[0] || null); }}
                 />
                 <Button onClick={handleCloneVoice} disabled={isCloning || !cloneName.trim() || !cloneFile} className="w-full">
                   {isCloning ? (
