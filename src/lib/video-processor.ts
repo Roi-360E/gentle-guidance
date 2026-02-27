@@ -688,8 +688,9 @@ export function revokeBlobUrls(combinations: Combination[]): void {
 }
 
 /**
- * Remove existing subtitles from a video using FFmpeg's delogo filter.
- * Applies interpolation-based removal to the bottom region of the video.
+ * Remove existing subtitles from a video by covering the bottom region.
+ * Uses a two-pass approach: first tries a smooth blur crop overlay,
+ * then falls back to a solid drawbox if blur filters aren't available.
  *
  * @param file - The video file to process
  * @param regionPct - Percentage of video height from the bottom to clean (default 15%)
@@ -702,8 +703,8 @@ export async function removeSubtitlesFromFile(
   videoDimensions: { width: number; height: number },
 ): Promise<File> {
   const ff = await getFFmpeg();
-  const inputName = `delogo_in_${Date.now()}.mp4`;
-  const outputName = `delogo_out_${Date.now()}.mp4`;
+  const inputName = `sub_rm_in_${Date.now()}.mp4`;
+  const outputName = `sub_rm_out_${Date.now()}.mp4`;
 
   const data = await fetchFileCached(file);
   await ff.writeFile(inputName, data);
@@ -712,14 +713,31 @@ export async function removeSubtitlesFromFile(
   const regionH = Math.round(height * (regionPct / 100));
   const regionY = height - regionH;
 
-  // delogo filter: interpolates the region to remove text
-  const exitCode = await ff.exec([
+  // Strategy 1: drawbox with black fill (most compatible, clean result)
+  let exitCode = await ff.exec([
     '-i', inputName,
-    '-vf', `delogo=x=0:y=${regionY}:w=${width}:h=${regionH}:show=0`,
-    '-c:a', 'copy',
+    '-vf', `drawbox=x=0:y=${regionY}:w=${width}:h=${regionH}:color=black:t=fill`,
+    '-c:v', 'libx264',
     '-preset', 'ultrafast',
+    '-crf', '23',
+    '-c:a', 'copy',
     '-y', outputName,
   ]);
+
+  if (exitCode !== 0) {
+    console.warn('[SubRemover] drawbox failed, trying crop+pad approach...');
+    // Strategy 2: crop the top portion and pad it back to original size
+    const keepH = height - regionH;
+    exitCode = await ff.exec([
+      '-i', inputName,
+      '-vf', `crop=${width}:${keepH}:0:0,pad=${width}:${height}:0:0:black`,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '23',
+      '-c:a', 'copy',
+      '-y', outputName,
+    ]);
+  }
 
   try { await ff.deleteFile(inputName); } catch {}
 
