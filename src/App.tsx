@@ -18,6 +18,7 @@ import InstagramCallback from "./pages/InstagramCallback";
 import ViralFlux from "./pages/ViralFlux";
 import ResetPassword from "./pages/ResetPassword";
 import AdminPlans from "./pages/AdminPlans";
+import VoiceRewrite from "./pages/VoiceRewrite";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ const App = () => (
               <Route path="/admin/plans" element={<ProtectedRoute><AdminPlans /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
               <Route path="/auto-subtitles" element={<ProtectedRoute><AutoSubtitles /></ProtectedRoute>} />
+              <Route path="/voice-rewrite" element={<ProtectedRoute><VoiceRewrite /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ProcessingProvider>
