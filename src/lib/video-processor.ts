@@ -217,34 +217,25 @@ export async function preProcessInputCached(
   const data = await fetchFileCached(file);
   await ff.writeFile(rawName, data);
 
-  const scale = getScale(settings);
   const startTime = performance.now();
-  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat}, scale: ${scale ?? 'none'})`);
+  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
 
-  // ─── Try stream copy ONLY when no scaling is needed (remux ~0.05-0.3s) ───
-  let exitCode: number | undefined;
-  if (!scale) {
-    const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
-    exitCode = await ff.exec(copyArgs);
-    checkAbort(abortSignal);
+  // ─── ALWAYS try stream copy first (remux ~0.05-0.3s) ── scaling is applied during concatenation ───
+  const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
+  let exitCode = await ff.exec(copyArgs);
+  checkAbort(abortSignal);
 
-    if (exitCode === 0) {
-      try { await ff.deleteFile(rawName); } catch {}
-      preProcessCache.set(file, outputName);
-      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-      console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
-      return outputName;
-    }
-    console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to ultra-fast re-encode...`);
-  } else {
-    console.log(`[VideoProcessor] Scaling required (${scale}), skipping stream copy for "${file.name}"`);
+  if (exitCode === 0) {
+    try { await ff.deleteFile(rawName); } catch {}
+    preProcessCache.set(file, outputName);
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+    console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
+    return outputName;
   }
+  console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to ultra-fast re-encode...`);
 
-  // ─── FALLBACK: minimal re-encode with shortest duration limit ───
+  // ─── FALLBACK: minimal re-encode (no scaling – scaling done at concat) ───
   const args: string[] = ['-i', rawName];
-  if (scale) {
-    args.push('-vf', `scale=${scale}`);
-  }
   args.push(
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
@@ -266,9 +257,6 @@ export async function preProcessInputCached(
   if (exitCode !== 0) {
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
     const args2: string[] = ['-i', rawName];
-    if (scale) {
-      args2.push('-vf', `scale=${scale}`);
-    }
     args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '32', '-r', '24', '-an', '-threads', '0', '-y', outputName);
     exitCode = await ff.exec(args2);
     checkAbort(abortSignal);
@@ -419,37 +407,76 @@ export async function concatenateVideos(
       }
 
       const outputFile = `out_${combination.id}.mp4`;
-      const concatList = `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`;
-      await ff.writeFile('concat.txt', concatList);
+      const scale = getScale(settings);
 
-      let exitCode = await ff.exec([
-        '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
-        '-c', 'copy', '-movflags', '+faststart', '-y', outputFile,
-      ]);
-      checkAbort(abortSignal);
+      let exitCode: number;
 
-      if (exitCode !== 0) {
-        console.warn('[VideoProcessor] Concat demuxer failed, trying filter concat...');
+      if (scale) {
+        // When scaling is needed (e.g. vertical/story), use filter_complex to scale + concat
+        console.log(`[VideoProcessor] Concat with scale=${scale} for combo ${combination.id}`);
         exitCode = await ff.exec([
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
-          '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
+          '-filter_complex',
+          `[0:v]scale=${scale},setsar=1[v0];` +
+          `[1:v]scale=${scale},setsar=1[v1];` +
+          `[2:v]scale=${scale},setsar=1[v2];` +
+          `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
           '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
-          '-y', outputFile,
+          '-movflags', '+faststart', '-y', outputFile,
         ]);
         checkAbort(abortSignal);
-      }
 
-      if (exitCode !== 0) {
-        console.warn('[VideoProcessor] Audio concat failed, trying video-only...');
+        if (exitCode !== 0) {
+          console.warn('[VideoProcessor] Scale+audio concat failed, trying video-only...');
+          exitCode = await ff.exec([
+            '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+            '-filter_complex',
+            `[0:v]scale=${scale},setsar=1[v0];` +
+            `[1:v]scale=${scale},setsar=1[v1];` +
+            `[2:v]scale=${scale},setsar=1[v2];` +
+            `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
+            '-map', '[outv]',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            '-movflags', '+faststart', '-y', outputFile,
+          ]);
+          checkAbort(abortSignal);
+        }
+      } else {
+        // No scaling needed – try fast stream copy concat first
+        const concatList = `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`;
+        await ff.writeFile('concat.txt', concatList);
+
         exitCode = await ff.exec([
-          '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
-          '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
-          '-map', '[outv]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
-          '-y', outputFile,
+          '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+          '-c', 'copy', '-movflags', '+faststart', '-y', outputFile,
         ]);
         checkAbort(abortSignal);
+        try { await ff.deleteFile('concat.txt'); } catch {}
+
+        if (exitCode !== 0) {
+          console.warn('[VideoProcessor] Concat demuxer failed, trying filter concat...');
+          exitCode = await ff.exec([
+            '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+            '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
+            '-map', '[outv]', '-map', '[outa]',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+            '-y', outputFile,
+          ]);
+          checkAbort(abortSignal);
+        }
+
+        if (exitCode !== 0) {
+          console.warn('[VideoProcessor] Audio concat failed, trying video-only...');
+          exitCode = await ff.exec([
+            '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+            '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
+            '-map', '[outv]',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            '-y', outputFile,
+          ]);
+          checkAbort(abortSignal);
+        }
       }
 
       if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
