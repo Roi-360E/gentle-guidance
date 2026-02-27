@@ -28,6 +28,7 @@ import {
   Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
   Lock, Eye, CheckCircle2, X, Film, Play, Square, Clock,
   ChevronLeft, ChevronRight, AlertCircle, Bold, Palette, Pencil,
+  Eraser, Sliders,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -41,6 +42,7 @@ import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
 import {
   getFFmpeg,
   preProcessBatch,
+  removeSubtitlesFromFile,
   defaultSettings,
   type ProcessingSettings,
 } from '@/lib/video-processor';
@@ -203,6 +205,10 @@ const AutoSubtitles = () => {
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [sectionPreprocessed, setSectionPreprocessed] = useState<boolean[]>([false, false, false]);
   const [sectionStarted, setSectionStarted] = useState<boolean[]>([false, false, false]);
+  // Subtitle removal settings
+  const [removeExistingSubs, setRemoveExistingSubs] = useState(false);
+  const [subtitleRegionPct, setSubtitleRegionPct] = useState(15);
+  const [isRemovingSubs, setIsRemovingSubs] = useState(false);
   // allPreprocessed computed after hasVideos below
 
   /* ──── Contagens derivadas ──── */
@@ -376,6 +382,42 @@ const AutoSubtitles = () => {
       return updated;
     });
   }, []);
+
+  /* ──── Remover legendas existentes de todos os vídeos ──── */
+  const handleRemoveExistingSubs = useCallback(async () => {
+    if (!removeExistingSubs) return;
+    setIsRemovingSubs(true);
+
+    for (let si = 0; si < sections.length; si++) {
+      const section = sections[si];
+      for (let vi = 0; vi < section.videos.length; vi++) {
+        const video = section.videos[vi];
+        const dims = video.dimensions || { width: 1080, height: 1920 };
+
+        updateVideo(si, vi, { statusText: 'Removendo legendas...' });
+
+        try {
+          const cleanFile = await removeSubtitlesFromFile(video.file, subtitleRegionPct, dims);
+          const newUrl = URL.createObjectURL(cleanFile);
+          URL.revokeObjectURL(video.previewUrl);
+
+          setSections(prev => {
+            const updated = [...prev];
+            const videos = [...updated[si].videos];
+            videos[vi] = { ...videos[vi], file: cleanFile, previewUrl: newUrl, statusText: 'Legendas removidas ✅' };
+            updated[si] = { ...updated[si], videos };
+            return updated;
+          });
+        } catch (err) {
+          console.error(`Delogo error [${section.label} #${vi + 1}]:`, err);
+          updateVideo(si, vi, { statusText: 'Erro ao remover legendas' });
+        }
+      }
+    }
+
+    setIsRemovingSubs(false);
+    toast.success('Legendas existentes removidas dos vídeos!');
+  }, [sections, removeExistingSubs, subtitleRegionPct, updateVideo]);
 
   /* ──── STEP 2: Transcrição em batch (modo turbo com paralelismo) ──── */
   const handleTranscribeAll = useCallback(async () => {
@@ -897,6 +939,85 @@ const AutoSubtitles = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {/* ════════ Remover Legendas Existentes ════════ */}
+        {mainStep === 'upload' && hasVideos && (
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Eraser className="w-5 h-5 text-primary" /> Remover Legendas Existentes
+                </CardTitle>
+                <Switch checked={removeExistingSubs} onCheckedChange={setRemoveExistingSubs} />
+              </div>
+              <CardDescription className="text-muted-foreground">
+                Remove legendas gravadas no vídeo usando interpolação de imagem (delogo). Ideal para repostar com novas legendas.
+              </CardDescription>
+            </CardHeader>
+            {removeExistingSubs && (
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2 text-sm">
+                      <Sliders className="w-4 h-4 text-muted-foreground" />
+                      Região a limpar (de baixo para cima)
+                    </Label>
+                    <span className="text-sm font-mono font-semibold text-primary">{subtitleRegionPct}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={40}
+                    step={1}
+                    value={subtitleRegionPct}
+                    onChange={(e) => setSubtitleRegionPct(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>5% (legendas pequenas)</span>
+                    <span>40% (legendas grandes)</span>
+                  </div>
+                </div>
+
+                {/* Preview visual da região */}
+                <div className="rounded-lg overflow-hidden border border-border bg-muted/30 relative" style={{ height: '120px' }}>
+                  <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+                    Área do vídeo
+                  </div>
+                  <div
+                    className="absolute bottom-0 left-0 right-0 bg-destructive/20 border-t-2 border-dashed border-destructive/50 flex items-center justify-center"
+                    style={{ height: `${subtitleRegionPct}%` }}
+                  >
+                    <span className="text-[10px] font-semibold text-destructive">Região removida</span>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full rounded-full bg-gradient-to-r from-destructive to-destructive/80 text-destructive-foreground font-semibold"
+                  disabled={isRemovingSubs || !allPreprocessed}
+                  onClick={handleRemoveExistingSubs}
+                >
+                  {isRemovingSubs ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Removendo legendas...
+                    </>
+                  ) : (
+                    <>
+                      <Eraser className="w-4 h-4 mr-2" />
+                      Remover Legendas de {totalVideos} Vídeos
+                    </>
+                  )}
+                </Button>
+                {!allPreprocessed && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Pré-processe todas as seções primeiro
+                  </p>
+                )}
+              </CardContent>
+            )}
+          </Card>
         )}
 
         {/* Botão para iniciar transcrição */}
