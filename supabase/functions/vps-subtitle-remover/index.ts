@@ -21,10 +21,20 @@ serve(async (req) => {
     // Forward the multipart form data directly to the VPS
     const formData = await req.formData();
     
+    // Add speed optimization hints for VPS
+    formData.append('preset', 'ultrafast');
+    formData.append('crf', '23');
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     const vpsResponse = await fetch(vpsUrl, {
       method: 'POST',
       body: formData,
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!vpsResponse.ok) {
       const errorText = await vpsResponse.text().catch(() => 'Unknown error');
@@ -43,7 +53,8 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const msg = error.name === 'AbortError' ? 'VPS timeout (>12s)' : error.message;
+    return new Response(JSON.stringify({ error: msg }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
