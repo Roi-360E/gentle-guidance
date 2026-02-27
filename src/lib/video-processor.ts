@@ -219,21 +219,26 @@ export async function preProcessInputCached(
 
   const scale = getScale(settings);
   const startTime = performance.now();
-  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
+  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat}, scale: ${scale ?? 'none'})`);
 
-  // ─── ALWAYS try stream copy first (remux ~0.05-0.3s) ───
-  const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
-  let exitCode = await ff.exec(copyArgs);
-  checkAbort(abortSignal);
+  // ─── Try stream copy ONLY when no scaling is needed (remux ~0.05-0.3s) ───
+  let exitCode: number | undefined;
+  if (!scale) {
+    const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
+    exitCode = await ff.exec(copyArgs);
+    checkAbort(abortSignal);
 
-  if (exitCode === 0) {
-    try { await ff.deleteFile(rawName); } catch {}
-    preProcessCache.set(file, outputName);
-    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-    console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
-    return outputName;
+    if (exitCode === 0) {
+      try { await ff.deleteFile(rawName); } catch {}
+      preProcessCache.set(file, outputName);
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
+      return outputName;
+    }
+    console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to ultra-fast re-encode...`);
+  } else {
+    console.log(`[VideoProcessor] Scaling required (${scale}), skipping stream copy for "${file.name}"`);
   }
-  console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to ultra-fast re-encode...`);
 
   // ─── FALLBACK: minimal re-encode with shortest duration limit ───
   const args: string[] = ['-i', rawName];
