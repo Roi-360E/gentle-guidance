@@ -42,10 +42,10 @@ import { burnSubtitlesIntoVideo } from '@/lib/subtitle-burner';
 import {
   getFFmpeg,
   preProcessBatch,
-  removeSubtitlesFromFile,
   defaultSettings,
   type ProcessingSettings,
 } from '@/lib/video-processor';
+import { removeSubtitlesAdvanced } from '@/lib/subtitle-remover';
 
 /* ───────────── Types ───────────── */
 
@@ -394,10 +394,12 @@ const AutoSubtitles = () => {
         const video = section.videos[vi];
         const dims = video.dimensions || { width: 1080, height: 1920 };
 
-        updateVideo(si, vi, { statusText: 'Removendo legendas...' });
+        updateVideo(si, vi, { statusText: 'Removendo legendas...', progress: 5 });
 
         try {
-          const cleanFile = await removeSubtitlesFromFile(video.file, subtitleRegionPct, dims);
+          const cleanFile = await removeSubtitlesAdvanced(video.file, subtitleRegionPct, dims, (pct, status) => {
+            updateVideo(si, vi, { progress: pct, statusText: status });
+          });
           const newUrl = URL.createObjectURL(cleanFile);
           URL.revokeObjectURL(video.previewUrl);
 
@@ -952,11 +954,36 @@ const AutoSubtitles = () => {
                 <Switch checked={removeExistingSubs} onCheckedChange={setRemoveExistingSubs} />
               </div>
               <CardDescription className="text-muted-foreground">
-                Remove legendas gravadas no vídeo usando interpolação de imagem (delogo). Ideal para repostar com novas legendas.
+                Reconstrução de fundo por <strong>mediana temporal</strong>: analisa múltiplos frames para eliminar o texto e restaurar o fundo original. 100% local, sem APIs externas.
               </CardDescription>
             </CardHeader>
             {removeExistingSubs && (
               <CardContent className="space-y-4">
+                {/* Per-video removal progress */}
+                {isRemovingSubs && (
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {sections.map((section, si) =>
+                      section.videos.map((v, vi) => (
+                        <div key={`${si}-${vi}`} className="flex items-center gap-2 text-xs rounded-lg bg-muted/30 p-2">
+                          {v.statusText?.includes('✅') ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                          ) : v.statusText?.includes('Removendo') || v.statusText?.includes('Extraindo') || v.statusText?.includes('Calculando') || v.statusText?.includes('Carregando') || v.statusText?.includes('Tentando') || v.statusText?.includes('Gerando') || v.statusText?.includes('Compositing') ? (
+                            <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+                          ) : v.statusText?.includes('Erro') ? (
+                            <X className="w-4 h-4 text-destructive shrink-0" />
+                          ) : (
+                            <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                          )}
+                          <span className="truncate flex-1 text-foreground">{v.name}</span>
+                          <span className="text-muted-foreground text-[10px]">{v.statusText}</span>
+                          {v.progress > 0 && v.progress < 100 && (
+                            <span className="text-primary font-semibold">{Math.round(v.progress)}%</span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-sm">
