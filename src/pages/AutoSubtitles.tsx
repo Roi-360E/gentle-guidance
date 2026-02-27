@@ -44,6 +44,7 @@ import {
   preProcessBatch,
   defaultSettings,
   type ProcessingSettings,
+  type ResolutionPreset,
 } from '@/lib/video-processor';
 import { removeSubtitlesAdvanced } from '@/lib/subtitle-remover';
 
@@ -349,7 +350,9 @@ const AutoSubtitles = () => {
 
       const rawFiles = section.videos.map(v => v.file);
 
-      await preProcessBatch(rawFiles, section.label, defaultSettings, (fileIndex, status, pct) => {
+      // Use 'original' resolution to avoid expensive re-encoding — just remux (stream copy ~0.1s)
+      const fastSettings: ProcessingSettings = { ...defaultSettings, resolution: 'original' as ResolutionPreset };
+      await preProcessBatch(rawFiles, section.label, fastSettings, (fileIndex, status, pct) => {
         setSections(prev => {
           const updated = [...prev];
           const videos = [...updated[sectionIndex].videos];
