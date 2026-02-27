@@ -1,24 +1,85 @@
 /**
- * Advanced Subtitle Remover — 100% local, no external APIs
+ * Advanced Subtitle Remover — Hybrid: VPS (fast) + Local fallback
  * 
- * Technique: Temporal Median Background Reconstruction
- * 
- * How it works:
- * 1. Extract N evenly-spaced frames from the video as images (FFmpeg)
- * 2. For the subtitle region only, compute the median pixel value across all samples
- *    — Since subtitles change between frames but the background stays mostly the same,
- *      the median naturally eliminates the text and reveals the true background
- * 3. Generate a "clean background plate" image from the median values
- * 4. Use FFmpeg to overlay this plate onto the subtitle region with soft edge blending
- * 
- * This produces much cleaner results than drawbox/blur for static or slow-moving backgrounds.
- * For fast-moving backgrounds, it gracefully degrades to a smooth averaged look.
+ * Strategy:
+ * 1. Try VPS processing via Edge Function proxy (fastest, uses native FFmpeg tmedian)
+ * 2. Fall back to local FFmpeg.wasm processing if VPS is unavailable
  */
 
 import { getFFmpeg } from './video-processor';
 import { fetchFile } from '@ffmpeg/util';
+import { supabase } from '@/integrations/supabase/client';
 
 const SAMPLE_COUNT = 24; // Number of frames to sample (more = better quality, slower)
+
+/**
+ * Try to remove subtitles via VPS (native FFmpeg, much faster)
+ */
+async function tryVpsRemoval(
+  file: File,
+  regionPct: number,
+  videoDimensions: { width: number; height: number },
+  onProgress?: (pct: number, status: string) => void,
+): Promise<File | null> {
+  try {
+    onProgress?.(5, 'Conectando ao servidor de processamento...');
+
+    const { height } = videoDimensions;
+    const regionH = Math.round(height * (regionPct / 100));
+    const regionY = height - regionH;
+
+    const formData = new FormData();
+    formData.append('video', file);
+    formData.append('y', String(regionY));
+    formData.append('h', String(regionH));
+
+    // Call edge function which proxies to VPS
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    
+    const response = await fetch(
+      `https://${projectId}.supabase.co/functions/v1/vps-subtitle-remover`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`,
+        },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      console.warn('[SubRemover] VPS proxy returned non-OK status:', response.status);
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    
+    // If JSON response, it's an error
+    if (contentType.includes('application/json')) {
+      const json = await response.json();
+      console.warn('[SubRemover] VPS returned error:', json.error);
+      return null;
+    }
+
+    // Success - got video back
+    onProgress?.(90, 'Recebendo vídeo processado...');
+    const blob = await response.blob();
+    
+    if (blob.size < 1000) {
+      console.warn('[SubRemover] VPS returned suspiciously small file:', blob.size);
+      return null;
+    }
+
+    onProgress?.(100, 'Concluído via servidor!');
+    console.log('[SubRemover] ✅ VPS processing succeeded!', blob.size, 'bytes');
+    return new File([blob], file.name, { type: 'video/mp4' });
+  } catch (err) {
+    console.warn('[SubRemover] VPS processing failed, falling back to local:', err);
+    return null;
+  }
+}
 
 /**
  * Extract evenly-spaced frames from a video as raw RGBA pixel data
@@ -196,6 +257,12 @@ export async function removeSubtitlesAdvanced(
   videoDimensions: { width: number; height: number },
   onProgress?: (pct: number, status: string) => void,
 ): Promise<File> {
+  // ─── Try VPS first (much faster) ───
+  const vpsResult = await tryVpsRemoval(file, regionPct, videoDimensions, onProgress);
+  if (vpsResult) return vpsResult;
+
+  // ─── Fallback: Local FFmpeg.wasm processing ───
+  console.log('[SubRemover] Using local FFmpeg.wasm fallback...');
   const ff = await getFFmpeg();
   const ts = Date.now();
   const inputName = `sub_adv_in_${ts}.mp4`;
