@@ -21,7 +21,7 @@ import {
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
-import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock } from 'lucide-react';
+import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock, Mic } from 'lucide-react';
 import { ScriptChatFloat } from '@/components/ScriptChat';
 import { InstagramConnect } from '@/components/InstagramConnect';
 import { Progress } from '@/components/ui/progress';
@@ -259,6 +259,11 @@ const Index = () => {
               <Type className="w-4 h-4" /> Legendas Auto
               {currentPlan === 'free' && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
+            {currentPlan === 'unlimited' && (
+              <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/voice-rewrite')}>
+                <Mic className="w-4 h-4" /> Voice Rewrite
+              </Button>
+            )}
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair
             </Button>
@@ -286,6 +291,11 @@ const Index = () => {
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/auto-subtitles'); setMobileMenuOpen(false); }}>
               <Type className="w-4 h-4" /> Legendas Automáticas
             </Button>
+            {currentPlan === 'unlimited' && (
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/voice-rewrite'); setMobileMenuOpen(false); }}>
+                <Mic className="w-4 h-4" /> Voice Rewrite
+              </Button>
+            )}
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
                 <LogOut className="w-4 h-4" /> Sair
