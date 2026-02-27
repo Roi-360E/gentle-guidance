@@ -116,7 +116,7 @@ export function VideoUploadZone({
               {/* File size + Position row */}
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5 bg-background border border-border rounded-md px-2.5 py-1 font-mono text-foreground">
-                  {formatFileSize(vf.file?.size ?? 0)}
+                  {formatFileSize(vf.file.size)}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   Posição:
