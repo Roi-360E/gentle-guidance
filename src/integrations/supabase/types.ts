@@ -353,6 +353,7 @@ export type Database = {
           month_year: string
           plan: string
           token_balance: number
+          tts_credits: number
           updated_at: string
           user_id: string
           video_count: number
@@ -363,6 +364,7 @@ export type Database = {
           month_year: string
           plan?: string
           token_balance?: number
+          tts_credits?: number
           updated_at?: string
           user_id: string
           video_count?: number
@@ -373,6 +375,7 @@ export type Database = {
           month_year?: string
           plan?: string
           token_balance?: number
+          tts_credits?: number
           updated_at?: string
           user_id?: string
           video_count?: number

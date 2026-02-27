@@ -170,14 +170,18 @@ async function processApprovedPayment(
     .eq("month_year", monthYear)
     .single();
 
+  // TTS credits: unlimited plan gets 50 credits per cycle
+  const ttsCredits = payment.plan === "unlimited" ? 50 : 0;
+
   if (existing) {
-    // Renew: reset token balance + video count for the new billing cycle
+    // Renew: reset token balance + video count + TTS credits for the new billing cycle
     await supabase
       .from("video_usage")
       .update({
         plan: payment.plan,
         token_balance: newTokens,
         video_count: 0,
+        tts_credits: ttsCredits,
       })
       .eq("id", existing.id);
   } else {
@@ -189,6 +193,7 @@ async function processApprovedPayment(
         plan: payment.plan,
         video_count: 0,
         token_balance: newTokens,
+        tts_credits: ttsCredits,
       });
   }
 

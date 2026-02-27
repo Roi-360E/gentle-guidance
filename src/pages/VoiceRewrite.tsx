@@ -30,6 +30,7 @@ const VoiceRewrite = () => {
 
   // Access check
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [ttsCredits, setTtsCredits] = useState<number>(0);
 
   // Steps
   const [step, setStep] = useState<Step>('upload');
@@ -65,18 +66,19 @@ const VoiceRewrite = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cloneInputRef = useRef<HTMLInputElement>(null);
 
-  // Check access (unlimited plan only)
+  // Check access (unlimited plan only) + load TTS credits
   useEffect(() => {
     if (!user) return;
     const checkAccess = async () => {
       const monthYear = new Date().toISOString().substring(0, 7);
       const { data } = await supabase
         .from('video_usage')
-        .select('plan')
+        .select('plan, tts_credits')
         .eq('user_id', user.id)
         .eq('month_year', monthYear)
         .single();
       setHasAccess(data?.plan === 'unlimited');
+      setTtsCredits((data as any)?.tts_credits ?? 0);
     };
     checkAccess();
   }, [user]);
@@ -237,6 +239,11 @@ const VoiceRewrite = () => {
   const handleGenerate = useCallback(async () => {
     if (!videoFile || !transcript.trim()) return;
 
+    if (ttsCredits <= 0) {
+      toast.error('Créditos TTS esgotados. Faça upgrade ou aguarde a renovação.');
+      return;
+    }
+
     const voiceId = voiceMode === 'custom'
       ? customVoiceId
       : selectedVoice?.voice_id;
@@ -251,6 +258,10 @@ const VoiceRewrite = () => {
     setGenProgress(10);
 
     try {
+      // Get user session token for credit validation
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
       // Step 1: Generate TTS audio
       setGenProgress(20);
       const ttsResponse = await fetch(
@@ -260,14 +271,22 @@ const VoiceRewrite = () => {
           headers: {
             'Content-Type': 'application/json',
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ text: transcript.slice(0, 4500), voiceId }),
         }
       );
 
+      // Check if response is JSON (error) or audio (success)
+      const contentType = ttsResponse.headers.get('Content-Type') || '';
+      if (contentType.includes('application/json')) {
+        const errData = await ttsResponse.json();
+        throw new Error(errData.error || 'Erro ao gerar áudio');
+      }
+
       if (!ttsResponse.ok) throw new Error(`TTS falhou: ${ttsResponse.status}`);
       const audioBlob = await ttsResponse.blob();
+      setTtsCredits(prev => Math.max(0, prev - 1));
       setGenProgress(50);
 
       // Step 2: Merge video (mute original) + new audio using FFmpeg.wasm
@@ -397,9 +416,14 @@ const VoiceRewrite = () => {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <Rocket className="w-6 h-6 text-primary" />
-          <div>
+          <div className="flex-1">
             <h1 className="text-lg font-bold text-foreground">Voice Rewrite</h1>
             <p className="text-xs text-muted-foreground">Reescreva o áudio dos seus vídeos com IA</p>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+            <Volume2 className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-primary">{ttsCredits}</span>
+            <span className="text-xs text-muted-foreground">créditos TTS</span>
           </div>
         </div>
       </header>
