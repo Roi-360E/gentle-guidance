@@ -1,0 +1,1 @@
+ALTER TABLE public.video_usage ADD COLUMN IF NOT EXISTS tts_credits integer NOT NULL DEFAULT 0;
