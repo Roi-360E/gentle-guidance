@@ -209,6 +209,9 @@ const AutoSubtitles = () => {
   const [removeExistingSubs, setRemoveExistingSubs] = useState(false);
   const [subtitleRegionPct, setSubtitleRegionPct] = useState(15);
   const [isRemovingSubs, setIsRemovingSubs] = useState(false);
+  // Before/after carousel for subtitle removal results
+  const [removalResults, setRemovalResults] = useState<{ beforeUrl: string; afterUrl: string; name: string; elapsed: string }[]>([]);
+  const [removalCarouselIdx, setRemovalCarouselIdx] = useState(0);
   // allPreprocessed computed after hasVideos below
 
   /* ──── Contagens derivadas ──── */
@@ -387,12 +390,16 @@ const AutoSubtitles = () => {
   const handleRemoveExistingSubs = useCallback(async () => {
     if (!removeExistingSubs) return;
     setIsRemovingSubs(true);
+    setRemovalResults([]);
+    const results: { beforeUrl: string; afterUrl: string; name: string; elapsed: string }[] = [];
 
     for (let si = 0; si < sections.length; si++) {
       const section = sections[si];
       for (let vi = 0; vi < section.videos.length; vi++) {
         const video = section.videos[vi];
         const dims = video.dimensions || { width: 1080, height: 1920 };
+        const beforeUrl = video.previewUrl;
+        const startTime = performance.now();
 
         updateVideo(si, vi, { statusText: 'Removendo legendas...', progress: 5 });
 
@@ -400,13 +407,16 @@ const AutoSubtitles = () => {
           const cleanFile = await removeSubtitlesAdvanced(video.file, subtitleRegionPct, dims, (pct, status) => {
             updateVideo(si, vi, { progress: pct, statusText: status });
           });
+          const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
           const newUrl = URL.createObjectURL(cleanFile);
-          URL.revokeObjectURL(video.previewUrl);
+
+          // Keep beforeUrl alive for carousel (don't revoke)
+          results.push({ beforeUrl, afterUrl: newUrl, name: video.name, elapsed });
 
           setSections(prev => {
             const updated = [...prev];
             const videos = [...updated[si].videos];
-            videos[vi] = { ...videos[vi], file: cleanFile, previewUrl: newUrl, statusText: 'Legendas removidas ✅' };
+            videos[vi] = { ...videos[vi], file: cleanFile, previewUrl: newUrl, statusText: `Removido em ${elapsed}s ⚡` };
             updated[si] = { ...updated[si], videos };
             return updated;
           });
@@ -417,6 +427,8 @@ const AutoSubtitles = () => {
       }
     }
 
+    setRemovalResults(results);
+    setRemovalCarouselIdx(0);
     setIsRemovingSubs(false);
     toast.success('Legendas existentes removidas dos vídeos!');
   }, [sections, removeExistingSubs, subtitleRegionPct, updateVideo]);
@@ -1041,6 +1053,76 @@ const AutoSubtitles = () => {
                   <p className="text-xs text-muted-foreground text-center">
                     Pré-processe todas as seções primeiro
                   </p>
+                )}
+
+                {/* Before/After Carousel */}
+                {removalResults.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        Resultado: 100% Removido
+                      </h4>
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {removalCarouselIdx + 1}/{removalResults.length}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Before */}
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold text-destructive uppercase tracking-wide text-center">Antes</p>
+                        <div className="rounded-lg overflow-hidden border border-destructive/30 bg-black aspect-[9/16]">
+                          <video
+                            src={removalResults[removalCarouselIdx]?.beforeUrl}
+                            className="w-full h-full object-cover"
+                            muted
+                            loop
+                            autoPlay
+                            playsInline
+                          />
+                        </div>
+                      </div>
+                      {/* After */}
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold text-green-500 uppercase tracking-wide text-center">Depois</p>
+                        <div className="rounded-lg overflow-hidden border border-green-500/30 bg-black aspect-[9/16]">
+                          <video
+                            src={removalResults[removalCarouselIdx]?.afterUrl}
+                            className="w-full h-full object-cover"
+                            muted
+                            loop
+                            autoPlay
+                            playsInline
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground truncate flex-1">
+                        {removalResults[removalCarouselIdx]?.name} — <span className="text-primary font-semibold">{removalResults[removalCarouselIdx]?.elapsed}s</span>
+                      </p>
+                      {removalResults.length > 1 && (
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline" size="icon"
+                            className="h-7 w-7 rounded-full"
+                            onClick={() => setRemovalCarouselIdx(i => (i - 1 + removalResults.length) % removalResults.length)}
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="outline" size="icon"
+                            className="h-7 w-7 rounded-full"
+                            onClick={() => setRemovalCarouselIdx(i => (i + 1) % removalResults.length)}
+                          >
+                            <ChevronRight className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </CardContent>
             )}

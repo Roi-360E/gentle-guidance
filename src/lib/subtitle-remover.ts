@@ -22,7 +22,8 @@ async function tryVpsRemoval(
   onProgress?: (pct: number, status: string) => void,
 ): Promise<File | null> {
   try {
-    onProgress?.(5, 'Conectando ao servidor de processamento...');
+    const startTime = performance.now();
+    onProgress?.(10, 'Enviando ao servidor...');
 
     const { height } = videoDimensions;
     const regionH = Math.round(height * (regionPct / 100));
@@ -36,7 +37,13 @@ async function tryVpsRemoval(
     // Call edge function which proxies to VPS
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
     const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    // Abort controller with 15s timeout for speed
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     
+    onProgress?.(25, 'Processando no servidor...');
+
     const response = await fetch(
       `https://${projectId}.supabase.co/functions/v1/vps-subtitle-remover`,
       {
@@ -46,8 +53,11 @@ async function tryVpsRemoval(
           'Authorization': `Bearer ${anonKey}`,
         },
         body: formData,
+        signal: controller.signal,
       }
     );
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.warn('[SubRemover] VPS proxy returned non-OK status:', response.status);
@@ -64,7 +74,7 @@ async function tryVpsRemoval(
     }
 
     // Success - got video back
-    onProgress?.(90, 'Recebendo vídeo processado...');
+    onProgress?.(85, 'Recebendo vídeo...');
     const blob = await response.blob();
     
     if (blob.size < 1000) {
@@ -72,11 +82,16 @@ async function tryVpsRemoval(
       return null;
     }
 
-    onProgress?.(100, 'Concluído via servidor!');
-    console.log('[SubRemover] ✅ VPS processing succeeded!', blob.size, 'bytes');
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+    onProgress?.(100, `Concluído em ${elapsed}s ⚡`);
+    console.log(`[SubRemover] ✅ VPS processing succeeded in ${elapsed}s!`, blob.size, 'bytes');
     return new File([blob], file.name, { type: 'video/mp4' });
-  } catch (err) {
-    console.warn('[SubRemover] VPS processing failed, falling back to local:', err);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      console.warn('[SubRemover] VPS timed out, falling back to local');
+    } else {
+      console.warn('[SubRemover] VPS processing failed, falling back to local:', err);
+    }
     return null;
   }
 }
