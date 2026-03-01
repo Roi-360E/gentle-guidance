@@ -383,41 +383,41 @@ export default function AdminPlans() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/plans')}>
-              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/plans')} className="shrink-0 px-2 sm:px-3">
+              <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">Voltar</span>
             </Button>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Painel Administrativo</h1>
-              <p className="text-sm text-muted-foreground">Planos, usuários e permissões</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground truncate">Painel Administrativo</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Planos, usuários e permissões</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs defaultValue="plans" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="plans" className="gap-2">
-              <CreditCard className="w-4 h-4" /> Planos
+            <TabsTrigger value="plans" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Planos
             </TabsTrigger>
-            <TabsTrigger value="users" className="gap-2">
-              <Users className="w-4 h-4" /> Usuários
+            <TabsTrigger value="users" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Usuários
             </TabsTrigger>
           </TabsList>
 
           {/* ===== PLANS TAB ===== */}
           <TabsContent value="plans" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Gerencie seus planos de pagamento e permissões de Chat IA.</p>
-              <div className="flex gap-2">
-                <Button onClick={addPlan} variant="outline" size="sm">
-                  <Plus className="w-4 h-4 mr-1" /> Novo Plano
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <p className="text-xs sm:text-sm text-muted-foreground">Gerencie planos e permissões de Chat IA.</p>
+              <div className="flex gap-2 shrink-0">
+                <Button onClick={addPlan} variant="outline" size="sm" className="text-xs sm:text-sm">
+                  <Plus className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Novo</span> Plano
                 </Button>
-                <Button onClick={saveAll} disabled={saving} size="sm">
+                <Button onClick={saveAll} disabled={saving} size="sm" className="text-xs sm:text-sm">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-                  Salvar Tudo
+                  Salvar
                 </Button>
               </div>
             </div>
@@ -497,13 +497,13 @@ export default function AdminPlans() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-6">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-6">
                       <div className="flex items-center gap-2">
                         <Label className="text-xs">Ícone:</Label>
                         <select
                           value={plan.icon}
                           onChange={e => updatePlan(index, 'icon', e.target.value)}
-                          className="text-sm bg-background border border-input rounded px-2 py-1"
+                          className="text-xs sm:text-sm bg-background border border-input rounded px-2 py-1"
                         >
                           {ICON_OPTIONS.map(icon => (
                             <option key={icon} value={icon}>{icon}</option>
@@ -515,7 +515,7 @@ export default function AdminPlans() {
                         <select
                           value={plan.color}
                           onChange={e => updatePlan(index, 'color', e.target.value)}
-                          className="text-sm bg-background border border-input rounded px-2 py-1"
+                          className="text-xs sm:text-sm bg-background border border-input rounded px-2 py-1"
                         >
                           {COLOR_OPTIONS.map(c => (
                             <option key={c.value} value={c.value}>{c.label}</option>
@@ -542,7 +542,7 @@ export default function AdminPlans() {
                           onCheckedChange={v => updatePlan(index, 'has_ai_chat', v)}
                         />
                         <Label className="text-xs flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3" /> Chat RoteiroPRO IA
+                          <MessageSquare className="w-3 h-3" /> Chat IA
                         </Label>
                       </div>
                       <div className="flex items-center gap-2">
@@ -551,7 +551,7 @@ export default function AdminPlans() {
                           onCheckedChange={v => updatePlan(index, 'has_auto_subtitles', v)}
                         />
                         <Label className="text-xs flex items-center gap-1">
-                          Legendas Automáticas
+                          Legendas Auto
                         </Label>
                       </div>
                     </div>
@@ -596,8 +596,8 @@ export default function AdminPlans() {
 
           {/* ===== USERS TAB ===== */}
           <TabsContent value="users" className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="relative flex-1 max-w-sm">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por e-mail ou nome..."
@@ -606,7 +606,7 @@ export default function AdminPlans() {
                   className="pl-9 text-sm"
                 />
               </div>
-              <Button variant="outline" size="sm" onClick={loadUsers} disabled={usersLoading}>
+              <Button variant="outline" size="sm" onClick={loadUsers} disabled={usersLoading} className="shrink-0">
                 {usersLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Atualizar'}
               </Button>
             </div>
