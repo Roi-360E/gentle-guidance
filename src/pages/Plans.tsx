@@ -52,7 +52,7 @@ export default function Plans() {
     supabase
       .from('subscription_plans' as any)
       .select('*')
-      .order('sort_order')
+      .order('price', { ascending: true })
       .then(({ data, error }) => {
         if (!error && data) {
           setPlans((data as any[]).map((p: any) => ({
