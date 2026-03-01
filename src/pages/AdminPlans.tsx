@@ -90,7 +90,7 @@ export default function AdminPlans() {
     const { data, error } = await supabase
       .from('subscription_plans' as any)
       .select('*')
-      .order('sort_order');
+      .order('price', { ascending: true });
 
     if (error) {
       toast.error('Erro ao carregar planos');
