@@ -105,6 +105,7 @@ export function ScriptChatFloat() {
   const [isLoading, setIsLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [plan, setPlan] = useState('free');
+  const [hasChatAccess, setHasChatAccess] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -128,19 +129,42 @@ export function ScriptChatFloat() {
   // ⚡ Flag: set to false to disable ElevenLabs and use free browser voice
   const USE_ELEVENLABS = false;
 
-  // Load plan
+  // Load plan and check chat access dynamically
   useEffect(() => {
     if (!user) return;
     const monthYear = new Date().toISOString().slice(0, 7);
-    supabase
-      .from('video_usage')
-      .select('plan')
-      .eq('user_id', user.id)
-      .eq('month_year', monthYear)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setPlan(data.plan);
-      });
+
+    Promise.all([
+      supabase
+        .from('video_usage')
+        .select('plan')
+        .eq('user_id', user.id)
+        .eq('month_year', monthYear)
+        .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('has_ai_chat')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+    ]).then(async ([usageRes, profileRes]) => {
+      const currentPlanKey = usageRes.data?.plan || 'free';
+      setPlan(currentPlanKey);
+
+      // Check if user has individual override
+      const profileHasChat = profileRes.data?.has_ai_chat === true;
+
+      // Check if the plan itself has chat enabled
+      const { data: planData } = await supabase
+        .from('subscription_plans')
+        .select('has_ai_chat')
+        .eq('plan_key', currentPlanKey)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      const planHasChat = (planData as any)?.has_ai_chat === true;
+
+      setHasChatAccess(profileHasChat || planHasChat);
+    });
   }, [user]);
 
   // Load conversations
@@ -453,7 +477,7 @@ export function ScriptChatFloat() {
     }, 500);
   };
 
-  const isPaid = plan === 'advanced' || plan === 'premium' || plan === 'enterprise' || plan === 'unlimited';
+  const isPaid = hasChatAccess;
 
   const createConversation = async () => {
     if (!user) return;
@@ -1057,7 +1081,7 @@ export function ScriptChatFloat() {
               </div>
               <h3 className="text-lg font-bold text-foreground">Recurso Exclusivo</h3>
               <p className="text-sm text-muted-foreground">
-                O RoteiroPRO IA está disponível a partir do plano <strong>Avançado</strong>.
+                O RoteiroPRO IA não está disponível no seu plano atual. Faça upgrade para um plano com Chat IA habilitado.
               </p>
               <Button
                 onClick={() => { setOpen(false); setTimeout(() => navigate('/plans'), 300); }}
