@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -11,14 +12,45 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
-    // NOTE: COOP/COEP headers removed intentionally.
-    // They block CDN resources (ffmpeg-core) and break iframe previews.
-    // FFmpeg.wasm 0.12.x works fine in single-thread mode without SharedArrayBuffer.
   },
   optimizeDeps: {
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    mode === "development" && componentTagger(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.png', 'fonts/Inter-Variable.ttf'],
+      workbox: {
+        navigateFallbackDenylist: [/^\/~oauth/],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,ttf}'],
+      },
+      manifest: {
+        name: 'EscalaXPro - Otimização de Vídeos',
+        short_name: 'EscalaXPro',
+        description: 'Otimize sua produção de criativos em vídeo',
+        theme_color: '#0f0a1a',
+        background_color: '#0f0a1a',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        icons: [
+          {
+            src: '/pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+        ],
+      },
+    }),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
