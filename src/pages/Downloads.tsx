@@ -144,7 +144,7 @@ const Downloads = () => {
                       }, 1500);
                     }}
                   >
-                    <ExternalLink className="w-3 h-3" /> Postar no Meta
+                    <ExternalLink className="w-3 h-3" /> Postar no Meta <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1 py-0.5 rounded-full">Beta</span>
                   </Button>
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => clearDownload(video.id)}>
                     <Trash2 className="w-3 h-3" />

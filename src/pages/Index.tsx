@@ -261,7 +261,7 @@ const Index = () => {
             </Button>
             {currentPlan === 'unlimited' && (
               <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/voice-rewrite')}>
-                <Mic className="w-4 h-4" /> Voice Rewrite
+                <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
             )}
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
@@ -293,7 +293,7 @@ const Index = () => {
             </Button>
             {currentPlan === 'unlimited' && (
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/voice-rewrite'); setMobileMenuOpen(false); }}>
-                <Mic className="w-4 h-4" /> Voice Rewrite
+                <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
             )}
             <div className="border-t border-border pt-1 mt-1">
