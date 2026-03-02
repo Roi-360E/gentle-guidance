@@ -478,7 +478,7 @@ const VoiceRewrite = () => {
           </Button>
           <Rocket className="w-6 h-6 text-primary" />
           <div className="flex-1">
-            <h1 className="text-lg font-bold text-foreground">Voice Rewrite</h1>
+            <h1 className="text-lg font-bold text-foreground">Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full align-middle">Beta</span></h1>
             <p className="text-xs text-muted-foreground">Reescreva o áudio dos seus vídeos com IA</p>
           </div>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
