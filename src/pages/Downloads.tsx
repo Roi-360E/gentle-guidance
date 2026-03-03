@@ -1,10 +1,11 @@
 import { useProcessing } from '@/hooks/useProcessing';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, ArrowLeft, Loader2, Film, Share2, ExternalLink, Instagram } from 'lucide-react';
+import { Download, Trash2, ArrowLeft, Loader2, Film, Share2, Instagram, Link2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
 import { InstagramPublishDialog } from '@/components/InstagramPublishDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,15 +46,19 @@ const Downloads = () => {
   const [previewName, setPreviewName] = useState('');
   const [igConnected, setIgConnected] = useState(false);
   const [publishVideo, setPublishVideo] = useState<{ url: string; name: string } | null>(null);
+  const [showConnectPrompt, setShowConnectPrompt] = useState(false);
+  const [metaAppId, setMetaAppId] = useState('');
 
   useEffect(() => {
     const checkIgConnection = async () => {
       if (!session) return;
       try {
-        const { data } = await supabase.functions.invoke('instagram-auth', {
-          body: { action: 'status' },
-        });
-        setIgConnected(!!data?.connection);
+        const [statusRes, appIdRes] = await Promise.all([
+          supabase.functions.invoke('instagram-auth', { body: { action: 'status' } }),
+          supabase.functions.invoke('instagram-auth', { body: { action: 'get_app_id' } }),
+        ]);
+        setIgConnected(!!statusRes.data?.connection);
+        setMetaAppId(appIdRes.data?.app_id || '');
       } catch {}
     };
     checkIgConnection();
@@ -165,15 +170,9 @@ const Downloads = () => {
                       size="sm"
                       variant="outline"
                       className="flex-1 gap-1 rounded-full"
-                      onClick={() => {
-                        handleDownload(video.url, video.name);
-                        toast.info('Vídeo baixado! O Creator Studio será aberto em instantes...');
-                        setTimeout(() => {
-                          window.open('https://business.facebook.com/latest/content_calendar', '_blank');
-                        }, 1500);
-                      }}
+                      onClick={() => setShowConnectPrompt(true)}
                     >
-                      <ExternalLink className="w-3 h-3" /> Postar no Meta <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1 py-0.5 rounded-full">Beta</span>
+                      <Instagram className="w-3 h-3" /> Publicar <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1 py-0.5 rounded-full">Beta</span>
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => clearDownload(video.id)}>
@@ -201,6 +200,65 @@ const Downloads = () => {
           videoName={publishVideo.name}
         />
       )}
+
+      <Dialog open={showConnectPrompt} onOpenChange={setShowConnectPrompt}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="rounded-lg bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-2">
+                <Instagram className="w-4 h-4 text-white" />
+              </div>
+              Conecte seu Instagram
+            </DialogTitle>
+            <DialogDescription>
+              Para publicar ou agendar Reels diretamente do app, conecte sua conta Business ou Creator do Instagram.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside">
+            <li>Conta Instagram Business ou Creator obrigatória</li>
+            <li>Vinculada a uma Página do Facebook</li>
+            <li>Publique e agende Reels sem sair do app</li>
+          </ul>
+          <div className="flex gap-2 pt-2">
+            <Button
+              className="flex-1 gap-2"
+              onClick={() => {
+                if (!metaAppId) {
+                  toast.error('App ID não configurado. Contate o suporte.');
+                  return;
+                }
+                const redirectUri = `${window.location.origin}/auth/instagram/callback`;
+                const scopes = 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,business_management';
+                const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code&state=${crypto.randomUUID()}`;
+                const popup = window.open(authUrl, 'instagramConnect', 'width=600,height=700,scrollbars=yes');
+                if (!popup) {
+                  toast.error('Permita popups para conectar o Instagram.');
+                  return;
+                }
+                const interval = setInterval(() => {
+                  if (popup.closed) {
+                    clearInterval(interval);
+                    // Re-check connection
+                    supabase.functions.invoke('instagram-auth', { body: { action: 'status' } })
+                      .then(({ data }) => {
+                        if (data?.connection) {
+                          setIgConnected(true);
+                          setShowConnectPrompt(false);
+                          toast.success(`Instagram @${data.connection.instagram_username} conectado!`);
+                        }
+                      });
+                  }
+                }, 1000);
+              }}
+            >
+              <Link2 className="w-4 h-4" /> Conectar Instagram
+            </Button>
+            <Button variant="outline" onClick={() => setShowConnectPrompt(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
