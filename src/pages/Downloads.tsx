@@ -1,11 +1,14 @@
 import { useProcessing } from '@/hooks/useProcessing';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, ArrowLeft, Loader2, Film, Share2, ExternalLink } from 'lucide-react';
+import { Download, Trash2, ArrowLeft, Loader2, Film, Share2, ExternalLink, Instagram } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
-import { useState } from 'react';
+import { InstagramPublishDialog } from '@/components/InstagramPublishDialog';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 const shareToInstagram = async (videoUrl: string, videoName: string) => {
   try {
@@ -37,8 +40,24 @@ const shareToInstagram = async (videoUrl: string, videoName: string) => {
 const Downloads = () => {
   const navigate = useNavigate();
   const { downloadedVideos, clearDownload, clearAllDownloads, isProcessing, currentProgress, combinations } = useProcessing();
+  const { session } = useAuth();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState('');
+  const [igConnected, setIgConnected] = useState(false);
+  const [publishVideo, setPublishVideo] = useState<{ url: string; name: string } | null>(null);
+
+  useEffect(() => {
+    const checkIgConnection = async () => {
+      if (!session) return;
+      try {
+        const { data } = await supabase.functions.invoke('instagram-auth', {
+          body: { action: 'status' },
+        });
+        setIgConnected(!!data?.connection);
+      } catch {}
+    };
+    checkIgConnection();
+  }, [session]);
 
   const handleDownload = (url: string, name: string) => {
     const a = document.createElement('a');
@@ -132,20 +151,31 @@ const Downloads = () => {
                   <Button size="sm" variant="outline" className="flex-1 gap-1 rounded-full" onClick={() => shareToInstagram(video.url, video.name)}>
                     <Share2 className="w-3 h-3" /> Compartilhar
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 gap-1 rounded-full"
-                    onClick={() => {
-                      handleDownload(video.url, video.name);
-                      toast.info('Vídeo baixado! O Creator Studio será aberto em instantes...');
-                      setTimeout(() => {
-                        window.open('https://business.facebook.com/latest/content_calendar', '_blank');
-                      }, 1500);
-                    }}
-                  >
-                    <ExternalLink className="w-3 h-3" /> Postar no Meta <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1 py-0.5 rounded-full">Beta</span>
-                  </Button>
+                  {igConnected ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 gap-1 rounded-full"
+                      onClick={() => setPublishVideo({ url: video.url, name: video.name })}
+                    >
+                      <Instagram className="w-3 h-3" /> Publicar <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1 py-0.5 rounded-full">Beta</span>
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 gap-1 rounded-full"
+                      onClick={() => {
+                        handleDownload(video.url, video.name);
+                        toast.info('Vídeo baixado! O Creator Studio será aberto em instantes...');
+                        setTimeout(() => {
+                          window.open('https://business.facebook.com/latest/content_calendar', '_blank');
+                        }, 1500);
+                      }}
+                    >
+                      <ExternalLink className="w-3 h-3" /> Postar no Meta <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1 py-0.5 rounded-full">Beta</span>
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => clearDownload(video.id)}>
                     <Trash2 className="w-3 h-3" />
                   </Button>
@@ -162,6 +192,15 @@ const Downloads = () => {
         videoUrl={previewUrl}
         title={previewName}
       />
+
+      {publishVideo && (
+        <InstagramPublishDialog
+          open={!!publishVideo}
+          onOpenChange={(open) => { if (!open) setPublishVideo(null); }}
+          videoUrl={publishVideo.url}
+          videoName={publishVideo.name}
+        />
+      )}
     </div>
   );
 };

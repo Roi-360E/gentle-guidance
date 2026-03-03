@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { video_url, caption, media_type = "REELS" } = body;
+    const { video_url, caption, media_type = "REELS", scheduled_publish_time } = body;
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
     }
 
     const { instagram_user_id, page_access_token } = connection;
+    const isScheduled = !!scheduled_publish_time;
 
     // Step 1: Create media container
     const containerParams = new URLSearchParams({
@@ -97,6 +98,12 @@ Deno.serve(async (req) => {
       media_type,
       access_token: page_access_token,
     });
+
+    // If scheduling, we don't publish immediately - we set published=false
+    if (isScheduled) {
+      containerParams.set("published", "false");
+      containerParams.set("scheduled_publish_time", String(scheduled_publish_time));
+    }
 
     const containerRes = await fetch(
       `https://graph.facebook.com/v21.0/${instagram_user_id}/media?${containerParams}`
@@ -109,9 +116,10 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: "Failed to create media container",
           details: containerData.error.message,
+          _debug: containerData.error,
         }),
         {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -122,10 +130,10 @@ Deno.serve(async (req) => {
     // Step 2: Wait for container to be ready (poll status)
     let status = "IN_PROGRESS";
     let attempts = 0;
-    const maxAttempts = 30; // Max 5 minutes (10s intervals)
+    const maxAttempts = 30;
 
     while (status === "IN_PROGRESS" && attempts < maxAttempts) {
-      await new Promise((r) => setTimeout(r, 10000)); // Wait 10s
+      await new Promise((r) => setTimeout(r, 10000));
       attempts++;
 
       const statusRes = await fetch(
@@ -140,7 +148,7 @@ Deno.serve(async (req) => {
             error: "Video processing failed on Instagram. Try a different video format.",
           }),
           {
-            status: 400,
+            status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
@@ -153,13 +161,28 @@ Deno.serve(async (req) => {
           error: "Video processing timed out. The video may be too large.",
         }),
         {
-          status: 408,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    // Step 3: Publish the container
+    // Step 3: If scheduled, the container is already set — no need to call media_publish
+    if (isScheduled) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          scheduled: true,
+          container_id: containerId,
+          message: `Reel agendado com sucesso para ${new Date(scheduled_publish_time * 1000).toLocaleString('pt-BR')}`,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Step 3b: Publish now
     const publishRes = await fetch(
       `https://graph.facebook.com/v21.0/${instagram_user_id}/media_publish?creation_id=${containerId}&access_token=${page_access_token}`
     );
@@ -173,7 +196,7 @@ Deno.serve(async (req) => {
           details: publishData.error.message,
         }),
         {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
