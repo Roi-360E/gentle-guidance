@@ -30,6 +30,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <PWAInstallPrompt />
+      <FacebookPixelProvider />
       <BrowserRouter>
         <AuthProvider>
           <ProcessingProvider>
