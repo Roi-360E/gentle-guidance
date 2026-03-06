@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
       data: [
         {
           event_name: "Purchase",
+          event_id: eventId,
           event_time: Math.floor(Date.now() / 1000),
           action_source: "website",
           event_source_url: "https://escalaxpro.com",
