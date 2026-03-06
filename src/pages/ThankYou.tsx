@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Home, Sparkles } from 'lucide-react';
@@ -9,18 +9,22 @@ import { motion } from 'framer-motion';
 export default function ThankYou() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const pixelFired = useRef(false);
+
+  const isTest = searchParams.get('test') === '1';
 
   useEffect(() => {
     if (pixelFired.current) return;
 
-    const planName = localStorage.getItem('checkout_plan_name') || '';
-    const planValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
-    const planKey = localStorage.getItem('checkout_plan_key') || '';
-    const method = localStorage.getItem('checkout_method') || 'Cartão/Boleto';
+    const planName = isTest ? 'Teste Purchase' : (localStorage.getItem('checkout_plan_name') || '');
+    const planValue = isTest ? 1.00 : parseFloat(localStorage.getItem('checkout_plan_value') || '0');
+    const planKey = isTest ? 'test_plan' : (localStorage.getItem('checkout_plan_key') || '');
+    const method = isTest ? 'Teste' : (localStorage.getItem('checkout_method') || 'Cartão/Boleto');
 
     const fireEvent = () => {
       pixelFired.current = true;
+      console.log('[ThankYou] Disparando evento Purchase', { planName, planValue, planKey, method, isTest });
       trackPixelEvent('Purchase', {
         content_name: planName,
         content_category: method,
@@ -30,11 +34,12 @@ export default function ThankYou() {
         content_type: 'product',
       }, user?.id);
 
-      // Clean up
-      localStorage.removeItem('checkout_plan_name');
-      localStorage.removeItem('checkout_plan_value');
-      localStorage.removeItem('checkout_plan_key');
-      localStorage.removeItem('checkout_method');
+      if (!isTest) {
+        localStorage.removeItem('checkout_plan_name');
+        localStorage.removeItem('checkout_plan_value');
+        localStorage.removeItem('checkout_plan_key');
+        localStorage.removeItem('checkout_method');
+      }
     };
 
     // Wait for fbq to be available (pixel script may still be loading)
@@ -51,7 +56,7 @@ export default function ThankYou() {
       }, 500);
       return () => clearInterval(interval);
     }
-  }, [user?.id]);
+  }, [user?.id, isTest]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
