@@ -153,13 +153,22 @@ export default function Plans() {
         .single();
       if (data?.status === 'confirmed') {
         setPollingPayment(false);
+        const confirmedPlanKey = localStorage.getItem('pix_plan_key') || '';
+        const confirmedPlanName = localStorage.getItem('pix_plan_name') || '';
+        const confirmedPlanValue = parseFloat(localStorage.getItem('pix_plan_value') || '0');
         setPixData(null);
         toast.success('Pagamento Pix confirmado! Plano ativado.');
-        // Fire Purchase event for Pix confirmation
         trackPixelEvent('Purchase', {
+          content_name: confirmedPlanName,
           content_category: 'Pix',
+          value: confirmedPlanValue,
           currency: 'BRL',
+          content_ids: [confirmedPlanKey],
+          content_type: 'product',
         }, user?.id);
+        localStorage.removeItem('pix_plan_key');
+        localStorage.removeItem('pix_plan_name');
+        localStorage.removeItem('pix_plan_value');
         const monthYear = new Date().toISOString().substring(0, 7);
         const { data: usage } = await supabase
           .from('video_usage')
