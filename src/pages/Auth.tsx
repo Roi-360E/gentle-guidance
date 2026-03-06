@@ -33,6 +33,11 @@ const Auth = () => {
         toast.error(error.message);
       } else {
         toast.success('Login realizado!');
+        // Track CompleteRegistration on successful login (email verified)
+        trackPixelEvent('CompleteRegistration', {
+          content_name: 'Login',
+          status: 'completed',
+        });
         navigate('/');
       }
     } else {
@@ -98,12 +103,6 @@ const Auth = () => {
           content_category: 'Registration',
         });
       }
-    } else {
-      // Track CompleteRegistration on successful login (email verified)
-      trackPixelEvent('CompleteRegistration', {
-        content_name: 'Login',
-        status: 'completed',
-      }, user?.id);
     }
     setLoading(false);
   };
