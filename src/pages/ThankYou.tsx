@@ -84,7 +84,7 @@ export default function ThankYou() {
       }, user?.id);
 
       // CAPI direct call for reliability
-      fireCAPI({ name: planName, value: planValue, key: planKey });
+      fireCAPI({ name: planName, value: planValue, key: planKey }, user?.id);
 
       // If test mode, fire all plans to seed multiple events
       if (isTest) {
