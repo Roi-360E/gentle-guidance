@@ -928,16 +928,28 @@ export default function AdminPlans() {
                           {px.is_active ? 'Ativo' : 'Inativo'}
                         </Badge>
                       </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deletePixel(px.id)}
-                        disabled={deletingPixelId === px.id}
-                        className="shrink-0 ml-3 gap-1"
-                      >
-                        {deletingPixelId === px.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                        Excluir
-                      </Button>
+                      <div className="flex gap-2 shrink-0 ml-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => testPixelPurchase(px)}
+                          disabled={testingPixelId === px.id}
+                          className="gap-1"
+                        >
+                          {testingPixelId === px.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+                          Testar Compra
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deletePixel(px.id)}
+                          disabled={deletingPixelId === px.id}
+                          className="gap-1"
+                        >
+                          {deletingPixelId === px.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          Excluir
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </CardContent>
