@@ -97,25 +97,9 @@ export default function Plans() {
     const savedPlanKey = localStorage.getItem('checkout_plan_key') || '';
 
     if (paymentStatus === 'success') {
-      toast.success('Pagamento aprovado! Seu plano foi ativado.');
-      trackPixelEvent('AddPaymentInfo', {
-        content_name: savedPlan,
-        content_category: 'Cartão/Boleto',
-        value: savedValue,
-        currency: 'BRL',
-      }, user?.id);
-      trackPixelEvent('Purchase', {
-        content_name: savedPlan,
-        content_category: 'Cartão/Boleto',
-        value: savedValue,
-        currency: 'BRL',
-        content_ids: [savedPlanKey],
-        content_type: 'product',
-      }, user?.id);
-      // Clean up
-      localStorage.removeItem('checkout_plan_name');
-      localStorage.removeItem('checkout_plan_value');
-      localStorage.removeItem('checkout_plan_key');
+      // Redirect to thank you page (pixel fires there)
+      navigate('/obrigado', { replace: true });
+      return;
     } else if (paymentStatus === 'failure') {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
@@ -155,30 +139,19 @@ export default function Plans() {
         .single();
       if (data?.status === 'confirmed') {
         setPollingPayment(false);
-        const confirmedPlanKey = localStorage.getItem('pix_plan_key') || '';
-        const confirmedPlanName = localStorage.getItem('pix_plan_name') || '';
-        const confirmedPlanValue = parseFloat(localStorage.getItem('pix_plan_value') || '0');
         setPixData(null);
-        toast.success('Pagamento Pix confirmado! Plano ativado.');
-        trackPixelEvent('Purchase', {
-          content_name: confirmedPlanName,
-          content_category: 'Pix',
-          value: confirmedPlanValue,
-          currency: 'BRL',
-          content_ids: [confirmedPlanKey],
-          content_type: 'product',
-        }, user?.id);
+        // Copy pix plan info to checkout keys so ThankYou page can read them
+        const pixKey = localStorage.getItem('pix_plan_key') || '';
+        const pixName = localStorage.getItem('pix_plan_name') || '';
+        const pixValue = localStorage.getItem('pix_plan_value') || '0';
+        localStorage.setItem('checkout_plan_key', pixKey);
+        localStorage.setItem('checkout_plan_name', pixName);
+        localStorage.setItem('checkout_plan_value', pixValue);
+        localStorage.setItem('checkout_method', 'Pix');
         localStorage.removeItem('pix_plan_key');
         localStorage.removeItem('pix_plan_name');
         localStorage.removeItem('pix_plan_value');
-        const monthYear = new Date().toISOString().substring(0, 7);
-        const { data: usage } = await supabase
-          .from('video_usage')
-          .select('plan')
-          .eq('user_id', user!.id)
-          .eq('month_year', monthYear)
-          .single();
-        if (usage?.plan) setCurrentPlan(usage.plan);
+        navigate('/obrigado');
       }
     }, 5000);
     return () => clearInterval(interval);
