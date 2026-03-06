@@ -92,7 +92,18 @@ const Auth = () => {
             .eq('user_id', newUser.id);
         }
         toast.success('Conta criada! Verifique seu email para confirmar.');
+        // Track Lead event on successful signup
+        trackPixelEvent('Lead', {
+          content_name: 'Signup',
+          content_category: 'Registration',
+        });
       }
+    } else {
+      // Track CompleteRegistration on successful login (email verified)
+      trackPixelEvent('CompleteRegistration', {
+        content_name: 'Login',
+        status: 'completed',
+      }, user?.id);
     }
     setLoading(false);
   };
