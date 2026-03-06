@@ -447,12 +447,15 @@ export default function AdminPlans() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs defaultValue="plans" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="plans" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Planos
             </TabsTrigger>
             <TabsTrigger value="users" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Usuários
+            </TabsTrigger>
+            <TabsTrigger value="pixel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
             </TabsTrigger>
           </TabsList>
 
