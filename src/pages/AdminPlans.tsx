@@ -77,6 +77,8 @@ export default function AdminPlans() {
   const [savedPixels, setSavedPixels] = useState<any[]>([]);
   const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
   const [testingPixelId, setTestingPixelId] = useState<string | null>(null);
+  const [testEventCode, setTestEventCode] = useState('');
+  const [lastTestResult, setLastTestResult] = useState<{ pixelName: string; code: string; success: boolean; error?: string } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -172,28 +174,41 @@ export default function AdminPlans() {
 
   const testPixelPurchase = async (pixel: any) => {
     setTestingPixelId(pixel.id);
+    setLastTestResult(null);
     try {
       const { data, error } = await supabase.functions.invoke('test-pixel-event', {
-        body: { pixel_id: pixel.pixel_id, access_token: pixel.access_token, pixel_name: pixel.name },
+        body: {
+          pixel_id: pixel.pixel_id,
+          access_token: pixel.access_token,
+          pixel_name: pixel.name,
+          test_event_code: testEventCode.trim() || undefined,
+        },
       });
 
       if (error) {
-        toast.error('Erro ao chamar função: ' + error.message);
+        const msg = error.message || 'Erro desconhecido';
+        if (msg.includes('autenticado') || msg.includes('autorizado') || msg.includes('Session')) {
+          toast.error('Sessão expirada. Faça login novamente.');
+        } else {
+          toast.error('Erro ao chamar função: ' + msg);
+        }
+        setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: msg });
       } else if (data?.error) {
-        toast.error(`Erro no Pixel "${pixel.name}": ${data.error}`);
+        if (data.error.includes('autenticado') || data.error.includes('Acesso negado')) {
+          toast.error('Sessão expirada ou sem permissão. Faça login novamente.');
+        } else {
+          toast.error(`Erro no Pixel "${pixel.name}": ${data.error}`);
+        }
+        setLastTestResult({ pixelName: pixel.name, code: data.test_event_code || '', success: false, error: data.error });
       } else if (data?.success) {
-        toast.success(
-          `✅ Evento de teste enviado para "${pixel.name}"!\n\n📋 Test Event Code: ${data.test_event_code}\n\nCopie esse código e cole no Gerenciador de Eventos do Facebook para visualizar o evento.`,
-          { duration: 15000 }
-        );
-        // Copy to clipboard
-        try {
-          await navigator.clipboard.writeText(data.test_event_code);
-          toast.info('Test Event Code copiado para a área de transferência!');
-        } catch {}
+        const code = data.test_event_code;
+        setLastTestResult({ pixelName: pixel.name, code, success: true });
+        toast.success(`Evento de teste enviado para "${pixel.name}"!`, { duration: 8000 });
+        try { await navigator.clipboard.writeText(code); } catch {}
       }
     } catch (err: any) {
       toast.error('Erro ao enviar evento de teste: ' + err.message);
+      setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: err.message });
     }
     setTestingPixelId(null);
   };
@@ -940,6 +955,67 @@ export default function AdminPlans() {
                       </div>
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Test Event Section */}
+            {savedPixels.length > 0 && (
+              <Card className="border-dashed border-2 border-primary/30">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Crosshair className="w-5 h-5 text-primary" />
+                    Eventos de Teste
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="test-event-code">Test Event Code (opcional)</Label>
+                    <Input
+                      id="test-event-code"
+                      placeholder="Ex: TEST12345 — obtenha no Gerenciador de Eventos do Facebook"
+                      value={testEventCode}
+                      onChange={e => setTestEventCode(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Acesse o <strong>Gerenciador de Eventos do Facebook</strong> → seu Pixel → <strong>Eventos de Teste</strong> para obter o código.
+                      Se deixar vazio, um código será gerado automaticamente.
+                    </p>
+                  </div>
+
+                  {lastTestResult && (
+                    <div className={`rounded-lg p-4 space-y-2 ${lastTestResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-destructive/10 border border-destructive/30'}`}>
+                      <p className="font-medium text-sm">
+                        {lastTestResult.success ? '✅ Evento enviado com sucesso!' : '❌ Erro no envio'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Pixel: {lastTestResult.pixelName}</p>
+                      {lastTestResult.code && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <code className="bg-background border rounded px-3 py-1.5 text-sm font-mono flex-1">{lastTestResult.code}</code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(lastTestResult.code);
+                                toast.success('Código copiado!');
+                              } catch { toast.error('Erro ao copiar'); }
+                            }}
+                          >
+                            Copiar
+                          </Button>
+                        </div>
+                      )}
+                      {lastTestResult.error && (
+                        <p className="text-xs text-destructive">{lastTestResult.error}</p>
+                      )}
+                      {lastTestResult.success && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Cole o código acima em <strong>Gerenciador de Eventos → Eventos de Teste</strong> no Facebook para visualizar este evento.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

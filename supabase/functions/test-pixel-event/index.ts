@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { pixel_id, access_token, pixel_name } = await req.json();
+    const { pixel_id, access_token, pixel_name, test_event_code } = await req.json();
 
     if (!pixel_id || !access_token) {
       return new Response(JSON.stringify({ error: "pixel_id e access_token são obrigatórios" }), {
@@ -51,8 +51,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Generate a test event code
-    const testEventCode = "TEST" + crypto.randomUUID().replace(/-/g, "").substring(0, 10).toUpperCase();
+    // Use provided test event code or generate one
+    const testEventCode = test_event_code || ("TEST" + crypto.randomUUID().replace(/-/g, "").substring(0, 10).toUpperCase());
 
     // Hash test email
     const encoder = new TextEncoder();
