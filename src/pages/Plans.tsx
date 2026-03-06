@@ -50,6 +50,7 @@ export default function Plans() {
 
   // Load plans from database
   useEffect(() => {
+    trackViewContent('Planos e Pagamento');
     supabase
       .from('subscription_plans' as any)
       .select('*')
