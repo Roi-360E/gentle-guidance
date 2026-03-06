@@ -92,6 +92,7 @@ export default function AdminPlans() {
 
   // Domain verification state
   const [domainVerifCode, setDomainVerifCode] = useState('');
+  const [domainVerifContent, setDomainVerifContent] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
@@ -1163,81 +1164,86 @@ export default function AdminPlans() {
             </p>
           </TabsContent>
 
-          {/* ===== DOMAIN VERIFICATION TAB ===== */}
+           {/* ===== DOMAIN VERIFICATION TAB ===== */}
           <TabsContent value="domain" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Globe className="w-5 h-5 text-primary" />
-                  Verificação de Domínio — Facebook
+                  Verificação de Domínio — Facebook (Arquivo HTML)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">📋 Como verificar seu domínio no Facebook:</p>
+                  <p className="font-medium text-foreground">📋 Como verificar seu domínio por arquivo HTML:</p>
                   <ol className="list-decimal list-inside space-y-2">
                     <li>No <strong>Gerenciador de Negócios do Facebook</strong>, vá em <strong>Configurações → Segurança da Marca → Domínios</strong>.</li>
                     <li>Clique em <strong>"Adicionar"</strong> e insira seu domínio (ex: <code className="bg-muted px-1 rounded">deploysites.online</code>).</li>
-                    <li>Selecione o método <strong>"Verificação por meta-tag HTML"</strong> ou <strong>"Upload de arquivo HTML"</strong>.</li>
-                    <li>Copie o <strong>código de verificação</strong> fornecido pelo Facebook.</li>
-                    <li>Cole o código no campo abaixo e clique em <strong>"Salvar Verificação"</strong>.</li>
+                    <li>Selecione o método <strong>"Carregar arquivo HTML"</strong>.</li>
+                    <li>Copie o <strong>nome do arquivo</strong> (ex: <code className="bg-muted px-1 rounded">ripyzu7jxb6g3e15krg2r5jat9apbs.html</code>) e o <strong>código de verificação</strong>.</li>
+                    <li>Cole ambos nos campos abaixo e clique em <strong>"Salvar Arquivo de Verificação"</strong>.</li>
+                    <li>Após publicar o site, acesse <code className="bg-muted px-1 rounded">https://seudominio.com/nomedoarquivo.html</code> para confirmar.</li>
                     <li>Volte ao Facebook e clique em <strong>"Verificar domínio"</strong>.</li>
                   </ol>
                   <p className="text-xs">⏳ A verificação pode levar até 72 horas.</p>
                 </div>
 
                 <div className="space-y-3">
-                  <Label htmlFor="domain-verif-code" className="text-sm font-medium">
-                    Código de Verificação do Facebook
+                  <Label htmlFor="domain-verif-filename" className="text-sm font-medium">
+                    Nome do arquivo HTML
                   </Label>
-                  <Textarea
-                    id="domain-verif-code"
-                    placeholder='Cole aqui o conteúdo do meta tag ou do arquivo HTML de verificação. Ex: facebook-domain-verification=abc123xyz...'
+                  <Input
+                    id="domain-verif-filename"
+                    placeholder='Ex: ripyzu7jxb6g3e15krg2r5jat9apbs.html'
                     value={domainVerifCode}
                     onChange={(e) => {
                       setDomainVerifCode(e.target.value);
                       setDomainVerifStatus('idle');
                     }}
-                    rows={4}
+                    className="font-mono text-xs"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label htmlFor="domain-verif-content" className="text-sm font-medium">
+                    Conteúdo do arquivo (código de verificação)
+                  </Label>
+                  <Textarea
+                    id="domain-verif-content"
+                    placeholder='Cole aqui o conteúdo que o Facebook pede para colocar dentro do arquivo HTML'
+                    value={domainVerifContent}
+                    onChange={(e) => {
+                      setDomainVerifContent(e.target.value);
+                      setDomainVerifStatus('idle');
+                    }}
+                    rows={3}
                     className="font-mono text-xs"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Aceita tanto o meta tag completo (<code>&lt;meta name="facebook-domain-verification" ...&gt;</code>) quanto apenas o código de verificação.
+                    Geralmente é um código como <code>facebook-domain-verification=abc123xyz...</code>
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <Button
                     onClick={async () => {
-                      const code = domainVerifCode.trim();
-                      if (!code) {
-                        toast.error('Cole o código de verificação do Facebook.');
+                      const filename = domainVerifCode.trim();
+                      const content = domainVerifContent.trim();
+                      if (!filename || !content) {
+                        toast.error('Preencha o nome do arquivo e o conteúdo de verificação.');
                         return;
-                      }
-
-                      // Extract the verification value from meta tag or raw code
-                      let verificationValue = code;
-                      const metaMatch = code.match(/content=["']([^"']+)["']/);
-                      if (metaMatch) {
-                        verificationValue = metaMatch[1];
-                      }
-                      // If it contains facebook-domain-verification= extract value
-                      const fbMatch = verificationValue.match(/facebook-domain-verification=(.+)/);
-                      if (fbMatch) {
-                        verificationValue = fbMatch[1].trim();
                       }
 
                       setDomainVerifSaving(true);
                       try {
-                        // Save meta tag to index.html via edge function
                         const { data, error } = await supabase.functions.invoke('domain-verify', {
-                          body: { verification_code: verificationValue }
+                          body: { filename, verification_content: content }
                         });
 
                         if (error) throw error;
 
                         setDomainVerifStatus('saved');
-                        toast.success('Código de verificação salvo! O meta tag foi adicionado ao site.');
+                        toast.success('Arquivo de verificação salvo! Publique o site para ativar.');
                       } catch (err: any) {
                         console.error('Error saving verification:', err);
                         setDomainVerifStatus('error');
@@ -1246,7 +1252,7 @@ export default function AdminPlans() {
                         setDomainVerifSaving(false);
                       }
                     }}
-                    disabled={domainVerifSaving || !domainVerifCode.trim()}
+                    disabled={domainVerifSaving || !domainVerifCode.trim() || !domainVerifContent.trim()}
                     className="gap-2"
                   >
                     {domainVerifSaving ? (
@@ -1254,13 +1260,13 @@ export default function AdminPlans() {
                     ) : (
                       <Save className="w-4 h-4" />
                     )}
-                    Salvar Verificação
+                    Salvar Arquivo de Verificação
                   </Button>
 
                   {domainVerifStatus === 'saved' && (
                     <div className="flex items-center gap-1.5 text-sm text-primary">
                       <CheckCircle2 className="w-4 h-4" />
-                      Código salvo com sucesso
+                      Arquivo salvo — publique o site para ativar
                     </div>
                   )}
                   {domainVerifStatus === 'error' && (
@@ -1269,13 +1275,6 @@ export default function AdminPlans() {
                       Erro ao salvar
                     </div>
                   )}
-                </div>
-
-                <div className="border-t pt-4 space-y-2">
-                  <p className="text-sm font-medium">🔗 Verificação via arquivo HTML</p>
-                  <p className="text-xs text-muted-foreground">
-                    Se preferir verificar por arquivo HTML, adicione o arquivo fornecido pelo Facebook na pasta <code className="bg-muted px-1 rounded">public/</code> do projeto e publique novamente.
-                  </p>
                 </div>
               </CardContent>
             </Card>

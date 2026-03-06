@@ -18,18 +18,8 @@ export function FacebookPixelProvider() {
       const pixels = (data as any[]) as { pixel_snippet: string; is_active: boolean }[];
       
       pixels.forEach((px) => {
-        // Handle domain verification meta tags
+        // Skip domain verification entries (handled via static HTML file)
         if (px.pixel_snippet?.includes('facebook-domain-verification')) {
-          const metaMatch = px.pixel_snippet.match(/content=["']([^"']+)["']/);
-          if (metaMatch) {
-            const existing = document.querySelector('meta[name="facebook-domain-verification"]');
-            if (!existing) {
-              const meta = document.createElement('meta');
-              meta.name = 'facebook-domain-verification';
-              meta.content = metaMatch[1];
-              document.head.appendChild(meta);
-            }
-          }
           return;
         }
 
