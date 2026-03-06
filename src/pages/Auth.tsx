@@ -11,6 +11,7 @@ import { validateEmailDomain } from '@/lib/email-validator';
 import { generateFingerprint } from '@/lib/device-fingerprint';
 import { validateCPF, formatCPF, hashCPF } from '@/lib/cpf-validator';
 import { supabase } from '@/integrations/supabase/client';
+import { trackPixelEvent } from '@/lib/pixel-tracker';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
