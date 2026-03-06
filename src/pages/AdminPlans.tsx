@@ -67,6 +67,14 @@ export default function AdminPlans() {
   const [tokenEditUser, setTokenEditUser] = useState<string | null>(null);
   const [tokenEditValue, setTokenEditValue] = useState('');
 
+  // Pixel state
+  const [pixelId, setPixelId] = useState('');
+  const [pixelAccessToken, setPixelAccessToken] = useState('');
+  const [pixelActive, setPixelActive] = useState(false);
+  const [pixelLoading, setPixelLoading] = useState(false);
+  const [pixelSaving, setPixelSaving] = useState(false);
+  const [pixelConfigId, setPixelConfigId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user) return;
     supabase
