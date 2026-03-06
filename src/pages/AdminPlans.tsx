@@ -959,6 +959,67 @@ export default function AdminPlans() {
               </Card>
             )}
 
+            {/* Test Event Section */}
+            {savedPixels.length > 0 && (
+              <Card className="border-dashed border-2 border-primary/30">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Crosshair className="w-5 h-5 text-primary" />
+                    Eventos de Teste
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="test-event-code">Test Event Code (opcional)</Label>
+                    <Input
+                      id="test-event-code"
+                      placeholder="Ex: TEST12345 — obtenha no Gerenciador de Eventos do Facebook"
+                      value={testEventCode}
+                      onChange={e => setTestEventCode(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Acesse o <strong>Gerenciador de Eventos do Facebook</strong> → seu Pixel → <strong>Eventos de Teste</strong> para obter o código.
+                      Se deixar vazio, um código será gerado automaticamente.
+                    </p>
+                  </div>
+
+                  {lastTestResult && (
+                    <div className={`rounded-lg p-4 space-y-2 ${lastTestResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-destructive/10 border border-destructive/30'}`}>
+                      <p className="font-medium text-sm">
+                        {lastTestResult.success ? '✅ Evento enviado com sucesso!' : '❌ Erro no envio'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Pixel: {lastTestResult.pixelName}</p>
+                      {lastTestResult.code && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <code className="bg-background border rounded px-3 py-1.5 text-sm font-mono flex-1">{lastTestResult.code}</code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(lastTestResult.code);
+                                toast.success('Código copiado!');
+                              } catch { toast.error('Erro ao copiar'); }
+                            }}
+                          >
+                            Copiar
+                          </Button>
+                        </div>
+                      )}
+                      {lastTestResult.error && (
+                        <p className="text-xs text-destructive">{lastTestResult.error}</p>
+                      )}
+                      {lastTestResult.success && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Cole o código acima em <strong>Gerenciador de Eventos → Eventos de Teste</strong> no Facebook para visualizar este evento.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <p className="text-xs text-muted-foreground text-center">
               O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
             </p>
