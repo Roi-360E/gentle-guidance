@@ -209,18 +209,24 @@ export default function AdminPlans() {
     setPixelSaving(true);
     const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, dedup_key: pixelDedupKey.trim(), pixel_snippet: pixelSnippet.trim(), is_active: pixelActive, updated_at: new Date().toISOString() };
 
-    const { error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
+    let error;
+    if (editingPixelId) {
+      ({ error } = await supabase.from('facebook_pixel_config' as any).update(payload as any).eq('id', editingPixelId));
+    } else {
+      ({ error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any));
+    }
 
     if (error) {
       toast.error('Erro ao salvar Pixel: ' + error.message);
     } else {
-      toast.success('Pixel salvo com sucesso!');
+      toast.success(editingPixelId ? 'Pixel atualizado com sucesso!' : 'Pixel salvo com sucesso!');
       setPixelName('');
       setPixelId('');
       setPixelAccessToken('');
       setPixelDedupKey('');
       setPixelSnippet('');
       setPixelActive(false);
+      setEditingPixelId(null);
       await loadPixelConfig();
     }
     setPixelSaving(false);
