@@ -90,6 +90,11 @@ export default function AdminPlans() {
   const [funnelData, setFunnelData] = useState<{ event_name: string; count: number }[]>([]);
   const [funnelLoading, setFunnelLoading] = useState(false);
 
+  // Domain verification state
+  const [domainVerifCode, setDomainVerifCode] = useState('');
+  const [domainVerifSaving, setDomainVerifSaving] = useState(false);
+  const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+
   useEffect(() => {
     if (!user) return;
     supabase
