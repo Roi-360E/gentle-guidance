@@ -9,9 +9,20 @@ export function trackPixelEvent(
   metadata: Record<string, any> = {},
   userId?: string
 ) {
-  // Browser-side fbq
-  if (typeof window !== 'undefined' && (window as any).fbq) {
-    (window as any).fbq('track', eventName, metadata);
+  // Browser-side fbq with retry
+  if (typeof window !== 'undefined') {
+    const tryFire = (attempt = 0) => {
+      const fbq = (window as any).fbq;
+      if (fbq && typeof fbq === 'function') {
+        fbq('track', eventName, metadata);
+        console.log(`[pixel-tracker] ✅ fbq('track', '${eventName}') fired`, metadata);
+      } else if (attempt < 30) {
+        setTimeout(() => tryFire(attempt + 1), 500);
+      } else {
+        console.warn(`[pixel-tracker] ❌ fbq not available after 15s, '${eventName}' not fired browser-side`);
+      }
+    };
+    tryFire();
   }
 
   // Log to database (fire-and-forget)
