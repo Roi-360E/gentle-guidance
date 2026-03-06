@@ -1181,16 +1181,17 @@ export default function AdminPlans() {
 
            {/* ===== DOMAIN VERIFICATION TAB ===== */}
           <TabsContent value="domain" className="space-y-6">
+            {/* Method 1: HTML File */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Globe className="w-5 h-5 text-primary" />
-                  Verificação de Domínio — Facebook (Arquivo HTML)
+                  Método 1 — Arquivo HTML
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">📋 Como verificar seu domínio por arquivo HTML:</p>
+                  <p className="font-medium text-foreground">📋 Como verificar por arquivo HTML:</p>
                   <ol className="list-decimal list-inside space-y-2">
                     <li>No <strong>Gerenciador de Negócios do Facebook</strong>, vá em <strong>Configurações → Segurança da Marca → Domínios</strong>.</li>
                     <li>Clique em <strong>"Adicionar"</strong> e insira seu domínio.</li>
@@ -1201,7 +1202,6 @@ export default function AdminPlans() {
                   <p className="text-xs">⏳ A verificação pode levar até 72 horas.</p>
                 </div>
 
-                {/* Saved domain files list */}
                 {savedDomainFiles.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Arquivos salvos</Label>
@@ -1293,6 +1293,154 @@ export default function AdminPlans() {
                       Erro ao salvar
                     </div>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Method 2: Meta Tag */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary" />
+                  Método 2 — Meta Tag
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">📋 Como verificar por Meta Tag:</p>
+                  <ol className="list-decimal list-inside space-y-2">
+                    <li>No <strong>Gerenciador de Negócios do Facebook</strong>, vá em <strong>Configurações → Segurança da Marca → Domínios</strong>.</li>
+                    <li>Selecione o método <strong>"Adicionar meta tag"</strong>.</li>
+                    <li>O Facebook vai fornecer uma meta tag como: <code className="bg-muted px-1 rounded text-xs">&lt;meta name="facebook-domain-verification" content="abc123" /&gt;</code></li>
+                    <li>Cole o <strong>conteúdo (content)</strong> abaixo. A tag será adicionada automaticamente ao seu site.</li>
+                    <li>Publique o site e volte ao Facebook para verificar.</li>
+                  </ol>
+                </div>
+
+                {(() => {
+                  const metaTag = document.querySelector('meta[name="facebook-domain-verification"]');
+                  const currentContent = metaTag?.getAttribute('content');
+                  return currentContent ? (
+                    <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-4 py-3">
+                      <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">Meta tag ativa</p>
+                        <p className="text-xs text-muted-foreground font-mono">{currentContent}</p>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                <div className="space-y-3">
+                  <Label htmlFor="domain-meta-content" className="text-sm font-medium">
+                    Cole o valor do content da meta tag
+                  </Label>
+                  <Input
+                    id="domain-meta-content"
+                    placeholder="Ex: ripyzu7jxb6g3e15krg2r5jat9apbs"
+                    value={domainMetaTag}
+                    onChange={(e) => {
+                      setDomainMetaTag(e.target.value);
+                      setDomainMetaStatus('idle');
+                    }}
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Você pode colar a tag inteira ou apenas o valor do <code>content</code>. Ex: <code>ripyzu7jxb6g3e15krg2r5jat9apbs</code>
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={async () => {
+                      let content = domainMetaTag.trim();
+                      if (!content) {
+                        toast.error('Cole o conteúdo da meta tag.');
+                        return;
+                      }
+                      // Extract content value if full tag was pasted
+                      const match = content.match(/content=["']([^"']+)["']/);
+                      if (match) content = match[1];
+
+                      setDomainMetaSaving(true);
+                      try {
+                        const { error } = await supabase.functions.invoke('domain-verify', {
+                          body: { filename: '__meta_tag__', verification_content: content, type: 'meta_tag' }
+                        });
+                        if (error) throw error;
+
+                        setDomainMetaStatus('saved');
+                        setDomainMetaTag('');
+                        loadDomainFiles();
+                        toast.success('Meta tag de verificação salva! Publique o site para ativar.');
+                      } catch (err: any) {
+                        console.error('Error saving meta tag:', err);
+                        setDomainMetaStatus('error');
+                        toast.error('Erro ao salvar: ' + (err.message || 'Tente novamente'));
+                      } finally {
+                        setDomainMetaSaving(false);
+                      }
+                    }}
+                    disabled={domainMetaSaving || !domainMetaTag.trim()}
+                    className="gap-2"
+                  >
+                    {domainMetaSaving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    Salvar Meta Tag
+                  </Button>
+
+                  {domainMetaStatus === 'saved' && (
+                    <div className="flex items-center gap-1.5 text-sm text-primary">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Salvo com sucesso
+                    </div>
+                  )}
+                  {domainMetaStatus === 'error' && (
+                    <div className="flex items-center gap-1.5 text-sm text-destructive">
+                      <AlertCircle className="w-4 h-4" />
+                      Erro ao salvar
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Method 3: DNS TXT Record */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary" />
+                  Método 3 — Registro DNS TXT
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">📋 Como verificar por registro DNS TXT:</p>
+                  <ol className="list-decimal list-inside space-y-2">
+                    <li>No <strong>Gerenciador de Negócios do Facebook</strong>, vá em <strong>Configurações → Segurança da Marca → Domínios</strong>.</li>
+                    <li>Selecione o método <strong>"Adicionar registro TXT ao DNS"</strong>.</li>
+                    <li>O Facebook vai fornecer um valor TXT como: <code className="bg-muted px-1 rounded text-xs">facebook-domain-verification=abc123</code></li>
+                    <li>Acesse o painel do seu <strong>provedor de domínio</strong> (ex: Cloudflare, GoDaddy, Hostinger).</li>
+                    <li>Adicione um novo registro <strong>TXT</strong> com:
+                      <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                        <li><strong>Nome/Host:</strong> <code className="bg-muted px-1 rounded">@</code></li>
+                        <li><strong>Valor:</strong> o texto fornecido pelo Facebook</li>
+                      </ul>
+                    </li>
+                    <li>Aguarde a propagação DNS e clique em <strong>"Verificar"</strong> no Facebook.</li>
+                  </ol>
+                  <p className="text-xs">⏳ A propagação DNS pode levar até 72 horas.</p>
+                </div>
+
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                  <p className="text-sm text-amber-200 font-medium">⚠️ Este método requer acesso ao painel DNS do seu domínio</p>
+                  <p className="text-xs text-amber-200/70 mt-1">
+                    Você precisa acessar o painel do seu provedor de domínio (Cloudflare, GoDaddy, Hostinger, etc.) para adicionar o registro TXT. 
+                    Esse método não pode ser feito diretamente pelo painel admin.
+                  </p>
                 </div>
               </CardContent>
             </Card>
