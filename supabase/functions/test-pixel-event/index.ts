@@ -31,7 +31,8 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
     console.log("test-pixel-event: getUser result", userData?.user?.id, userError?.message);
 
     if (userError || !userData?.user) {
