@@ -187,7 +187,9 @@ export default function ThankYou() {
         >
           <Sparkles className="w-8 h-8 text-primary mx-auto" />
           <p className="text-sm text-muted-foreground">
-            {isTest
+            {isReal
+              ? '✅ Evento Purchase REAL disparado: Plano Pro R$47,00 via Browser + CAPI.'
+              : isTest
               ? 'Modo teste: eventos Purchase disparados para todos os planos (Starter R$27, Pro R$47, Premium R$97) via Browser + CAPI.'
               : 'Seu plano foi ativado automaticamente. Aproveite todos os recursos disponíveis!'}
           </p>
