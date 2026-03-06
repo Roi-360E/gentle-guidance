@@ -1162,6 +1162,124 @@ export default function AdminPlans() {
               📊 Todos os eventos do Pixel (browser + server) são registrados automaticamente. As taxas de conversão mostram a % em relação ao evento anterior no funil.
             </p>
           </TabsContent>
+
+          {/* ===== DOMAIN VERIFICATION TAB ===== */}
+          <TabsContent value="domain" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary" />
+                  Verificação de Domínio — Facebook
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">📋 Como verificar seu domínio no Facebook:</p>
+                  <ol className="list-decimal list-inside space-y-2">
+                    <li>No <strong>Gerenciador de Negócios do Facebook</strong>, vá em <strong>Configurações → Segurança da Marca → Domínios</strong>.</li>
+                    <li>Clique em <strong>"Adicionar"</strong> e insira seu domínio (ex: <code className="bg-muted px-1 rounded">deploysites.online</code>).</li>
+                    <li>Selecione o método <strong>"Verificação por meta-tag HTML"</strong> ou <strong>"Upload de arquivo HTML"</strong>.</li>
+                    <li>Copie o <strong>código de verificação</strong> fornecido pelo Facebook.</li>
+                    <li>Cole o código no campo abaixo e clique em <strong>"Salvar Verificação"</strong>.</li>
+                    <li>Volte ao Facebook e clique em <strong>"Verificar domínio"</strong>.</li>
+                  </ol>
+                  <p className="text-xs">⏳ A verificação pode levar até 72 horas.</p>
+                </div>
+
+                <div className="space-y-3">
+                  <Label htmlFor="domain-verif-code" className="text-sm font-medium">
+                    Código de Verificação do Facebook
+                  </Label>
+                  <Textarea
+                    id="domain-verif-code"
+                    placeholder='Cole aqui o conteúdo do meta tag ou do arquivo HTML de verificação. Ex: facebook-domain-verification=abc123xyz...'
+                    value={domainVerifCode}
+                    onChange={(e) => {
+                      setDomainVerifCode(e.target.value);
+                      setDomainVerifStatus('idle');
+                    }}
+                    rows={4}
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Aceita tanto o meta tag completo (<code>&lt;meta name="facebook-domain-verification" ...&gt;</code>) quanto apenas o código de verificação.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={async () => {
+                      const code = domainVerifCode.trim();
+                      if (!code) {
+                        toast.error('Cole o código de verificação do Facebook.');
+                        return;
+                      }
+
+                      // Extract the verification value from meta tag or raw code
+                      let verificationValue = code;
+                      const metaMatch = code.match(/content=["']([^"']+)["']/);
+                      if (metaMatch) {
+                        verificationValue = metaMatch[1];
+                      }
+                      // If it contains facebook-domain-verification= extract value
+                      const fbMatch = verificationValue.match(/facebook-domain-verification=(.+)/);
+                      if (fbMatch) {
+                        verificationValue = fbMatch[1].trim();
+                      }
+
+                      setDomainVerifSaving(true);
+                      try {
+                        // Save meta tag to index.html via edge function
+                        const { data, error } = await supabase.functions.invoke('domain-verify', {
+                          body: { verification_code: verificationValue }
+                        });
+
+                        if (error) throw error;
+
+                        setDomainVerifStatus('saved');
+                        toast.success('Código de verificação salvo! O meta tag foi adicionado ao site.');
+                      } catch (err: any) {
+                        console.error('Error saving verification:', err);
+                        setDomainVerifStatus('error');
+                        toast.error('Erro ao salvar: ' + (err.message || 'Tente novamente'));
+                      } finally {
+                        setDomainVerifSaving(false);
+                      }
+                    }}
+                    disabled={domainVerifSaving || !domainVerifCode.trim()}
+                    className="gap-2"
+                  >
+                    {domainVerifSaving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    Salvar Verificação
+                  </Button>
+
+                  {domainVerifStatus === 'saved' && (
+                    <div className="flex items-center gap-1.5 text-sm text-green-600">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Código salvo com sucesso
+                    </div>
+                  )}
+                  {domainVerifStatus === 'error' && (
+                    <div className="flex items-center gap-1.5 text-sm text-destructive">
+                      <AlertCircle className="w-4 h-4" />
+                      Erro ao salvar
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t pt-4 space-y-2">
+                  <p className="text-sm font-medium">🔗 Verificação via arquivo HTML</p>
+                  <p className="text-xs text-muted-foreground">
+                    Se preferir verificar por arquivo HTML, adicione o arquivo fornecido pelo Facebook na pasta <code className="bg-muted px-1 rounded">public/</code> do projeto e publique novamente.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
       {/* Test Pixel Dialog */}
