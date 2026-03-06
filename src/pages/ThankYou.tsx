@@ -151,7 +151,7 @@ export default function ThankYou() {
       }, 500);
       return () => clearInterval(interval);
     }
-  }, [user?.id, isTest]);
+  }, [user?.id, isTest, isReal]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
