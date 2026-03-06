@@ -205,15 +205,13 @@ async function processApprovedPayment(
 
 async function fireFacebookPurchaseEvent(supabase: any, payment: any) {
   try {
-    const { data: pixelConfig } = await supabase
+    const { data: pixelConfigs } = await supabase
       .from("facebook_pixel_config")
       .select("*")
-      .eq("is_active", true)
-      .limit(1)
-      .single();
+      .eq("is_active", true);
 
-    if (!pixelConfig || !pixelConfig.pixel_id || !pixelConfig.access_token) {
-      console.log("[FB Pixel] No active pixel config found, skipping");
+    if (!pixelConfigs || pixelConfigs.length === 0) {
+      console.log("[FB Pixel] No active pixel configs found, skipping");
       return;
     }
 
@@ -224,39 +222,46 @@ async function fireFacebookPurchaseEvent(supabase: any, payment: any) {
       .eq("user_id", payment.user_id)
       .single();
 
-    const eventData = {
-      data: [
+    const emHash = profile?.email
+      ? [await sha256(profile.email.toLowerCase().trim())]
+      : [];
+    const externalIdHash = [await sha256(payment.user_id)];
+
+    for (const pixelConfig of pixelConfigs) {
+      if (!pixelConfig.pixel_id || !pixelConfig.access_token) continue;
+
+      const eventData = {
+        data: [
+          {
+            event_name: "Purchase",
+            event_time: Math.floor(Date.now() / 1000),
+            action_source: "website",
+            user_data: {
+              em: emHash,
+              external_id: externalIdHash,
+            },
+            custom_data: {
+              currency: "BRL",
+              value: Number(payment.amount),
+              content_name: payment.plan,
+              content_type: "product",
+            },
+          },
+        ],
+      };
+
+      const res = await fetch(
+        `https://graph.facebook.com/v19.0/${pixelConfig.pixel_id}/events?access_token=${pixelConfig.access_token}`,
         {
-          event_name: "Purchase",
-          event_time: Math.floor(Date.now() / 1000),
-          action_source: "website",
-          user_data: {
-            em: profile?.email
-              ? [await sha256(profile.email.toLowerCase().trim())]
-              : [],
-            external_id: [await sha256(payment.user_id)],
-          },
-          custom_data: {
-            currency: "BRL",
-            value: Number(payment.amount),
-            content_name: payment.plan,
-            content_type: "product",
-          },
-        },
-      ],
-    };
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(eventData),
+        }
+      );
 
-    const res = await fetch(
-      `https://graph.facebook.com/v19.0/${pixelConfig.pixel_id}/events?access_token=${pixelConfig.access_token}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(eventData),
-      }
-    );
-
-    const result = await res.json();
-    console.log("[FB Pixel] Conversions API response:", JSON.stringify(result));
+      const result = await res.json();
+      console.log(`[FB Pixel] ${pixelConfig.name || pixelConfig.pixel_id} response:`, JSON.stringify(result));
+    }
   } catch (err) {
     console.error("[FB Pixel] Error sending event:", err);
   }
