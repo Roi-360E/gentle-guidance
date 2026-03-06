@@ -138,6 +138,8 @@ export default function Plans() {
       return;
     }
     setLoading(`${planKey}-${method}`);
+    const plan = plans.find(p => p.plan_key === planKey);
+    if (plan) trackInitiateCheckout(plan.name, plan.price);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
