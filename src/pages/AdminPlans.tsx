@@ -120,41 +120,50 @@ export default function AdminPlans() {
 
   const loadPixelConfig = async () => {
     setPixelLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('facebook_pixel_config' as any)
       .select('*')
-      .limit(1)
-      .single();
+      .order('created_at', { ascending: false });
 
     if (data) {
-      const d = data as any;
-      setPixelId(d.pixel_id || '');
-      setPixelAccessToken(d.access_token || '');
-      setPixelActive(d.is_active || false);
-      setPixelConfigId(d.id);
+      setSavedPixels(data as any[]);
     }
     setPixelLoading(false);
   };
 
   const savePixelConfig = async () => {
-    setPixelSaving(true);
-    const payload = { pixel_id: pixelId, access_token: pixelAccessToken, is_active: pixelActive, updated_at: new Date().toISOString() };
-
-    let error;
-    if (pixelConfigId) {
-      const res = await supabase.from('facebook_pixel_config' as any).update(payload as any).eq('id', pixelConfigId);
-      error = res.error;
-    } else {
-      const res = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
-      error = res.error;
+    if (!pixelName.trim() || !pixelId.trim() || !pixelAccessToken.trim()) {
+      toast.error('Preencha o nome, Pixel ID e Token de Acesso.');
+      return;
     }
+    setPixelSaving(true);
+    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, is_active: pixelActive, updated_at: new Date().toISOString() };
+
+    const { error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
 
     if (error) {
-      toast.error('Erro ao salvar configuração do Pixel: ' + error.message);
+      toast.error('Erro ao salvar Pixel: ' + error.message);
     } else {
-      toast.success('Configuração do Facebook Pixel salva!');
+      toast.success('Pixel salvo com sucesso!');
+      setPixelName('');
+      setPixelId('');
+      setPixelAccessToken('');
+      setPixelActive(false);
+      await loadPixelConfig();
     }
     setPixelSaving(false);
+  };
+
+  const deletePixel = async (id: string) => {
+    setDeletingPixelId(id);
+    const { error } = await supabase.from('facebook_pixel_config' as any).delete().eq('id', id);
+    if (error) {
+      toast.error('Erro ao excluir Pixel: ' + error.message);
+    } else {
+      toast.success('Pixel excluído!');
+      setSavedPixels(prev => prev.filter(p => p.id !== id));
+    }
+    setDeletingPixelId(null);
   };
 
   const loadUsers = async () => {
