@@ -793,6 +793,77 @@ export default function AdminPlans() {
               {filteredUsers.length} usuário(s) • Altere o plano para liberar ou revogar acessos instantaneamente.
             </p>
           </TabsContent>
+
+          {/* ===== PIXEL TAB ===== */}
+          <TabsContent value="pixel" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Facebook className="w-5 h-5" /> Facebook Pixel & Conversions API
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {pixelLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-id">Pixel ID</Label>
+                      <Input
+                        id="pixel-id"
+                        placeholder="Ex: 123456789012345"
+                        value={pixelId}
+                        onChange={e => setPixelId(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Encontre seu Pixel ID no Gerenciador de Eventos do Facebook.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-token">Token de Acesso (Conversions API)</Label>
+                      <Textarea
+                        id="pixel-token"
+                        placeholder="Cole aqui o token de acesso gerado no Gerenciador de Eventos"
+                        value={pixelAccessToken}
+                        onChange={e => setPixelAccessToken(e.target.value)}
+                        className="font-mono text-xs min-h-[80px]"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Gere o token em Gerenciador de Eventos → Configurações → Token de Acesso.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between border rounded-lg p-4">
+                      <div>
+                        <p className="font-medium text-sm">Ativar rastreamento</p>
+                        <p className="text-xs text-muted-foreground">
+                          Envia evento <code className="bg-muted px-1 rounded">Purchase</code> via Conversions API a cada compra confirmada.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={pixelActive}
+                        onCheckedChange={setPixelActive}
+                      />
+                    </div>
+
+                    <Button
+                      onClick={savePixelConfig}
+                      disabled={pixelSaving}
+                      className="w-full gap-2"
+                    >
+                      {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Salvar Configuração do Pixel
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <p className="text-xs text-muted-foreground text-center">
+              O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
+            </p>
+          </TabsContent>
         </Tabs>
       </main>
     </div>
