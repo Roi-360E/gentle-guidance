@@ -7,13 +7,13 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Token não fornecido" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -21,28 +21,36 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Validate token using getClaims
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Usuário não autenticado" }), {
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Sessão inválida ou expirada. Faça login novamente." }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check admin role
-    const { data: roleData } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    const userId = claimsData.claims.sub;
+
+    // Check admin role using service role client
+    const adminClient = createClient(supabaseUrl, serviceKey);
+    const { data: roleData } = await adminClient.rpc("has_role", { _user_id: userId, _role: "admin" });
     if (!roleData) {
-      return new Response(JSON.stringify({ error: "Acesso negado" }), {
+      return new Response(JSON.stringify({ error: "Acesso negado. Apenas administradores." }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { pixel_id, access_token, pixel_name, test_event_code } = await req.json();
+    const body = await req.json();
+    const { pixel_id, access_token, pixel_name, test_event_code } = body;
 
     if (!pixel_id || !access_token) {
       return new Response(JSON.stringify({ error: "pixel_id e access_token são obrigatórios" }), {
@@ -51,10 +59,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Use provided test event code or generate one
     const testEventCode = test_event_code || ("TEST" + crypto.randomUUID().replace(/-/g, "").substring(0, 10).toUpperCase());
 
-    // Hash test email
     const encoder = new TextEncoder();
     const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode("test@escalaxpro.com"));
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -87,7 +93,16 @@ Deno.serve(async (req) => {
       }
     );
 
-    const fbResult = await fbRes.json();
+    const fbText = await fbRes.text();
+    let fbResult;
+    try {
+      fbResult = JSON.parse(fbText);
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Resposta inválida do Facebook: " + fbText.substring(0, 200), test_event_code: testEventCode }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (fbResult.error) {
       return new Response(

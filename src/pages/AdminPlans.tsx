@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair, Copy } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
@@ -77,6 +78,8 @@ export default function AdminPlans() {
   const [savedPixels, setSavedPixels] = useState<any[]>([]);
   const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
   const [testingPixelId, setTestingPixelId] = useState<string | null>(null);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testDialogPixel, setTestDialogPixel] = useState<any>(null);
   const [testEventCode, setTestEventCode] = useState('');
   const [lastTestResult, setLastTestResult] = useState<{ pixelName: string; code: string; success: boolean; error?: string } | null>(null);
 
@@ -172,7 +175,16 @@ export default function AdminPlans() {
     setDeletingPixelId(null);
   };
 
-  const testPixelPurchase = async (pixel: any) => {
+  const openTestDialog = (pixel: any) => {
+    setTestDialogPixel(pixel);
+    setTestEventCode('');
+    setLastTestResult(null);
+    setTestDialogOpen(true);
+  };
+
+  const testPixelPurchase = async () => {
+    if (!testDialogPixel) return;
+    const pixel = testDialogPixel;
     setTestingPixelId(pixel.id);
     setLastTestResult(null);
     try {
@@ -187,27 +199,15 @@ export default function AdminPlans() {
 
       if (error) {
         const msg = error.message || 'Erro desconhecido';
-        if (msg.includes('autenticado') || msg.includes('autorizado') || msg.includes('Session')) {
-          toast.error('Sessão expirada. Faça login novamente.');
-        } else {
-          toast.error('Erro ao chamar função: ' + msg);
-        }
         setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: msg });
       } else if (data?.error) {
-        if (data.error.includes('autenticado') || data.error.includes('Acesso negado')) {
-          toast.error('Sessão expirada ou sem permissão. Faça login novamente.');
-        } else {
-          toast.error(`Erro no Pixel "${pixel.name}": ${data.error}`);
-        }
         setLastTestResult({ pixelName: pixel.name, code: data.test_event_code || '', success: false, error: data.error });
       } else if (data?.success) {
         const code = data.test_event_code;
         setLastTestResult({ pixelName: pixel.name, code, success: true });
-        toast.success(`Evento de teste enviado para "${pixel.name}"!`, { duration: 8000 });
         try { await navigator.clipboard.writeText(code); } catch {}
       }
     } catch (err: any) {
-      toast.error('Erro ao enviar evento de teste: ' + err.message);
       setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: err.message });
     }
     setTestingPixelId(null);
@@ -935,7 +935,7 @@ export default function AdminPlans() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => testPixelPurchase(px)}
+                          onClick={() => openTestDialog(px)}
                           disabled={testingPixelId === px.id}
                           className="gap-1"
                         >
@@ -1026,6 +1026,84 @@ export default function AdminPlans() {
           </TabsContent>
         </Tabs>
       </main>
+      {/* Test Pixel Dialog */}
+      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crosshair className="w-5 h-5 text-primary" />
+              Testar Evento de Compra
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {testDialogPixel && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Pixel:</span>{' '}
+                <strong>{testDialogPixel.name || 'Sem nome'}</strong>
+                <span className="text-muted-foreground ml-2 font-mono text-xs">({testDialogPixel.pixel_id})</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="dialog-test-code">Test Event Code do Facebook</Label>
+              <Input
+                id="dialog-test-code"
+                placeholder="Ex: TEST12345"
+                value={testEventCode}
+                onChange={e => setTestEventCode(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Acesse o <strong>Gerenciador de Eventos do Facebook</strong> → seu Pixel → <strong>Eventos de Teste</strong> para obter o código. Se deixar vazio, um código será gerado automaticamente.
+              </p>
+            </div>
+
+            {lastTestResult && (
+              <div className={`rounded-lg p-4 space-y-2 ${lastTestResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-destructive/10 border border-destructive/30'}`}>
+                <p className="font-medium text-sm">
+                  {lastTestResult.success ? '✅ Evento enviado com sucesso!' : '❌ Erro no envio'}
+                </p>
+                {lastTestResult.code && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <code className="bg-muted border rounded px-3 py-1.5 text-sm font-mono flex-1 truncate">{lastTestResult.code}</code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(lastTestResult.code);
+                          toast.success('Código copiado!');
+                        } catch { toast.error('Erro ao copiar'); }
+                      }}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+                {lastTestResult.error && (
+                  <p className="text-xs text-destructive">{lastTestResult.error}</p>
+                )}
+                {lastTestResult.success && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Cole o código acima em <strong>Gerenciador de Eventos → Eventos de Teste</strong> no Facebook para visualizar este evento.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTestDialogOpen(false)}>Fechar</Button>
+            <Button
+              onClick={testPixelPurchase}
+              disabled={testingPixelId !== null}
+              className="gap-2"
+            >
+              {testingPixelId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
+              Enviar Evento de Teste
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
