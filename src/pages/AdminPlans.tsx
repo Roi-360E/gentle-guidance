@@ -1129,6 +1129,32 @@ export default function AdminPlans() {
               </Card>
             )}
 
+            {/* Fire Real Purchase Button */}
+            {savedPixels.some(p => p.is_active) && (
+              <Card className="border-2 border-green-500/40 bg-green-500/5">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-green-600" />
+                    Disparar Compra Real
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Este botão dispara um evento de <strong>Purchase real</strong> (Plano Starter — R$ 38,00) em <strong>todos os pixels ativos</strong>, tanto via Browser (fbq) quanto via Conversions API (CAPI). Não é um evento de teste.
+                  </p>
+                  <Button
+                    onClick={fireRealPurchase}
+                    disabled={firingRealPurchase}
+                    className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
+                    size="lg"
+                  >
+                    {firingRealPurchase ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                    {firingRealPurchase ? 'Disparando...' : '🚀 Disparar Evento de Compra Real'}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Test Event Section */}
             {savedPixels.length > 0 && (
               <Card className="border-dashed border-2 border-primary/30">
