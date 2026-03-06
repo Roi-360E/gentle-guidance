@@ -48,7 +48,7 @@ const App = () => (
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
               <Route path="/auto-subtitles" element={<ProtectedRoute><AutoSubtitles /></ProtectedRoute>} />
               <Route path="/voice-rewrite" element={<ProtectedRoute><VoiceRewrite /></ProtectedRoute>} />
-              <Route path="/obrigado" element={<ProtectedRoute><ThankYou /></ProtectedRoute>} />
+              <Route path="/obrigado" element={<ThankYou />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ProcessingProvider>

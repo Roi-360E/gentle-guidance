@@ -5,6 +5,60 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle2, Home, Sparkles } from 'lucide-react';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 import { motion } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
+
+const TEST_PLANS = [
+  { name: 'Plano Starter', value: 27.00, key: 'starter' },
+  { name: 'Plano Pro', value: 47.00, key: 'pro' },
+  { name: 'Plano Premium', value: 97.00, key: 'premium' },
+];
+
+async function fireCAPI(plan: { name: string; value: number; key: string }) {
+  try {
+    const { data: pixels } = await supabase
+      .from('facebook_pixel_config')
+      .select('pixel_id, access_token, dedup_key')
+      .eq('is_active', true);
+
+    if (!pixels?.length) return;
+
+    const eventId = `${pixels[0].dedup_key || 'dedup'}_${Date.now()}`;
+
+    for (const px of pixels) {
+      await fetch(
+        `https://graph.facebook.com/v21.0/${px.pixel_id}/events?access_token=${px.access_token}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: [{
+              event_name: 'Purchase',
+              event_time: Math.floor(Date.now() / 1000),
+              event_id: eventId,
+              event_source_url: window.location.href,
+              action_source: 'website',
+              user_data: {
+                client_user_agent: navigator.userAgent,
+                client_ip_address: '',
+              },
+              custom_data: {
+                content_name: plan.name,
+                content_category: 'Plano',
+                value: plan.value,
+                currency: 'BRL',
+                content_ids: [plan.key],
+                content_type: 'product',
+              },
+            }],
+          }),
+        }
+      );
+    }
+    console.log('[ThankYou] CAPI Purchase event sent for', plan.name);
+  } catch (e) {
+    console.warn('[ThankYou] CAPI error:', e);
+  }
+}
 
 export default function ThankYou() {
   const navigate = useNavigate();
@@ -17,14 +71,16 @@ export default function ThankYou() {
   useEffect(() => {
     if (pixelFired.current) return;
 
-    const planName = isTest ? 'Teste Purchase' : (localStorage.getItem('checkout_plan_name') || '');
-    const planValue = isTest ? 1.00 : parseFloat(localStorage.getItem('checkout_plan_value') || '0');
-    const planKey = isTest ? 'test_plan' : (localStorage.getItem('checkout_plan_key') || '');
+    const planName = isTest ? 'Plano Pro' : (localStorage.getItem('checkout_plan_name') || '');
+    const planValue = isTest ? 47.00 : parseFloat(localStorage.getItem('checkout_plan_value') || '0');
+    const planKey = isTest ? 'pro' : (localStorage.getItem('checkout_plan_key') || '');
     const method = isTest ? 'Teste' : (localStorage.getItem('checkout_method') || 'Cartão/Boleto');
 
     const fireEvent = () => {
       pixelFired.current = true;
-      console.log('[ThankYou] Disparando evento Purchase', { planName, planValue, planKey, method, isTest });
+      console.log('[ThankYou] Disparando Purchase', { planName, planValue, planKey, method, isTest });
+
+      // Browser-side fbq
       trackPixelEvent('Purchase', {
         content_name: planName,
         content_category: method,
@@ -34,6 +90,27 @@ export default function ThankYou() {
         content_type: 'product',
       }, user?.id);
 
+      // CAPI direct call for reliability
+      fireCAPI({ name: planName, value: planValue, key: planKey });
+
+      // If test mode, fire all plans to seed multiple events
+      if (isTest) {
+        TEST_PLANS.forEach((p, i) => {
+          setTimeout(() => {
+            trackPixelEvent('Purchase', {
+              content_name: p.name,
+              content_category: 'Teste',
+              value: p.value,
+              currency: 'BRL',
+              content_ids: [p.key],
+              content_type: 'product',
+            }, user?.id);
+            fireCAPI(p);
+            console.log(`[ThankYou] Test Purchase fired: ${p.name} R$${p.value}`);
+          }, (i + 1) * 1000);
+        });
+      }
+
       if (!isTest) {
         localStorage.removeItem('checkout_plan_name');
         localStorage.removeItem('checkout_plan_value');
@@ -42,7 +119,6 @@ export default function ThankYou() {
       }
     };
 
-    // Wait for fbq to be available (pixel script may still be loading)
     if (typeof window !== 'undefined' && (window as any).fbq) {
       fireEvent();
     } else {
@@ -92,7 +168,9 @@ export default function ThankYou() {
         >
           <Sparkles className="w-8 h-8 text-primary mx-auto" />
           <p className="text-sm text-muted-foreground">
-            Seu plano foi ativado automaticamente. Aproveite todos os recursos disponíveis!
+            {isTest
+              ? 'Modo teste: eventos Purchase disparados para todos os planos (Starter R$27, Pro R$47, Premium R$97) via Browser + CAPI.'
+              : 'Seu plano foi ativado automaticamente. Aproveite todos os recursos disponíveis!'}
           </p>
         </motion.div>
 
