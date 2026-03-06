@@ -455,7 +455,7 @@ export default function AdminPlans() {
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Usuários
             </TabsTrigger>
             <TabsTrigger value="pixel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
+              <Crosshair className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
             </TabsTrigger>
           </TabsList>
 
