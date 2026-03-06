@@ -1009,10 +1009,25 @@ export default function AdminPlans() {
                       <Switch checked={pixelActive} onCheckedChange={setPixelActive} />
                     </div>
 
-                    <Button onClick={savePixelConfig} disabled={pixelSaving} className="w-full gap-2">
-                      {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Salvar Configuração
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button onClick={savePixelConfig} disabled={pixelSaving} className="flex-1 gap-2">
+                        {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {editingPixelId ? 'Atualizar Pixel' : 'Salvar Configuração'}
+                      </Button>
+                      {editingPixelId && (
+                        <Button variant="outline" onClick={() => {
+                          setEditingPixelId(null);
+                          setPixelName('');
+                          setPixelId('');
+                          setPixelAccessToken('');
+                          setPixelDedupKey('');
+                          setPixelSnippet('');
+                          setPixelActive(false);
+                        }}>
+                          Cancelar
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </CardContent>
