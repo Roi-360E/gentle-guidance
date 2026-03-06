@@ -76,6 +76,7 @@ export default function AdminPlans() {
   const [pixelSaving, setPixelSaving] = useState(false);
   const [savedPixels, setSavedPixels] = useState<any[]>([]);
   const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
+  const [testingPixelId, setTestingPixelId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -167,6 +168,46 @@ export default function AdminPlans() {
       setSavedPixels(prev => prev.filter(p => p.id !== id));
     }
     setDeletingPixelId(null);
+  };
+
+  const testPixelPurchase = async (pixel: any) => {
+    setTestingPixelId(pixel.id);
+    try {
+      const hashedData = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('test@test.com'));
+      const hashArray = Array.from(new Uint8Array(hashedData));
+      const hashedEmail = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const eventData = {
+        data: [{
+          event_name: 'Purchase',
+          event_time: Math.floor(Date.now() / 1000),
+          action_source: 'website',
+          user_data: { em: [hashedEmail] },
+          custom_data: {
+            value: 1.00,
+            currency: 'BRL',
+            content_name: 'Evento de Teste',
+            content_type: 'product',
+          },
+        }],
+        test_event_code: 'TEST' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+      };
+
+      const res = await fetch(
+        `https://graph.facebook.com/v19.0/${pixel.pixel_id}/events?access_token=${pixel.access_token}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(eventData) }
+      );
+      const result = await res.json();
+
+      if (result.error) {
+        toast.error(`Erro no Pixel "${pixel.name}": ${result.error.message}`);
+      } else {
+        toast.success(`Evento de teste enviado para "${pixel.name}"! Verifique no Gerenciador de Eventos do Facebook.`);
+      }
+    } catch (err: any) {
+      toast.error('Erro ao enviar evento de teste: ' + err.message);
+    }
+    setTestingPixelId(null);
   };
 
   const loadUsers = async () => {
@@ -887,16 +928,28 @@ export default function AdminPlans() {
                           {px.is_active ? 'Ativo' : 'Inativo'}
                         </Badge>
                       </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deletePixel(px.id)}
-                        disabled={deletingPixelId === px.id}
-                        className="shrink-0 ml-3 gap-1"
-                      >
-                        {deletingPixelId === px.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                        Excluir
-                      </Button>
+                      <div className="flex gap-2 shrink-0 ml-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => testPixelPurchase(px)}
+                          disabled={testingPixelId === px.id}
+                          className="gap-1"
+                        >
+                          {testingPixelId === px.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+                          Testar Compra
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deletePixel(px.id)}
+                          disabled={deletingPixelId === px.id}
+                          className="gap-1"
+                        >
+                          {deletingPixelId === px.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          Excluir
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </CardContent>
