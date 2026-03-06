@@ -799,7 +799,7 @@ export default function AdminPlans() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Facebook className="w-5 h-5" /> Facebook Pixel & Conversions API
+                  <Crosshair className="w-5 h-5" /> Facebook Pixel & Conversions API
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
