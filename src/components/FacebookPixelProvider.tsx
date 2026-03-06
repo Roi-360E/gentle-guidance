@@ -18,6 +18,21 @@ export function FacebookPixelProvider() {
       const pixels = (data as any[]) as { pixel_snippet: string; is_active: boolean }[];
       
       pixels.forEach((px) => {
+        // Handle domain verification meta tags
+        if (px.pixel_snippet?.includes('facebook-domain-verification')) {
+          const metaMatch = px.pixel_snippet.match(/content=["']([^"']+)["']/);
+          if (metaMatch) {
+            const existing = document.querySelector('meta[name="facebook-domain-verification"]');
+            if (!existing) {
+              const meta = document.createElement('meta');
+              meta.name = 'facebook-domain-verification';
+              meta.content = metaMatch[1];
+              document.head.appendChild(meta);
+            }
+          }
+          return;
+        }
+
         const snippet = px.pixel_snippet?.trim();
         if (!snippet) return;
 
@@ -32,14 +47,12 @@ export function FacebookPixelProvider() {
             const innerContent = match.replace(/<\/?script[^>]*>/gi, '').trim();
 
             if (srcMatch) {
-              // External script
               const el = document.createElement('script');
               el.async = true;
               el.src = srcMatch[1];
               document.head.appendChild(el);
             }
             if (innerContent) {
-              // Inline script
               const el = document.createElement('script');
               el.textContent = innerContent;
               document.head.appendChild(el);
