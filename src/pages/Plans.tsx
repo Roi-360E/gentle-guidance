@@ -97,25 +97,9 @@ export default function Plans() {
     const savedPlanKey = localStorage.getItem('checkout_plan_key') || '';
 
     if (paymentStatus === 'success') {
-      toast.success('Pagamento aprovado! Seu plano foi ativado.');
-      trackPixelEvent('AddPaymentInfo', {
-        content_name: savedPlan,
-        content_category: 'Cartão/Boleto',
-        value: savedValue,
-        currency: 'BRL',
-      }, user?.id);
-      trackPixelEvent('Purchase', {
-        content_name: savedPlan,
-        content_category: 'Cartão/Boleto',
-        value: savedValue,
-        currency: 'BRL',
-        content_ids: [savedPlanKey],
-        content_type: 'product',
-      }, user?.id);
-      // Clean up
-      localStorage.removeItem('checkout_plan_name');
-      localStorage.removeItem('checkout_plan_value');
-      localStorage.removeItem('checkout_plan_key');
+      // Redirect to thank you page (pixel fires there)
+      navigate('/obrigado', { replace: true });
+      return;
     } else if (paymentStatus === 'failure') {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
