@@ -44,3 +44,12 @@ verify_jwt = false
 
 [functions.test-pixel-event]
 verify_jwt = false
+
+[functions.fire-purchase-event]
+verify_jwt = false
+
+[functions.signup-guard]
+verify_jwt = false
+
+[functions.domain-verify]
+verify_jwt = false
