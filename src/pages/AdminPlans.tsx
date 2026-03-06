@@ -1036,8 +1036,22 @@ export default function AdminPlans() {
               </Card>
             )}
 
+            {/* Diagnostic Panel */}
+            <Card className="border border-border">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-primary" />
+                  Diagnóstico do Pixel
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <PixelDiagnosticPanel savedPixels={savedPixels} />
+              </CardContent>
+            </Card>
+
             <p className="text-xs text-muted-foreground text-center">
               O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
+              <br />Eventos de <strong>PageView</strong>, <strong>ViewContent</strong> e <strong>InitiateCheckout</strong> são enviados automaticamente pelo navegador.
             </p>
           </TabsContent>
         </Tabs>
