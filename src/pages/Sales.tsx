@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { trackViewContent, trackInitiateCheckout } from '@/lib/facebook-pixel';
 import {
   Zap,
   Rocket,
@@ -101,7 +103,13 @@ export default function Sales() {
   const navigate = useNavigate();
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 
+  // Track ViewContent when user visits sales page
+  useEffect(() => {
+    trackViewContent('Página de Vendas - EscalaXPro', 197);
+  }, []);
+
   const scrollToCTA = () => {
+    trackInitiateCheckout('EscalaXPro', 197);
     document.getElementById('checkout')?.scrollIntoView({ behavior: 'smooth' });
   };
 
