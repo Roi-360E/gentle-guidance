@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, Zap, Crown, ArrowLeft, Check, Loader2, Copy, CheckCircle2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
+import { useHighIntentTracking } from '@/hooks/useAudienceEvents';
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-checkout`;
 
