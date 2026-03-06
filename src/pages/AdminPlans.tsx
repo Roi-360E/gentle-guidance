@@ -52,43 +52,6 @@ const COLOR_OPTIONS = [
   { label: 'Destaque', value: 'text-accent', bg: 'bg-accent/10' },
 ];
 
-function PixelDiagnosticPanel({ savedPixels }: { savedPixels: any[] }) {
-  const [diagnostics, setDiagnostics] = useState<any>(null);
-
-  useEffect(() => {
-    import('@/lib/facebook-pixel').then(({ getPixelDiagnostics }) => {
-      setDiagnostics(getPixelDiagnostics());
-    });
-  }, []);
-
-  const activePixels = savedPixels.filter(p => p.is_active);
-  const inactivePixels = savedPixels.filter(p => !p.is_active);
-  const missingToken = savedPixels.filter(p => !p.access_token?.trim());
-  const missingId = savedPixels.filter(p => !p.pixel_id?.trim());
-
-  const checks = [
-    { label: 'Script fbevents.js carregado', ok: diagnostics?.scriptLoaded, detail: diagnostics?.scriptLoaded ? 'Sim' : 'Não — verifique se há pixels ativos' },
-    { label: 'Pixels inicializados no navegador', ok: diagnostics?.pixelsInitialized, detail: diagnostics?.activePixelIds?.length ? `${diagnostics.activePixelIds.length} pixel(s)` : 'Nenhum' },
-    { label: 'Pixels ativos no banco', ok: activePixels.length > 0, detail: `${activePixels.length} ativo(s), ${inactivePixels.length} inativo(s)` },
-    { label: 'Todos possuem Pixel ID', ok: missingId.length === 0, detail: missingId.length > 0 ? `${missingId.length} sem ID` : 'OK' },
-    { label: 'Todos possuem Access Token (CAPI)', ok: missingToken.length === 0, detail: missingToken.length > 0 ? `${missingToken.length} sem token` : 'OK' },
-  ];
-
-  return (
-    <div className="space-y-2">
-      {checks.map((c, i) => (
-        <div key={i} className="flex items-center justify-between text-sm border rounded-lg px-4 py-2.5">
-          <span className="flex items-center gap-2">
-            {c.ok ? <ShieldCheck className="w-4 h-4 text-green-500" /> : <ShieldBan className="w-4 h-4 text-destructive" />}
-            {c.label}
-          </span>
-          <span className={`text-xs ${c.ok ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>{c.detail}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function AdminPlans() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -110,6 +73,7 @@ export default function AdminPlans() {
   const [pixelId, setPixelId] = useState('');
   const [pixelAccessToken, setPixelAccessToken] = useState('');
   const [pixelDedupKey, setPixelDedupKey] = useState('');
+  const [pixelSnippet, setPixelSnippet] = useState('');
   const [pixelActive, setPixelActive] = useState(false);
   const [pixelLoading, setPixelLoading] = useState(false);
   const [pixelSaving, setPixelSaving] = useState(false);
@@ -184,7 +148,7 @@ export default function AdminPlans() {
       return;
     }
     setPixelSaving(true);
-    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, dedup_key: pixelDedupKey.trim(), is_active: pixelActive, updated_at: new Date().toISOString() };
+    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, dedup_key: pixelDedupKey.trim(), pixel_snippet: pixelSnippet.trim(), is_active: pixelActive, updated_at: new Date().toISOString() };
 
     const { error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
 
@@ -196,6 +160,7 @@ export default function AdminPlans() {
       setPixelId('');
       setPixelAccessToken('');
       setPixelDedupKey('');
+      setPixelSnippet('');
       setPixelActive(false);
       await loadPixelConfig();
     }
@@ -949,6 +914,20 @@ export default function AdminPlans() {
                       </p>
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-snippet">Código do Meta Pixel (Snippet)</Label>
+                      <Textarea
+                        id="pixel-snippet"
+                        placeholder="Cole aqui o código completo do Meta Pixel fornecido pelo Facebook (<!-- Meta Pixel Code --> ... <!-- End Meta Pixel Code -->)"
+                        value={pixelSnippet}
+                        onChange={e => setPixelSnippet(e.target.value)}
+                        className="font-mono text-xs min-h-[160px]"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Cole o snippet completo do Meta Pixel. Ele será injetado automaticamente em todas as páginas do site para rastrear <code className="bg-muted px-1 rounded">PageView</code> e outros eventos do browser.
+                      </p>
+                    </div>
+
                     <div className="flex items-center justify-between border rounded-lg p-4">
                       <div>
                         <p className="font-medium text-sm">Ativar rastreamento</p>
@@ -1073,22 +1052,8 @@ export default function AdminPlans() {
               </Card>
             )}
 
-            {/* Diagnostic Panel */}
-            <Card className="border border-border">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-primary" />
-                  Diagnóstico do Pixel
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <PixelDiagnosticPanel savedPixels={savedPixels} />
-              </CardContent>
-            </Card>
-
             <p className="text-xs text-muted-foreground text-center">
               O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
-              <br />Eventos de <strong>PageView</strong>, <strong>ViewContent</strong> e <strong>InitiateCheckout</strong> são enviados automaticamente pelo navegador.
             </p>
           </TabsContent>
         </Tabs>

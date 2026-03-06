@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { trackViewContent, trackInitiateCheckout } from '@/lib/facebook-pixel';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,7 +49,6 @@ export default function Plans() {
 
   // Load plans from database
   useEffect(() => {
-    trackViewContent('Planos e Pagamento');
     supabase
       .from('subscription_plans' as any)
       .select('*')
@@ -138,8 +136,6 @@ export default function Plans() {
       return;
     }
     setLoading(`${planKey}-${method}`);
-    const plan = plans.find(p => p.plan_key === planKey);
-    if (plan) trackInitiateCheckout(plan.name, plan.price);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');

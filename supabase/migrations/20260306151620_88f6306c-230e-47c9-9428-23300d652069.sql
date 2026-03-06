@@ -1,0 +1,1 @@
+ALTER TABLE public.facebook_pixel_config ADD COLUMN pixel_snippet text NOT NULL DEFAULT '';

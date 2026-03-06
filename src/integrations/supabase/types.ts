@@ -82,6 +82,7 @@ export type Database = {
           is_active: boolean
           name: string
           pixel_id: string
+          pixel_snippet: string
           updated_at: string
         }
         Insert: {
@@ -92,6 +93,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           pixel_id?: string
+          pixel_snippet?: string
           updated_at?: string
         }
         Update: {
@@ -102,6 +104,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           pixel_id?: string
+          pixel_snippet?: string
           updated_at?: string
         }
         Relationships: []
