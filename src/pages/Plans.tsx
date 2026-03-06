@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Zap, Crown, ArrowLeft, Check, Loader2, Copy, CheckCircle2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
+import { trackPixelEvent } from '@/lib/pixel-tracker';
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-checkout`;
 
@@ -62,6 +63,12 @@ export default function Plans() {
         }
         setPlansLoading(false);
       });
+
+    // Track ViewContent on plans page
+    trackPixelEvent('ViewContent', {
+      content_name: 'Plans Page',
+      content_category: 'Pricing',
+    });
   }, []);
 
   // Check admin role
@@ -82,14 +89,10 @@ export default function Plans() {
     const paymentStatus = searchParams.get('payment');
     if (paymentStatus === 'success') {
       toast.success('Pagamento aprovado! Seu plano foi ativado.');
-
-      // Track AddPaymentInfo on successful return from Checkout Pro
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('track', 'AddPaymentInfo', {
-          content_category: 'Cartão/Boleto',
-          currency: 'BRL',
-        });
-      }
+      trackPixelEvent('AddPaymentInfo', {
+        content_category: 'Cartão/Boleto',
+        currency: 'BRL',
+      }, user?.id);
     } else if (paymentStatus === 'failure') {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
@@ -145,16 +148,14 @@ export default function Plans() {
     }
     setLoading(`${planKey}-${method}`);
 
-    // Track InitiateCheckout event on Facebook Pixel
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      const plan = plans.find(p => p.plan_key === planKey);
-      (window as any).fbq('track', 'InitiateCheckout', {
-        content_name: plan?.name || planKey,
-        content_category: method === 'pix' ? 'Pix' : 'Cartão/Boleto',
-        value: plan?.price || 0,
-        currency: 'BRL',
-      });
-    }
+    // Track InitiateCheckout event
+    const plan = plans.find(p => p.plan_key === planKey);
+    trackPixelEvent('InitiateCheckout', {
+      content_name: plan?.name || planKey,
+      content_category: method === 'pix' ? 'Pix' : 'Cartão/Boleto',
+      value: plan?.price || 0,
+      currency: 'BRL',
+    }, user?.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
@@ -177,15 +178,13 @@ export default function Plans() {
         setPollingPayment(true);
 
         // Track AddPaymentInfo when Pix QR code is generated
-        if (typeof window !== 'undefined' && (window as any).fbq) {
-          const plan = plans.find(p => p.plan_key === planKey);
-          (window as any).fbq('track', 'AddPaymentInfo', {
-            content_name: plan?.name || planKey,
-            content_category: 'Pix',
-            value: plan?.price || 0,
-            currency: 'BRL',
-          });
-        }
+        const plan = plans.find(p => p.plan_key === planKey);
+        trackPixelEvent('AddPaymentInfo', {
+          content_name: plan?.name || planKey,
+          content_category: 'Pix',
+          value: plan?.price || 0,
+          currency: 'BRL',
+        }, user?.id);
       } else if (data.type === 'checkout') {
         window.location.href = data.initPoint;
       }

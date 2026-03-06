@@ -26,11 +26,13 @@ import { ScriptChatFloat } from '@/components/ScriptChat';
 import { InstagramConnect } from '@/components/InstagramConnect';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-
+import { trackPixelEvent, trackCustomEvent } from '@/lib/pixel-tracker';
+import { useUtmCapture } from '@/hooks/useUtmCapture';
 
 const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  useUtmCapture(user?.id);
   const { isProcessing, currentProgress, processingPhase, combinations, startProcessing, cancelProcessing, setCombinations } = useProcessing();
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [videoCount, setVideoCount] = useState(0);
@@ -198,6 +200,13 @@ const Index = () => {
       return;
     }
 
+    // Track StartTrial on first processing
+    trackCustomEvent('StartTrial', {
+      content_name: 'Video Processing',
+      combinations: totalCombinations,
+      plan: currentPlan,
+    }, user.id);
+
     startProcessing({
       hooks, bodies, ctas, settings, currentPlan, tokenBalance, videoCount,
       userId: user.id,
@@ -207,7 +216,6 @@ const Index = () => {
       },
     });
   }, [canProcess, hooks, bodies, ctas, settings, currentPlan, tokenBalance, videoCount, totalCombinations, navigate, user, startProcessing]);
-
   const handleCancel = () => {
     cancelProcessing();
   };

@@ -11,6 +11,7 @@ import { validateEmailDomain } from '@/lib/email-validator';
 import { generateFingerprint } from '@/lib/device-fingerprint';
 import { validateCPF, formatCPF, hashCPF } from '@/lib/cpf-validator';
 import { supabase } from '@/integrations/supabase/client';
+import { trackPixelEvent } from '@/lib/pixel-tracker';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -32,6 +33,11 @@ const Auth = () => {
         toast.error(error.message);
       } else {
         toast.success('Login realizado!');
+        // Track CompleteRegistration on successful login (email verified)
+        trackPixelEvent('CompleteRegistration', {
+          content_name: 'Login',
+          status: 'completed',
+        });
         navigate('/');
       }
     } else {
@@ -91,6 +97,11 @@ const Auth = () => {
             .eq('user_id', newUser.id);
         }
         toast.success('Conta criada! Verifique seu email para confirmar.');
+        // Track Lead event on successful signup
+        trackPixelEvent('Lead', {
+          content_name: 'Signup',
+          content_category: 'Registration',
+        });
       }
     }
     setLoading(false);

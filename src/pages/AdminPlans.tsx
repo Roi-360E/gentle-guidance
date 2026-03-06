@@ -13,9 +13,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair, Copy } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair, Copy, BarChart3 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { Progress } from '@/components/ui/progress';
 
 interface Plan {
   id?: string;
@@ -85,6 +86,10 @@ export default function AdminPlans() {
   const [testEventCode, setTestEventCode] = useState('');
   const [lastTestResult, setLastTestResult] = useState<{ pixelName: string; code: string; success: boolean; error?: string } | null>(null);
 
+  // Funnel state
+  const [funnelData, setFunnelData] = useState<{ event_name: string; count: number }[]>([]);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     supabase
@@ -98,6 +103,7 @@ export default function AdminPlans() {
           loadPlans();
           loadUsers();
           loadPixelConfig();
+          loadFunnelData();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
@@ -140,6 +146,34 @@ export default function AdminPlans() {
       setSavedPixels(data as any[]);
     }
     setPixelLoading(false);
+  };
+
+  const FUNNEL_EVENTS = ['PageView', 'ViewContent', 'Lead', 'CompleteRegistration', 'InitiateCheckout', 'AddPaymentInfo', 'Purchase', 'StartTrial', 'ScrollDepth'];
+
+  const loadFunnelData = async () => {
+    setFunnelLoading(true);
+    const { data, error } = await supabase
+      .from('pixel_events_log' as any)
+      .select('event_name')
+      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+    if (!error && data) {
+      const counts: Record<string, number> = {};
+      (data as any[]).forEach((row: any) => {
+        counts[row.event_name] = (counts[row.event_name] || 0) + 1;
+      });
+      const result = FUNNEL_EVENTS.map(name => ({
+        event_name: name,
+        count: counts[name] || 0,
+      }));
+      Object.keys(counts).forEach(name => {
+        if (!FUNNEL_EVENTS.includes(name)) {
+          result.push({ event_name: name, count: counts[name] });
+        }
+      });
+      setFunnelData(result);
+    }
+    setFunnelLoading(false);
   };
 
   const savePixelConfig = async () => {
@@ -510,7 +544,7 @@ export default function AdminPlans() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs defaultValue="plans" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="plans" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Planos
             </TabsTrigger>
@@ -519,6 +553,9 @@ export default function AdminPlans() {
             </TabsTrigger>
             <TabsTrigger value="pixel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <Crosshair className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
+            </TabsTrigger>
+            <TabsTrigger value="funnel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Funil
             </TabsTrigger>
           </TabsList>
 
@@ -1054,6 +1091,67 @@ export default function AdminPlans() {
 
             <p className="text-xs text-muted-foreground text-center">
               O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
+            </p>
+          </TabsContent>
+
+          {/* ===== FUNNEL TAB ===== */}
+          <TabsContent value="funnel" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Funil de Conversão (últimos 30 dias)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {funnelLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const maxCount = Math.max(...funnelData.map(f => f.count), 1);
+                      return funnelData.map((item, i) => {
+                        const pct = Math.round((item.count / maxCount) * 100);
+                        const prevCount = i > 0 ? funnelData[i - 1].count : 0;
+                        const convRate = prevCount > 0 ? ((item.count / prevCount) * 100).toFixed(1) : null;
+                        return (
+                          <div key={item.event_name} className="space-y-1">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="font-medium">{item.event_name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-foreground">{item.count}</span>
+                                {convRate && i > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {convRate}%
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Progress value={pct} className="h-3" />
+                          </div>
+                        );
+                      });
+                    })()}
+                    {funnelData.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Nenhum evento registrado ainda. Os eventos começarão a aparecer conforme os usuários interagem com o site.
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <Button variant="outline" size="sm" onClick={loadFunnelData} disabled={funnelLoading}>
+                    {funnelLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Atualizar Dados
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <p className="text-xs text-muted-foreground text-center">
+              📊 Todos os eventos do Pixel (browser + server) são registrados automaticamente. As taxas de conversão mostram a % em relação ao evento anterior no funil.
             </p>
           </TabsContent>
         </Tabs>

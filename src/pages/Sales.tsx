@@ -16,7 +16,10 @@ import {
   Star,
   ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { trackPixelEvent } from '@/lib/pixel-tracker';
+import { useScrollDepth } from '@/hooks/useScrollDepth';
+import { useUtmCapture } from '@/hooks/useUtmCapture';
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -100,6 +103,20 @@ const bonuses = [
 export default function Sales() {
   const navigate = useNavigate();
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
+
+  // Track ViewContent on page load
+  useEffect(() => {
+    trackPixelEvent('ViewContent', {
+      content_name: 'Sales Page',
+      content_category: 'Landing',
+    });
+  }, []);
+
+  // Scroll depth tracking
+  useScrollDepth('Sales');
+
+  // UTM capture
+  useUtmCapture();
 
   const scrollToCTA = () => {
     document.getElementById('checkout')?.scrollIntoView({ behavior: 'smooth' });
