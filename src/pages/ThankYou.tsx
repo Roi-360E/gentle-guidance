@@ -13,27 +13,44 @@ export default function ThankYou() {
 
   useEffect(() => {
     if (pixelFired.current) return;
-    pixelFired.current = true;
 
     const planName = localStorage.getItem('checkout_plan_name') || '';
     const planValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
     const planKey = localStorage.getItem('checkout_plan_key') || '';
     const method = localStorage.getItem('checkout_method') || 'Cartão/Boleto';
 
-    trackPixelEvent('Purchase', {
-      content_name: planName,
-      content_category: method,
-      value: planValue,
-      currency: 'BRL',
-      content_ids: [planKey],
-      content_type: 'product',
-    }, user?.id);
+    const fireEvent = () => {
+      pixelFired.current = true;
+      trackPixelEvent('Purchase', {
+        content_name: planName,
+        content_category: method,
+        value: planValue,
+        currency: 'BRL',
+        content_ids: [planKey],
+        content_type: 'product',
+      }, user?.id);
 
-    // Clean up
-    localStorage.removeItem('checkout_plan_name');
-    localStorage.removeItem('checkout_plan_value');
-    localStorage.removeItem('checkout_plan_key');
-    localStorage.removeItem('checkout_method');
+      // Clean up
+      localStorage.removeItem('checkout_plan_name');
+      localStorage.removeItem('checkout_plan_value');
+      localStorage.removeItem('checkout_plan_key');
+      localStorage.removeItem('checkout_method');
+    };
+
+    // Wait for fbq to be available (pixel script may still be loading)
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      fireEvent();
+    } else {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if ((window as any).fbq || attempts >= 20) {
+          clearInterval(interval);
+          fireEvent();
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
   }, [user?.id]);
 
   return (
