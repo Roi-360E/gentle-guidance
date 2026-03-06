@@ -195,6 +195,7 @@ export default function AdminPlans() {
           pixel_id: pixel.pixel_id,
           access_token: pixel.access_token,
           pixel_name: pixel.name,
+          dedup_key: pixel.dedup_key || '',
           test_event_code: testEventCode.trim() || undefined,
         },
       });
