@@ -10,15 +10,32 @@ export function FacebookPixelProvider() {
     const loadAndInject = async () => {
       const { data, error } = await supabase
         .from('facebook_pixel_config' as any)
-        .select('pixel_snippet, is_active')
+        .select('name, pixel_id, pixel_snippet, is_active')
         .eq('is_active', true);
 
       if (error || !data) return;
 
-      const pixels = (data as any[]) as { pixel_snippet: string; is_active: boolean }[];
+      const entries = (data as any[]) as { name: string; pixel_id: string; pixel_snippet: string; is_active: boolean }[];
       
-      pixels.forEach((px) => {
-        // Skip domain verification entries (handled via static HTML file)
+      entries.forEach((px) => {
+        // Handle meta tag domain verification entries
+        if (px.name === '__domain_verification__' && px.pixel_id === '__meta_tag__') {
+          const existing = document.querySelector('meta[name="facebook-domain-verification"]');
+          if (!existing) {
+            const meta = document.createElement('meta');
+            meta.name = 'facebook-domain-verification';
+            meta.content = px.pixel_snippet;
+            document.head.appendChild(meta);
+          }
+          return;
+        }
+
+        // Skip HTML file domain verification entries
+        if (px.name === '__domain_verification__') {
+          return;
+        }
+
+        // Skip entries containing domain verification meta tags in snippet
         if (px.pixel_snippet?.includes('facebook-domain-verification')) {
           return;
         }

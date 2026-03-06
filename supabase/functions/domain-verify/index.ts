@@ -49,21 +49,24 @@ serve(async (req) => {
       });
     }
 
-    const { filename, verification_content } = await req.json();
+    const { filename, verification_content, type } = await req.json();
 
-    if (!filename || !verification_content) {
+    if (!verification_content) {
       return new Response(
-        JSON.stringify({ error: "filename and verification_content are required" }),
+        JSON.stringify({ error: "verification_content is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // For meta_tag type, store with special pixel_id marker
+    const storeFilename = type === 'meta_tag' ? '__meta_tag__' : (filename || 'domain-verification.html');
 
     // Insert new domain verification entry
     const { error: insertError } = await supabase
       .from("facebook_pixel_config")
       .insert({
         name: "__domain_verification__",
-        pixel_id: filename,
+        pixel_id: storeFilename,
         pixel_snippet: verification_content,
         access_token: "",
         dedup_key: "",
