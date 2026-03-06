@@ -87,25 +87,41 @@ export default function Plans() {
   // Check payment return from Checkout Pro
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
+    if (!paymentStatus) return;
+
+    // Recover plan info saved before redirect
+    const savedPlan = localStorage.getItem('checkout_plan_name') || '';
+    const savedValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
+    const savedPlanKey = localStorage.getItem('checkout_plan_key') || '';
+
     if (paymentStatus === 'success') {
       toast.success('Pagamento aprovado! Seu plano foi ativado.');
-      // Fire AddPaymentInfo (user filled card/boleto info on Mercado Pago)
       trackPixelEvent('AddPaymentInfo', {
+        content_name: savedPlan,
         content_category: 'Cartão/Boleto',
+        value: savedValue,
         currency: 'BRL',
       }, user?.id);
-      // Fire Purchase (payment confirmed by Mercado Pago redirect)
       trackPixelEvent('Purchase', {
+        content_name: savedPlan,
         content_category: 'Cartão/Boleto',
+        value: savedValue,
         currency: 'BRL',
+        content_ids: [savedPlanKey],
+        content_type: 'product',
       }, user?.id);
+      // Clean up
+      localStorage.removeItem('checkout_plan_name');
+      localStorage.removeItem('checkout_plan_value');
+      localStorage.removeItem('checkout_plan_key');
     } else if (paymentStatus === 'failure') {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
       toast.info('Pagamento pendente. Será ativado assim que confirmado.');
-      // User filled payment info even if pending
       trackPixelEvent('AddPaymentInfo', {
+        content_name: savedPlan,
         content_category: 'Cartão/Boleto',
+        value: savedValue,
         currency: 'BRL',
       }, user?.id);
     }
