@@ -53,9 +53,9 @@ export default function ThankYou() {
 
     if (isReal) {
       // Disparo REAL de um único evento Purchase (sem test_event_code)
-      planName = 'Plano Pro';
-      planValue = 47.00;
-      planKey = 'pro';
+      planName = 'Plano Starter';
+      planValue = 38.00;
+      planKey = 'starter';
       method = 'Cartão/Boleto';
     } else if (isTest) {
       planName = 'Plano Pro';
