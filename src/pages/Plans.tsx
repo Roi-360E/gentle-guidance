@@ -167,6 +167,17 @@ export default function Plans() {
       if (data.type === 'pix') {
         setPixData({ qrCode: data.qrCode, qrCodeBase64: data.qrCodeBase64, paymentId: data.paymentId, mpPaymentId: data.mpPaymentId, expiresAt: data.expiresAt });
         setPollingPayment(true);
+
+        // Track AddPaymentInfo when Pix QR code is generated
+        if (typeof window !== 'undefined' && (window as any).fbq) {
+          const plan = plans.find(p => p.plan_key === planKey);
+          (window as any).fbq('track', 'AddPaymentInfo', {
+            content_name: plan?.name || planKey,
+            content_category: 'Pix',
+            value: plan?.price || 0,
+            currency: 'BRL',
+          });
+        }
       } else if (data.type === 'checkout') {
         window.location.href = data.initPoint;
       }
