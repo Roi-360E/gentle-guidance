@@ -94,6 +94,21 @@ export default function AdminPlans() {
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [savedDomainFiles, setSavedDomainFiles] = useState<{ id: string; pixel_id: string; pixel_snippet: string }[]>([]);
+
+  const loadDomainFiles = async () => {
+    const { data } = await supabase
+      .from('facebook_pixel_config')
+      .select('id, pixel_id, pixel_snippet')
+      .eq('name', '__domain_verification__');
+    if (data) setSavedDomainFiles(data);
+  };
+
+  const deleteDomainFile = async (id: string) => {
+    await supabase.from('facebook_pixel_config').delete().eq('id', id);
+    setSavedDomainFiles(prev => prev.filter(f => f.id !== id));
+    toast.success('Arquivo de verificação removido.');
+  };
 
   useEffect(() => {
     if (!user) return;
