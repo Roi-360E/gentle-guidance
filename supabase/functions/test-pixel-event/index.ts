@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
     }
 
     const testEventCode = test_event_code || ("TEST" + crypto.randomUUID().replace(/-/g, "").substring(0, 10).toUpperCase());
+    const eventId = (dedup_key ? dedup_key + "_" : "") + "test_" + crypto.randomUUID();
 
     const encoder = new TextEncoder();
     const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode("test@escalaxpro.com"));
