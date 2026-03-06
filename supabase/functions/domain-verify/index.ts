@@ -49,24 +49,23 @@ serve(async (req) => {
       });
     }
 
-    const { verification_code } = await req.json();
+    const { filename, verification_content } = await req.json();
 
-    if (!verification_code || typeof verification_code !== "string") {
+    if (!filename || !verification_content) {
       return new Response(
-        JSON.stringify({ error: "verification_code is required" }),
+        JSON.stringify({ error: "filename and verification_content are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Store the verification code in a simple key-value style
-    // We'll use facebook_pixel_config table with a special name
+    // Store filename and content for reference
     const { error: upsertError } = await supabase
       .from("facebook_pixel_config")
       .upsert(
         {
           name: "__domain_verification__",
-          pixel_id: "domain-verify",
-          pixel_snippet: `<meta name="facebook-domain-verification" content="${verification_code}" />`,
+          pixel_id: filename,
+          pixel_snippet: verification_content,
           access_token: "",
           dedup_key: "",
           is_active: true,
@@ -74,9 +73,7 @@ serve(async (req) => {
         { onConflict: "name" }
       );
 
-    // Note: if onConflict on name doesn't work, we do manual check
     if (upsertError) {
-      // Try delete + insert
       await supabase
         .from("facebook_pixel_config")
         .delete()
@@ -86,8 +83,8 @@ serve(async (req) => {
         .from("facebook_pixel_config")
         .insert({
           name: "__domain_verification__",
-          pixel_id: "domain-verify",
-          pixel_snippet: `<meta name="facebook-domain-verification" content="${verification_code}" />`,
+          pixel_id: filename,
+          pixel_snippet: verification_content,
           access_token: "",
           dedup_key: "",
           is_active: true,
@@ -99,7 +96,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, verification_code }),
+      JSON.stringify({ success: true, filename, verification_content }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
