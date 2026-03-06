@@ -218,8 +218,12 @@ export default function Plans() {
         setPixData({ qrCode: data.qrCode, qrCodeBase64: data.qrCodeBase64, paymentId: data.paymentId, mpPaymentId: data.mpPaymentId, expiresAt: data.expiresAt });
         setPollingPayment(true);
 
+        // Save plan info for Purchase event on Pix confirmation
+        localStorage.setItem('pix_plan_key', planKey);
+        localStorage.setItem('pix_plan_name', plan?.name || planKey);
+        localStorage.setItem('pix_plan_value', String(plan?.price || 0));
+
         // Track AddPaymentInfo when Pix QR code is generated
-        const plan = plans.find(p => p.plan_key === planKey);
         trackPixelEvent('AddPaymentInfo', {
           content_name: plan?.name || planKey,
           content_category: 'Pix',
@@ -227,6 +231,11 @@ export default function Plans() {
           currency: 'BRL',
         }, user?.id);
       } else if (data.type === 'checkout') {
+        // Save plan info in localStorage before redirect
+        localStorage.setItem('checkout_plan_key', planKey);
+        localStorage.setItem('checkout_plan_name', plan?.name || planKey);
+        localStorage.setItem('checkout_plan_value', String(plan?.price || 0));
+
         // Small delay to ensure Pixel beacon completes before redirect
         await new Promise(resolve => setTimeout(resolve, 500));
         window.location.href = data.initPoint;
