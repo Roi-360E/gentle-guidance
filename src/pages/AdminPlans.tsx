@@ -148,6 +148,34 @@ export default function AdminPlans() {
     setPixelLoading(false);
   };
 
+  const FUNNEL_EVENTS = ['PageView', 'ViewContent', 'Lead', 'CompleteRegistration', 'InitiateCheckout', 'AddPaymentInfo', 'Purchase', 'StartTrial', 'ScrollDepth'];
+
+  const loadFunnelData = async () => {
+    setFunnelLoading(true);
+    const { data, error } = await supabase
+      .from('pixel_events_log' as any)
+      .select('event_name')
+      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+    if (!error && data) {
+      const counts: Record<string, number> = {};
+      (data as any[]).forEach((row: any) => {
+        counts[row.event_name] = (counts[row.event_name] || 0) + 1;
+      });
+      const result = FUNNEL_EVENTS.map(name => ({
+        event_name: name,
+        count: counts[name] || 0,
+      }));
+      Object.keys(counts).forEach(name => {
+        if (!FUNNEL_EVENTS.includes(name)) {
+          result.push({ event_name: name, count: counts[name] });
+        }
+      });
+      setFunnelData(result);
+    }
+    setFunnelLoading(false);
+  };
+
   const savePixelConfig = async () => {
     if (!pixelName.trim() || !pixelId.trim() || !pixelAccessToken.trim()) {
       toast.error('Preencha o nome, Pixel ID e Token de Acesso.');
