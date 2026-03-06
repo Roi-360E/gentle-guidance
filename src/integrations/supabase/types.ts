@@ -79,6 +79,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          name: string
           pixel_id: string
           updated_at: string
         }
@@ -87,6 +88,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          name?: string
           pixel_id?: string
           updated_at?: string
         }
@@ -95,6 +97,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          name?: string
           pixel_id?: string
           updated_at?: string
         }

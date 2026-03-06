@@ -68,12 +68,14 @@ export default function AdminPlans() {
   const [tokenEditValue, setTokenEditValue] = useState('');
 
   // Pixel state
+  const [pixelName, setPixelName] = useState('');
   const [pixelId, setPixelId] = useState('');
   const [pixelAccessToken, setPixelAccessToken] = useState('');
   const [pixelActive, setPixelActive] = useState(false);
   const [pixelLoading, setPixelLoading] = useState(false);
   const [pixelSaving, setPixelSaving] = useState(false);
-  const [pixelConfigId, setPixelConfigId] = useState<string | null>(null);
+  const [savedPixels, setSavedPixels] = useState<any[]>([]);
+  const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -118,41 +120,50 @@ export default function AdminPlans() {
 
   const loadPixelConfig = async () => {
     setPixelLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('facebook_pixel_config' as any)
       .select('*')
-      .limit(1)
-      .single();
+      .order('created_at', { ascending: false });
 
     if (data) {
-      const d = data as any;
-      setPixelId(d.pixel_id || '');
-      setPixelAccessToken(d.access_token || '');
-      setPixelActive(d.is_active || false);
-      setPixelConfigId(d.id);
+      setSavedPixels(data as any[]);
     }
     setPixelLoading(false);
   };
 
   const savePixelConfig = async () => {
-    setPixelSaving(true);
-    const payload = { pixel_id: pixelId, access_token: pixelAccessToken, is_active: pixelActive, updated_at: new Date().toISOString() };
-
-    let error;
-    if (pixelConfigId) {
-      const res = await supabase.from('facebook_pixel_config' as any).update(payload as any).eq('id', pixelConfigId);
-      error = res.error;
-    } else {
-      const res = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
-      error = res.error;
+    if (!pixelName.trim() || !pixelId.trim() || !pixelAccessToken.trim()) {
+      toast.error('Preencha o nome, Pixel ID e Token de Acesso.');
+      return;
     }
+    setPixelSaving(true);
+    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, is_active: pixelActive, updated_at: new Date().toISOString() };
+
+    const { error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
 
     if (error) {
-      toast.error('Erro ao salvar configuração do Pixel: ' + error.message);
+      toast.error('Erro ao salvar Pixel: ' + error.message);
     } else {
-      toast.success('Configuração do Facebook Pixel salva!');
+      toast.success('Pixel salvo com sucesso!');
+      setPixelName('');
+      setPixelId('');
+      setPixelAccessToken('');
+      setPixelActive(false);
+      await loadPixelConfig();
     }
     setPixelSaving(false);
+  };
+
+  const deletePixel = async (id: string) => {
+    setDeletingPixelId(id);
+    const { error } = await supabase.from('facebook_pixel_config' as any).delete().eq('id', id);
+    if (error) {
+      toast.error('Erro ao excluir Pixel: ' + error.message);
+    } else {
+      toast.success('Pixel excluído!');
+      setSavedPixels(prev => prev.filter(p => p.id !== id));
+    }
+    setDeletingPixelId(null);
   };
 
   const loadUsers = async () => {
@@ -802,11 +813,21 @@ export default function AdminPlans() {
                   <Crosshair className="w-5 h-5" /> Facebook Pixel & Conversions API
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-5">
+               <CardContent className="space-y-5">
                 {pixelLoading ? (
                   <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
                 ) : (
                   <>
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-name">Nome do Pixel</Label>
+                      <Input
+                        id="pixel-name"
+                        placeholder="Ex: Campanha Principal"
+                        value={pixelName}
+                        onChange={e => setPixelName(e.target.value)}
+                      />
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="pixel-id">Pixel ID</Label>
                       <Input
@@ -815,9 +836,6 @@ export default function AdminPlans() {
                         value={pixelId}
                         onChange={e => setPixelId(e.target.value)}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Encontre seu Pixel ID no Gerenciador de Eventos do Facebook.
-                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -829,9 +847,6 @@ export default function AdminPlans() {
                         onChange={e => setPixelAccessToken(e.target.value)}
                         className="font-mono text-xs min-h-[80px]"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Gere o token em Gerenciador de Eventos → Configurações → Token de Acesso.
-                      </p>
                     </div>
 
                     <div className="flex items-center justify-between border rounded-lg p-4">
@@ -841,44 +856,49 @@ export default function AdminPlans() {
                           Envia evento <code className="bg-muted px-1 rounded">Purchase</code> via Conversions API a cada compra confirmada.
                         </p>
                       </div>
-                      <Switch
-                        checked={pixelActive}
-                        onCheckedChange={setPixelActive}
-                      />
+                      <Switch checked={pixelActive} onCheckedChange={setPixelActive} />
                     </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={savePixelConfig}
-                        disabled={pixelSaving}
-                        className="flex-1 gap-2"
-                      >
-                        {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Salvar Configuração
-                      </Button>
-                      {pixelConfigId && (pixelId || pixelAccessToken) && (
-                        <Button
-                          variant="destructive"
-                          onClick={async () => {
-                            setPixelSaving(true);
-                            await supabase.from('facebook_pixel_config' as any).update({ pixel_id: '', access_token: '', is_active: false } as any).eq('id', pixelConfigId);
-                            setPixelId('');
-                            setPixelAccessToken('');
-                            setPixelActive(false);
-                            toast.success('Pixel removido com sucesso!');
-                            setPixelSaving(false);
-                          }}
-                          disabled={pixelSaving}
-                          className="gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" /> Excluir Pixel
-                        </Button>
-                      )}
-                    </div>
+                    <Button onClick={savePixelConfig} disabled={pixelSaving} className="w-full gap-2">
+                      {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Salvar Configuração
+                    </Button>
                   </>
                 )}
               </CardContent>
             </Card>
+
+            {/* Saved Pixels List */}
+            {savedPixels.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Pixels Salvos</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {savedPixels.map((px) => (
+                    <div key={px.id} className="flex items-center justify-between border rounded-lg p-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{px.name || 'Sem nome'}</p>
+                        <p className="text-xs text-muted-foreground font-mono truncate">ID: {px.pixel_id}</p>
+                        <Badge variant={px.is_active ? 'default' : 'outline'} className="mt-1 text-xs">
+                          {px.is_active ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deletePixel(px.id)}
+                        disabled={deletingPixelId === px.id}
+                        className="shrink-0 ml-3 gap-1"
+                      >
+                        {deletingPixelId === px.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        Excluir
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <p className="text-xs text-muted-foreground text-center">
               O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
