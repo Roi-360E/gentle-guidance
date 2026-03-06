@@ -33,7 +33,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <ProcessingProvider>
-            <Routes>
+            <FacebookPixelProvider>
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
