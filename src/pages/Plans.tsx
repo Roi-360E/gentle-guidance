@@ -82,6 +82,14 @@ export default function Plans() {
     const paymentStatus = searchParams.get('payment');
     if (paymentStatus === 'success') {
       toast.success('Pagamento aprovado! Seu plano foi ativado.');
+
+      // Track AddPaymentInfo on successful return from Checkout Pro
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        (window as any).fbq('track', 'AddPaymentInfo', {
+          content_category: 'Cartão/Boleto',
+          currency: 'BRL',
+        });
+      }
     } else if (paymentStatus === 'failure') {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
@@ -167,6 +175,17 @@ export default function Plans() {
       if (data.type === 'pix') {
         setPixData({ qrCode: data.qrCode, qrCodeBase64: data.qrCodeBase64, paymentId: data.paymentId, mpPaymentId: data.mpPaymentId, expiresAt: data.expiresAt });
         setPollingPayment(true);
+
+        // Track AddPaymentInfo when Pix QR code is generated
+        if (typeof window !== 'undefined' && (window as any).fbq) {
+          const plan = plans.find(p => p.plan_key === planKey);
+          (window as any).fbq('track', 'AddPaymentInfo', {
+            content_name: plan?.name || planKey,
+            content_category: 'Pix',
+            value: plan?.price || 0,
+            currency: 'BRL',
+          });
+        }
       } else if (data.type === 'checkout') {
         window.location.href = data.initPoint;
       }
