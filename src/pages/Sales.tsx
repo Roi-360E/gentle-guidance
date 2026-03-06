@@ -16,7 +16,10 @@ import {
   Star,
   ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { trackPixelEvent } from '@/lib/pixel-tracker';
+import { useScrollDepth } from '@/hooks/useScrollDepth';
+import { useUtmCapture } from '@/hooks/useUtmCapture';
 
 /* ───────────────────────── helpers ───────────────────────── */
 
