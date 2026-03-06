@@ -254,7 +254,15 @@ export default function AdminPlans() {
         fbq('track', 'Purchase', { currency: 'BRL', value: 38.00, content_name: 'Starter', content_type: 'product', content_ids: ['starter'] });
       }
 
-      // Fire CAPI via edge function
+      // Get Facebook cookies for better matching
+      const getCookie = (name: string) => {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : undefined;
+      };
+      const fbc = getCookie('_fbc');
+      const fbp = getCookie('_fbp');
+
+      // Fire CAPI via edge function with enriched user data
       const { data, error } = await supabase.functions.invoke('fire-purchase-event', {
         body: {
           plan_name: 'Starter',
@@ -262,13 +270,23 @@ export default function AdminPlans() {
           plan_key: 'starter',
           user_id: user?.id || null,
           event_source_url: window.location.origin + '/obrigado',
+          fbc: fbc || undefined,
+          fbp: fbp || undefined,
+          client_user_agent: navigator.userAgent,
         },
       });
 
       if (error) {
         toast.error('Erro ao disparar evento: ' + error.message);
       } else if (data?.success) {
-        toast.success('✅ Evento de compra REAL disparado com sucesso via Browser + CAPI!');
+        // Check if any pixel returned an error
+        const hasErrors = data.results?.some((r: any) => r.result?.error);
+        if (hasErrors) {
+          const errorMsg = data.results.find((r: any) => r.result?.error)?.result?.error?.error_user_msg || 'Erro desconhecido';
+          toast.error('⚠️ Evento enviado mas com erro: ' + errorMsg);
+        } else {
+          toast.success('✅ Evento de compra REAL disparado com sucesso via Browser + CAPI!');
+        }
       } else {
         toast.error('Falha: ' + JSON.stringify(data));
       }

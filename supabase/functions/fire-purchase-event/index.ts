@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json();
-    const { plan_name, plan_value, plan_key, user_id, event_source_url } = body;
+    const { plan_name, plan_value, plan_key, user_id, event_source_url, fbc, fbp, client_user_agent } = body;
 
     if (!plan_name || !plan_value || !plan_key) {
       return new Response(JSON.stringify({ error: "Missing plan data" }), {
@@ -30,6 +30,12 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Get client IP from request headers
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() 
+      || req.headers.get("cf-connecting-ip") 
+      || req.headers.get("x-real-ip") 
+      || "0.0.0.0";
 
     // Get active pixel configs
     const { data: pixels } = await supabase
@@ -47,16 +53,27 @@ Deno.serve(async (req) => {
     // Get user email for matching
     let emHash: string[] = [];
     let externalIdHash: string[] = [];
+    let fnHash: string[] = [];
     if (user_id) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("email")
+        .select("email, name")
         .eq("user_id", user_id)
         .single();
       if (profile?.email) {
         emHash = [await sha256(profile.email.toLowerCase().trim())];
       }
+      if (profile?.name) {
+        // Hash first name only (Meta best practice)
+        const firstName = profile.name.split(" ")[0].toLowerCase().trim();
+        fnHash = [await sha256(firstName)];
+      }
       externalIdHash = [await sha256(user_id)];
+    }
+
+    // Generate a fallback external_id if no user
+    if (!externalIdHash.length) {
+      externalIdHash = [await sha256(`anon_${Date.now()}_${crypto.randomUUID()}`)];
     }
 
     const results = [];
@@ -66,6 +83,21 @@ Deno.serve(async (req) => {
 
       const eventId = `${px.dedup_key || "dedup"}_purchase_${Date.now()}_${crypto.randomUUID().substring(0, 8)}`;
 
+      const userData: Record<string, any> = {
+        external_id: externalIdHash,
+        client_ip_address: clientIp,
+        client_user_agent: client_user_agent || req.headers.get("user-agent") || "",
+      };
+
+      // Add email hash if available
+      if (emHash.length) userData.em = emHash;
+      // Add first name hash if available
+      if (fnHash.length) userData.fn = fnHash;
+      // Add Facebook click ID if available
+      if (fbc) userData.fbc = fbc;
+      // Add Facebook browser ID if available
+      if (fbp) userData.fbp = fbp;
+
       const eventPayload = {
         data: [{
           event_name: "Purchase",
@@ -73,11 +105,7 @@ Deno.serve(async (req) => {
           event_time: Math.floor(Date.now() / 1000),
           action_source: "website",
           event_source_url: event_source_url || "https://deploysites.online/obrigado",
-          user_data: {
-            em: emHash,
-            external_id: externalIdHash,
-            client_user_agent: req.headers.get("user-agent") || "",
-          },
+          user_data: userData,
           custom_data: {
             currency: "BRL",
             value: Number(plan_value),
@@ -87,6 +115,8 @@ Deno.serve(async (req) => {
           },
         }],
       };
+
+      console.log(`[fire-purchase] Sending to ${px.name || px.pixel_id}:`, JSON.stringify(eventPayload));
 
       const res = await fetch(
         `https://graph.facebook.com/v21.0/${px.pixel_id}/events?access_token=${px.access_token}`,
@@ -98,7 +128,7 @@ Deno.serve(async (req) => {
       );
 
       const result = await res.json();
-      console.log(`[fire-purchase] ${px.name || px.pixel_id}:`, JSON.stringify(result));
+      console.log(`[fire-purchase] Response ${px.name || px.pixel_id}:`, JSON.stringify(result));
       results.push({ pixel: px.name || px.pixel_id, result });
     }
 
