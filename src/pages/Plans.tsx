@@ -89,14 +89,10 @@ export default function Plans() {
     const paymentStatus = searchParams.get('payment');
     if (paymentStatus === 'success') {
       toast.success('Pagamento aprovado! Seu plano foi ativado.');
-
-      // Track AddPaymentInfo on successful return from Checkout Pro
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('track', 'AddPaymentInfo', {
-          content_category: 'Cartão/Boleto',
-          currency: 'BRL',
-        });
-      }
+      trackPixelEvent('AddPaymentInfo', {
+        content_category: 'Cartão/Boleto',
+        currency: 'BRL',
+      }, user?.id);
     } else if (paymentStatus === 'failure') {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
