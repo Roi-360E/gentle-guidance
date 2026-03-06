@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProcessingProvider } from "@/hooks/useProcessing";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { FacebookPixelProvider } from "@/components/FacebookPixelProvider";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import SubtitleEditor from "./pages/SubtitleEditor";
