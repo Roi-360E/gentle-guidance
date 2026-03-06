@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProcessing } from '@/hooks/useProcessing';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,7 +33,16 @@ import { usePowerUserTracking } from '@/hooks/useAudienceEvents';
 const Index = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   useUtmCapture(user?.id);
+
+  // Fallback: if user returns from MercadoPago to root with ?payment=success
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    if (paymentStatus === 'success') {
+      navigate('/obrigado', { replace: true });
+    }
+  }, [searchParams, navigate]);
   const { isProcessing, currentProgress, processingPhase, combinations, startProcessing, cancelProcessing, setCombinations } = useProcessing();
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [videoCount, setVideoCount] = useState(0);
