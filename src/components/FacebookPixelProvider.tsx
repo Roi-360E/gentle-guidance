@@ -15,7 +15,7 @@ export function FacebookPixelProvider() {
 
       if (error || !data) return;
 
-      const pixels = data as { pixel_snippet: string; is_active: boolean }[];
+      const pixels = (data as any[]) as { pixel_snippet: string; is_active: boolean }[];
       
       pixels.forEach((px) => {
         const snippet = px.pixel_snippet?.trim();
