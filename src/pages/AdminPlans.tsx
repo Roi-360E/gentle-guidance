@@ -82,6 +82,7 @@ export default function AdminPlans() {
   const [editingPixelId, setEditingPixelId] = useState<string | null>(null);
   const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
   const [testingPixelId, setTestingPixelId] = useState<string | null>(null);
+  const [firingRealPurchase, setFiringRealPurchase] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testDialogPixel, setTestDialogPixel] = useState<any>(null);
   const [testEventCode, setTestEventCode] = useState('');
