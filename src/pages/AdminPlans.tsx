@@ -68,12 +68,14 @@ export default function AdminPlans() {
   const [tokenEditValue, setTokenEditValue] = useState('');
 
   // Pixel state
+  const [pixelName, setPixelName] = useState('');
   const [pixelId, setPixelId] = useState('');
   const [pixelAccessToken, setPixelAccessToken] = useState('');
   const [pixelActive, setPixelActive] = useState(false);
   const [pixelLoading, setPixelLoading] = useState(false);
   const [pixelSaving, setPixelSaving] = useState(false);
-  const [pixelConfigId, setPixelConfigId] = useState<string | null>(null);
+  const [savedPixels, setSavedPixels] = useState<any[]>([]);
+  const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
