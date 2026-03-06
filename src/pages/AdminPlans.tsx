@@ -94,6 +94,21 @@ export default function AdminPlans() {
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [savedDomainFiles, setSavedDomainFiles] = useState<{ id: string; pixel_id: string; pixel_snippet: string }[]>([]);
+
+  const loadDomainFiles = async () => {
+    const { data } = await supabase
+      .from('facebook_pixel_config')
+      .select('id, pixel_id, pixel_snippet')
+      .eq('name', '__domain_verification__');
+    if (data) setSavedDomainFiles(data);
+  };
+
+  const deleteDomainFile = async (id: string) => {
+    await supabase.from('facebook_pixel_config').delete().eq('id', id);
+    setSavedDomainFiles(prev => prev.filter(f => f.id !== id));
+    toast.success('Arquivo de verificação removido.');
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -109,6 +124,7 @@ export default function AdminPlans() {
           loadUsers();
           loadPixelConfig();
           loadFunnelData();
+          loadDomainFiles();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
@@ -1185,6 +1201,29 @@ export default function AdminPlans() {
                   <p className="text-xs">⏳ A verificação pode levar até 72 horas.</p>
                 </div>
 
+                {/* Saved domain files list */}
+                {savedDomainFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Arquivos salvos</Label>
+                    {savedDomainFiles.map((file) => (
+                      <div key={file.id} className="flex items-center justify-between bg-muted/30 border border-border rounded-lg px-4 py-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-mono truncate">{file.pixel_id}</p>
+                          <p className="text-xs text-muted-foreground truncate">{file.pixel_snippet.substring(0, 80)}...</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive ml-2 shrink-0"
+                          onClick={() => deleteDomainFile(file.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   <Label htmlFor="domain-verif-html" className="text-sm font-medium">
                     Cole o arquivo HTML para pasta raiz do domínio
@@ -1220,7 +1259,9 @@ export default function AdminPlans() {
                         if (error) throw error;
 
                         setDomainVerifStatus('saved');
-                        toast.success('Arquivo de verificação salvo! Publique o site para ativar.');
+                        setDomainVerifHtml('');
+                        loadDomainFiles();
+                        toast.success('Arquivo de verificação salvo!');
                       } catch (err: any) {
                         console.error('Error saving verification:', err);
                         setDomainVerifStatus('error');
@@ -1235,15 +1276,15 @@ export default function AdminPlans() {
                     {domainVerifSaving ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <Save className="w-4 h-4" />
+                      <Plus className="w-4 h-4" />
                     )}
-                    Salvar Arquivo de Verificação
+                    Adicionar Arquivo
                   </Button>
 
                   {domainVerifStatus === 'saved' && (
                     <div className="flex items-center gap-1.5 text-sm text-primary">
                       <CheckCircle2 className="w-4 h-4" />
-                      Arquivo salvo — publique o site para ativar
+                      Salvo com sucesso
                     </div>
                   )}
                   {domainVerifStatus === 'error' && (

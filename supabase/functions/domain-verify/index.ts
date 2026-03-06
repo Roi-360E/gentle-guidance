@@ -58,41 +58,20 @@ serve(async (req) => {
       );
     }
 
-    // Store filename and content for reference
-    const { error: upsertError } = await supabase
+    // Insert new domain verification entry
+    const { error: insertError } = await supabase
       .from("facebook_pixel_config")
-      .upsert(
-        {
-          name: "__domain_verification__",
-          pixel_id: filename,
-          pixel_snippet: verification_content,
-          access_token: "",
-          dedup_key: "",
-          is_active: true,
-        },
-        { onConflict: "name" }
-      );
+      .insert({
+        name: "__domain_verification__",
+        pixel_id: filename,
+        pixel_snippet: verification_content,
+        access_token: "",
+        dedup_key: "",
+        is_active: true,
+      });
 
-    if (upsertError) {
-      await supabase
-        .from("facebook_pixel_config")
-        .delete()
-        .eq("name", "__domain_verification__");
-
-      const { error: insertError } = await supabase
-        .from("facebook_pixel_config")
-        .insert({
-          name: "__domain_verification__",
-          pixel_id: filename,
-          pixel_snippet: verification_content,
-          access_token: "",
-          dedup_key: "",
-          is_active: true,
-        });
-
-      if (insertError) {
-        throw insertError;
-      }
+    if (insertError) {
+      throw insertError;
     }
 
     return new Response(
