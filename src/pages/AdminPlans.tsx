@@ -210,7 +210,7 @@ export default function AdminPlans() {
     setTestingPixelId(null);
   };
 
-
+  const loadUsers = async () => {
     setUsersLoading(true);
     const monthYear = new Date().toISOString().substring(0, 7);
 
