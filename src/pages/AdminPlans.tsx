@@ -847,14 +847,34 @@ export default function AdminPlans() {
                       />
                     </div>
 
-                    <Button
-                      onClick={savePixelConfig}
-                      disabled={pixelSaving}
-                      className="w-full gap-2"
-                    >
-                      {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Salvar Configuração do Pixel
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={savePixelConfig}
+                        disabled={pixelSaving}
+                        className="flex-1 gap-2"
+                      >
+                        {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Salvar Configuração
+                      </Button>
+                      {pixelConfigId && (pixelId || pixelAccessToken) && (
+                        <Button
+                          variant="destructive"
+                          onClick={async () => {
+                            setPixelSaving(true);
+                            await supabase.from('facebook_pixel_config' as any).update({ pixel_id: '', access_token: '', is_active: false } as any).eq('id', pixelConfigId);
+                            setPixelId('');
+                            setPixelAccessToken('');
+                            setPixelActive(false);
+                            toast.success('Pixel removido com sucesso!');
+                            setPixelSaving(false);
+                          }}
+                          disabled={pixelSaving}
+                          className="gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" /> Excluir Pixel
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </CardContent>
