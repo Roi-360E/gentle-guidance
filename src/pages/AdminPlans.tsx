@@ -245,6 +245,39 @@ export default function AdminPlans() {
     setDeletingPixelId(null);
   };
 
+  const fireRealPurchase = async () => {
+    setFiringRealPurchase(true);
+    try {
+      // Fire browser-side fbq
+      const fbq = (window as any).fbq;
+      if (fbq && typeof fbq === 'function') {
+        fbq('track', 'Purchase', { currency: 'BRL', value: 38.00, content_name: 'Starter', content_type: 'product', content_ids: ['starter'] });
+      }
+
+      // Fire CAPI via edge function
+      const { data, error } = await supabase.functions.invoke('fire-purchase-event', {
+        body: {
+          plan_name: 'Starter',
+          plan_value: 38.00,
+          plan_key: 'starter',
+          user_id: user?.id || null,
+          event_source_url: window.location.origin + '/obrigado',
+        },
+      });
+
+      if (error) {
+        toast.error('Erro ao disparar evento: ' + error.message);
+      } else if (data?.success) {
+        toast.success('✅ Evento de compra REAL disparado com sucesso via Browser + CAPI!');
+      } else {
+        toast.error('Falha: ' + JSON.stringify(data));
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setFiringRealPurchase(false);
+  };
+
   const openTestDialog = (pixel: any) => {
     setTestDialogPixel(pixel);
     setTestEventCode('');
