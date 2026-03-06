@@ -73,6 +73,33 @@ export type Database = {
         }
         Relationships: []
       }
+      facebook_pixel_config: {
+        Row: {
+          access_token: string
+          created_at: string
+          id: string
+          is_active: boolean
+          pixel_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          pixel_id?: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          pixel_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       instagram_connections: {
         Row: {
           created_at: string

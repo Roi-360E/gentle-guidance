@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Facebook } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
 interface Plan {
@@ -66,6 +67,14 @@ export default function AdminPlans() {
   const [tokenEditUser, setTokenEditUser] = useState<string | null>(null);
   const [tokenEditValue, setTokenEditValue] = useState('');
 
+  // Pixel state
+  const [pixelId, setPixelId] = useState('');
+  const [pixelAccessToken, setPixelAccessToken] = useState('');
+  const [pixelActive, setPixelActive] = useState(false);
+  const [pixelLoading, setPixelLoading] = useState(false);
+  const [pixelSaving, setPixelSaving] = useState(false);
+  const [pixelConfigId, setPixelConfigId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user) return;
     supabase
@@ -78,6 +87,7 @@ export default function AdminPlans() {
           setIsAdmin(true);
           loadPlans();
           loadUsers();
+          loadPixelConfig();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
@@ -104,6 +114,45 @@ export default function AdminPlans() {
       })));
     }
     setLoading(false);
+  };
+
+  const loadPixelConfig = async () => {
+    setPixelLoading(true);
+    const { data, error } = await supabase
+      .from('facebook_pixel_config' as any)
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (data) {
+      const d = data as any;
+      setPixelId(d.pixel_id || '');
+      setPixelAccessToken(d.access_token || '');
+      setPixelActive(d.is_active || false);
+      setPixelConfigId(d.id);
+    }
+    setPixelLoading(false);
+  };
+
+  const savePixelConfig = async () => {
+    setPixelSaving(true);
+    const payload = { pixel_id: pixelId, access_token: pixelAccessToken, is_active: pixelActive, updated_at: new Date().toISOString() };
+
+    let error;
+    if (pixelConfigId) {
+      const res = await supabase.from('facebook_pixel_config' as any).update(payload as any).eq('id', pixelConfigId);
+      error = res.error;
+    } else {
+      const res = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
+      error = res.error;
+    }
+
+    if (error) {
+      toast.error('Erro ao salvar configuração do Pixel: ' + error.message);
+    } else {
+      toast.success('Configuração do Facebook Pixel salva!');
+    }
+    setPixelSaving(false);
   };
 
   const loadUsers = async () => {
@@ -398,12 +447,15 @@ export default function AdminPlans() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs defaultValue="plans" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="plans" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Planos
             </TabsTrigger>
             <TabsTrigger value="users" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Usuários
+            </TabsTrigger>
+            <TabsTrigger value="pixel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
             </TabsTrigger>
           </TabsList>
 
@@ -739,6 +791,77 @@ export default function AdminPlans() {
 
             <p className="text-xs text-muted-foreground text-center">
               {filteredUsers.length} usuário(s) • Altere o plano para liberar ou revogar acessos instantaneamente.
+            </p>
+          </TabsContent>
+
+          {/* ===== PIXEL TAB ===== */}
+          <TabsContent value="pixel" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Facebook className="w-5 h-5" /> Facebook Pixel & Conversions API
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {pixelLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-id">Pixel ID</Label>
+                      <Input
+                        id="pixel-id"
+                        placeholder="Ex: 123456789012345"
+                        value={pixelId}
+                        onChange={e => setPixelId(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Encontre seu Pixel ID no Gerenciador de Eventos do Facebook.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-token">Token de Acesso (Conversions API)</Label>
+                      <Textarea
+                        id="pixel-token"
+                        placeholder="Cole aqui o token de acesso gerado no Gerenciador de Eventos"
+                        value={pixelAccessToken}
+                        onChange={e => setPixelAccessToken(e.target.value)}
+                        className="font-mono text-xs min-h-[80px]"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Gere o token em Gerenciador de Eventos → Configurações → Token de Acesso.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between border rounded-lg p-4">
+                      <div>
+                        <p className="font-medium text-sm">Ativar rastreamento</p>
+                        <p className="text-xs text-muted-foreground">
+                          Envia evento <code className="bg-muted px-1 rounded">Purchase</code> via Conversions API a cada compra confirmada.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={pixelActive}
+                        onCheckedChange={setPixelActive}
+                      />
+                    </div>
+
+                    <Button
+                      onClick={savePixelConfig}
+                      disabled={pixelSaving}
+                      className="w-full gap-2"
+                    >
+                      {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Salvar Configuração do Pixel
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <p className="text-xs text-muted-foreground text-center">
+              O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
             </p>
           </TabsContent>
         </Tabs>

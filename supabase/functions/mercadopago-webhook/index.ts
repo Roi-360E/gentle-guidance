@@ -198,4 +198,73 @@ async function processApprovedPayment(
   }
 
   console.log(`[MP Webhook] ✅ Payment ${internalPaymentId} confirmed! Plan: ${payment.plan} for user: ${payment.user_id}`);
+
+  // Fire Facebook Conversions API event
+  await fireFacebookPurchaseEvent(supabase, payment);
+}
+
+async function fireFacebookPurchaseEvent(supabase: any, payment: any) {
+  try {
+    const { data: pixelConfig } = await supabase
+      .from("facebook_pixel_config")
+      .select("*")
+      .eq("is_active", true)
+      .limit(1)
+      .single();
+
+    if (!pixelConfig || !pixelConfig.pixel_id || !pixelConfig.access_token) {
+      console.log("[FB Pixel] No active pixel config found, skipping");
+      return;
+    }
+
+    // Get user email for better matching
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("user_id", payment.user_id)
+      .single();
+
+    const eventData = {
+      data: [
+        {
+          event_name: "Purchase",
+          event_time: Math.floor(Date.now() / 1000),
+          action_source: "website",
+          user_data: {
+            em: profile?.email
+              ? [await sha256(profile.email.toLowerCase().trim())]
+              : [],
+            external_id: [await sha256(payment.user_id)],
+          },
+          custom_data: {
+            currency: "BRL",
+            value: Number(payment.amount),
+            content_name: payment.plan,
+            content_type: "product",
+          },
+        },
+      ],
+    };
+
+    const res = await fetch(
+      `https://graph.facebook.com/v19.0/${pixelConfig.pixel_id}/events?access_token=${pixelConfig.access_token}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(eventData),
+      }
+    );
+
+    const result = await res.json();
+    console.log("[FB Pixel] Conversions API response:", JSON.stringify(result));
+  } catch (err) {
+    console.error("[FB Pixel] Error sending event:", err);
+  }
+}
+
+async function sha256(message: string): Promise<string> {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
