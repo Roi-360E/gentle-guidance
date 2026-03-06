@@ -11,8 +11,11 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log("test-pixel-event: request received");
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
+      console.log("test-pixel-event: no auth header");
       return new Response(JSON.stringify({ error: "Token não fornecido" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -23,25 +26,28 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Validate token using getClaims
+    // Validate token using getUser
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    console.log("test-pixel-event: getUser result", userData?.user?.id, userError?.message);
+
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Sessão inválida ou expirada. Faça login novamente." }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = claimsData.claims.sub;
+    const userId = userData.user.id;
 
     // Check admin role using service role client
     const adminClient = createClient(supabaseUrl, serviceKey);
-    const { data: roleData } = await adminClient.rpc("has_role", { _user_id: userId, _role: "admin" });
+    const { data: roleData, error: roleError } = await adminClient.rpc("has_role", { _user_id: userId, _role: "admin" });
+    console.log("test-pixel-event: role check", roleData, roleError?.message);
+
     if (!roleData) {
       return new Response(JSON.stringify({ error: "Acesso negado. Apenas administradores." }), {
         status: 200,
@@ -51,6 +57,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { pixel_id, access_token, pixel_name, test_event_code } = body;
+    console.log("test-pixel-event: pixel_id=", pixel_id, "has_token=", !!access_token, "test_code=", test_event_code);
 
     if (!pixel_id || !access_token) {
       return new Response(JSON.stringify({ error: "pixel_id e access_token são obrigatórios" }), {
@@ -72,20 +79,28 @@ Deno.serve(async (req) => {
           event_name: "Purchase",
           event_time: Math.floor(Date.now() / 1000),
           action_source: "website",
-          user_data: { em: [hashedEmail] },
+          event_source_url: "https://escalaxpro.com",
+          user_data: {
+            em: [hashedEmail],
+            client_ip_address: "0.0.0.0",
+            client_user_agent: "EscalaXPro/TestEvent",
+          },
           custom_data: {
             value: 1.0,
             currency: "BRL",
             content_name: "Compra Teste - " + (pixel_name || "Pixel"),
             content_type: "product",
+            content_ids: ["test-purchase-001"],
           },
         },
       ],
       test_event_code: testEventCode,
     };
 
+    console.log("test-pixel-event: sending to FB", JSON.stringify(eventPayload));
+
     const fbRes = await fetch(
-      `https://graph.facebook.com/v19.0/${pixel_id}/events?access_token=${access_token}`,
+      `https://graph.facebook.com/v21.0/${pixel_id}/events?access_token=${access_token}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,6 +109,8 @@ Deno.serve(async (req) => {
     );
 
     const fbText = await fbRes.text();
+    console.log("test-pixel-event: FB response status=", fbRes.status, "body=", fbText.substring(0, 500));
+
     let fbResult;
     try {
       fbResult = JSON.parse(fbText);
@@ -116,10 +133,12 @@ Deno.serve(async (req) => {
         success: true,
         test_event_code: testEventCode,
         events_received: fbResult.events_received,
+        message: `Evento enviado com sucesso! ${fbResult.events_received || 0} evento(s) recebido(s) pelo Facebook.`,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    console.error("test-pixel-event: caught error", err);
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
