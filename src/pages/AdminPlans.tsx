@@ -1177,66 +1177,44 @@ export default function AdminPlans() {
                   <p className="font-medium text-foreground">📋 Como verificar seu domínio por arquivo HTML:</p>
                   <ol className="list-decimal list-inside space-y-2">
                     <li>No <strong>Gerenciador de Negócios do Facebook</strong>, vá em <strong>Configurações → Segurança da Marca → Domínios</strong>.</li>
-                    <li>Clique em <strong>"Adicionar"</strong> e insira seu domínio (ex: <code className="bg-muted px-1 rounded">deploysites.online</code>).</li>
+                    <li>Clique em <strong>"Adicionar"</strong> e insira seu domínio.</li>
                     <li>Selecione o método <strong>"Carregar arquivo HTML"</strong>.</li>
-                    <li>Copie o <strong>nome do arquivo</strong> (ex: <code className="bg-muted px-1 rounded">ripyzu7jxb6g3e15krg2r5jat9apbs.html</code>) e o <strong>código de verificação</strong>.</li>
-                    <li>Cole ambos nos campos abaixo e clique em <strong>"Salvar Arquivo de Verificação"</strong>.</li>
-                    <li>Após publicar o site, acesse <code className="bg-muted px-1 rounded">https://seudominio.com/nomedoarquivo.html</code> para confirmar.</li>
-                    <li>Volte ao Facebook e clique em <strong>"Verificar domínio"</strong>.</li>
+                    <li>O Facebook vai fornecer o conteúdo do arquivo HTML. <strong>Cole-o abaixo</strong>.</li>
+                    <li>Após publicar o site, volte ao Facebook e clique em <strong>"Verificar domínio"</strong>.</li>
                   </ol>
                   <p className="text-xs">⏳ A verificação pode levar até 72 horas.</p>
                 </div>
 
                 <div className="space-y-3">
-                  <Label htmlFor="domain-verif-filename" className="text-sm font-medium">
-                    Nome do arquivo HTML
-                  </Label>
-                  <Input
-                    id="domain-verif-filename"
-                    placeholder='Ex: ripyzu7jxb6g3e15krg2r5jat9apbs.html'
-                    value={domainVerifCode}
-                    onChange={(e) => {
-                      setDomainVerifCode(e.target.value);
-                      setDomainVerifStatus('idle');
-                    }}
-                    className="font-mono text-xs"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <Label htmlFor="domain-verif-content" className="text-sm font-medium">
-                    Conteúdo do arquivo (código de verificação)
+                  <Label htmlFor="domain-verif-html" className="text-sm font-medium">
+                    Cole o arquivo HTML para pasta raiz do domínio
                   </Label>
                   <Textarea
-                    id="domain-verif-content"
-                    placeholder='Cole aqui o conteúdo que o Facebook pede para colocar dentro do arquivo HTML'
-                    value={domainVerifContent}
+                    id="domain-verif-html"
+                    placeholder="Cole aqui todo o conteúdo do arquivo HTML fornecido pelo Facebook"
+                    value={domainVerifHtml}
                     onChange={(e) => {
-                      setDomainVerifContent(e.target.value);
+                      setDomainVerifHtml(e.target.value);
                       setDomainVerifStatus('idle');
                     }}
-                    rows={3}
+                    rows={5}
                     className="font-mono text-xs"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Geralmente é um código como <code>facebook-domain-verification=abc123xyz...</code>
-                  </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <Button
                     onClick={async () => {
-                      const filename = domainVerifCode.trim();
-                      const content = domainVerifContent.trim();
-                      if (!filename || !content) {
-                        toast.error('Preencha o nome do arquivo e o conteúdo de verificação.');
+                      const content = domainVerifHtml.trim();
+                      if (!content) {
+                        toast.error('Cole o conteúdo do arquivo HTML.');
                         return;
                       }
 
                       setDomainVerifSaving(true);
                       try {
                         const { data, error } = await supabase.functions.invoke('domain-verify', {
-                          body: { filename, verification_content: content }
+                          body: { filename: 'domain-verification.html', verification_content: content }
                         });
 
                         if (error) throw error;
@@ -1251,7 +1229,7 @@ export default function AdminPlans() {
                         setDomainVerifSaving(false);
                       }
                     }}
-                    disabled={domainVerifSaving || !domainVerifCode.trim() || !domainVerifContent.trim()}
+                    disabled={domainVerifSaving || !domainVerifHtml.trim()}
                     className="gap-2"
                   >
                     {domainVerifSaving ? (
