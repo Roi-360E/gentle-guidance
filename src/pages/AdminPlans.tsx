@@ -87,6 +87,7 @@ export default function AdminPlans() {
           setIsAdmin(true);
           loadPlans();
           loadUsers();
+          loadPixelConfig();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
