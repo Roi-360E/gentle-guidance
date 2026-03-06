@@ -170,7 +170,47 @@ export default function AdminPlans() {
     setDeletingPixelId(null);
   };
 
-  const loadUsers = async () => {
+  const testPixelPurchase = async (pixel: any) => {
+    setTestingPixelId(pixel.id);
+    try {
+      const hashedData = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('test@test.com'));
+      const hashArray = Array.from(new Uint8Array(hashedData));
+      const hashedEmail = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const eventData = {
+        data: [{
+          event_name: 'Purchase',
+          event_time: Math.floor(Date.now() / 1000),
+          action_source: 'website',
+          user_data: { em: [hashedEmail] },
+          custom_data: {
+            value: 1.00,
+            currency: 'BRL',
+            content_name: 'Evento de Teste',
+            content_type: 'product',
+          },
+        }],
+        test_event_code: 'TEST' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+      };
+
+      const res = await fetch(
+        `https://graph.facebook.com/v19.0/${pixel.pixel_id}/events?access_token=${pixel.access_token}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(eventData) }
+      );
+      const result = await res.json();
+
+      if (result.error) {
+        toast.error(`Erro no Pixel "${pixel.name}": ${result.error.message}`);
+      } else {
+        toast.success(`Evento de teste enviado para "${pixel.name}"! Verifique no Gerenciador de Eventos do Facebook.`);
+      }
+    } catch (err: any) {
+      toast.error('Erro ao enviar evento de teste: ' + err.message);
+    }
+    setTestingPixelId(null);
+  };
+
+
     setUsersLoading(true);
     const monthYear = new Date().toISOString().substring(0, 7);
 
