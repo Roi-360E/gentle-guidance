@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Facebook } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
@@ -455,7 +455,7 @@ export default function AdminPlans() {
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Usuários
             </TabsTrigger>
             <TabsTrigger value="pixel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
+              <Crosshair className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
             </TabsTrigger>
           </TabsList>
 
@@ -799,7 +799,7 @@ export default function AdminPlans() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Facebook className="w-5 h-5" /> Facebook Pixel & Conversions API
+                  <Crosshair className="w-5 h-5" /> Facebook Pixel & Conversions API
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -847,14 +847,34 @@ export default function AdminPlans() {
                       />
                     </div>
 
-                    <Button
-                      onClick={savePixelConfig}
-                      disabled={pixelSaving}
-                      className="w-full gap-2"
-                    >
-                      {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Salvar Configuração do Pixel
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={savePixelConfig}
+                        disabled={pixelSaving}
+                        className="flex-1 gap-2"
+                      >
+                        {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Salvar Configuração
+                      </Button>
+                      {pixelConfigId && (pixelId || pixelAccessToken) && (
+                        <Button
+                          variant="destructive"
+                          onClick={async () => {
+                            setPixelSaving(true);
+                            await supabase.from('facebook_pixel_config' as any).update({ pixel_id: '', access_token: '', is_active: false } as any).eq('id', pixelConfigId);
+                            setPixelId('');
+                            setPixelAccessToken('');
+                            setPixelActive(false);
+                            toast.success('Pixel removido com sucesso!');
+                            setPixelSaving(false);
+                          }}
+                          disabled={pixelSaving}
+                          className="gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" /> Excluir Pixel
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </CardContent>
