@@ -89,7 +89,7 @@ function PixelDiagnosticPanel({ savedPixels }: { savedPixels: any[] }) {
   );
 }
 
-
+export default function AdminPlans() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[]>([]);
