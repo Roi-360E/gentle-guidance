@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.vps-subtitle-remover]
 verify_jwt = false
+
+[functions.test-pixel-event]
+verify_jwt = false
