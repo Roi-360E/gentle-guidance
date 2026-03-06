@@ -1093,6 +1093,67 @@ export default function AdminPlans() {
               O evento de compra será enviado automaticamente via Conversions API do Facebook sempre que um pagamento for confirmado pelo Mercado Pago.
             </p>
           </TabsContent>
+
+          {/* ===== FUNNEL TAB ===== */}
+          <TabsContent value="funnel" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Funil de Conversão (últimos 30 dias)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {funnelLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const maxCount = Math.max(...funnelData.map(f => f.count), 1);
+                      return funnelData.map((item, i) => {
+                        const pct = Math.round((item.count / maxCount) * 100);
+                        const prevCount = i > 0 ? funnelData[i - 1].count : 0;
+                        const convRate = prevCount > 0 ? ((item.count / prevCount) * 100).toFixed(1) : null;
+                        return (
+                          <div key={item.event_name} className="space-y-1">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="font-medium">{item.event_name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-foreground">{item.count}</span>
+                                {convRate && i > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {convRate}%
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Progress value={pct} className="h-3" />
+                          </div>
+                        );
+                      });
+                    })()}
+                    {funnelData.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Nenhum evento registrado ainda. Os eventos começarão a aparecer conforme os usuários interagem com o site.
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <Button variant="outline" size="sm" onClick={loadFunnelData} disabled={funnelLoading}>
+                    {funnelLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Atualizar Dados
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <p className="text-xs text-muted-foreground text-center">
+              📊 Todos os eventos do Pixel (browser + server) são registrados automaticamente. As taxas de conversão mostram a % em relação ao evento anterior no funil.
+            </p>
+          </TabsContent>
         </Tabs>
       </main>
       {/* Test Pixel Dialog */}
