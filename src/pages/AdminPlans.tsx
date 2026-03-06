@@ -1065,7 +1065,7 @@ export default function AdminPlans() {
                           }}
                           className="gap-1"
                         >
-                          <Save className="w-3.5 h-3.5" />
+                          <Pencil className="w-3.5 h-3.5" />
                           Editar
                         </Button>
                         <Button
