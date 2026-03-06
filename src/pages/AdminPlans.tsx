@@ -116,6 +116,45 @@ export default function AdminPlans() {
     setLoading(false);
   };
 
+  const loadPixelConfig = async () => {
+    setPixelLoading(true);
+    const { data, error } = await supabase
+      .from('facebook_pixel_config' as any)
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (data) {
+      const d = data as any;
+      setPixelId(d.pixel_id || '');
+      setPixelAccessToken(d.access_token || '');
+      setPixelActive(d.is_active || false);
+      setPixelConfigId(d.id);
+    }
+    setPixelLoading(false);
+  };
+
+  const savePixelConfig = async () => {
+    setPixelSaving(true);
+    const payload = { pixel_id: pixelId, access_token: pixelAccessToken, is_active: pixelActive, updated_at: new Date().toISOString() };
+
+    let error;
+    if (pixelConfigId) {
+      const res = await supabase.from('facebook_pixel_config' as any).update(payload as any).eq('id', pixelConfigId);
+      error = res.error;
+    } else {
+      const res = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
+      error = res.error;
+    }
+
+    if (error) {
+      toast.error('Erro ao salvar configuração do Pixel: ' + error.message);
+    } else {
+      toast.success('Configuração do Facebook Pixel salva!');
+    }
+    setPixelSaving(false);
+  };
+
   const loadUsers = async () => {
     setUsersLoading(true);
     const monthYear = new Date().toISOString().substring(0, 7);
