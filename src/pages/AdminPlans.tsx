@@ -174,28 +174,41 @@ export default function AdminPlans() {
 
   const testPixelPurchase = async (pixel: any) => {
     setTestingPixelId(pixel.id);
+    setLastTestResult(null);
     try {
       const { data, error } = await supabase.functions.invoke('test-pixel-event', {
-        body: { pixel_id: pixel.pixel_id, access_token: pixel.access_token, pixel_name: pixel.name },
+        body: {
+          pixel_id: pixel.pixel_id,
+          access_token: pixel.access_token,
+          pixel_name: pixel.name,
+          test_event_code: testEventCode.trim() || undefined,
+        },
       });
 
       if (error) {
-        toast.error('Erro ao chamar função: ' + error.message);
+        const msg = error.message || 'Erro desconhecido';
+        if (msg.includes('autenticado') || msg.includes('autorizado') || msg.includes('Session')) {
+          toast.error('Sessão expirada. Faça login novamente.');
+        } else {
+          toast.error('Erro ao chamar função: ' + msg);
+        }
+        setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: msg });
       } else if (data?.error) {
-        toast.error(`Erro no Pixel "${pixel.name}": ${data.error}`);
+        if (data.error.includes('autenticado') || data.error.includes('Acesso negado')) {
+          toast.error('Sessão expirada ou sem permissão. Faça login novamente.');
+        } else {
+          toast.error(`Erro no Pixel "${pixel.name}": ${data.error}`);
+        }
+        setLastTestResult({ pixelName: pixel.name, code: data.test_event_code || '', success: false, error: data.error });
       } else if (data?.success) {
-        toast.success(
-          `✅ Evento de teste enviado para "${pixel.name}"!\n\n📋 Test Event Code: ${data.test_event_code}\n\nCopie esse código e cole no Gerenciador de Eventos do Facebook para visualizar o evento.`,
-          { duration: 15000 }
-        );
-        // Copy to clipboard
-        try {
-          await navigator.clipboard.writeText(data.test_event_code);
-          toast.info('Test Event Code copiado para a área de transferência!');
-        } catch {}
+        const code = data.test_event_code;
+        setLastTestResult({ pixelName: pixel.name, code, success: true });
+        toast.success(`Evento de teste enviado para "${pixel.name}"!`, { duration: 8000 });
+        try { await navigator.clipboard.writeText(code); } catch {}
       }
     } catch (err: any) {
       toast.error('Erro ao enviar evento de teste: ' + err.message);
+      setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: err.message });
     }
     setTestingPixelId(null);
   };
