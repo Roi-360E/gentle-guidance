@@ -13,48 +13,22 @@ const TEST_PLANS = [
   { name: 'Plano Premium', value: 97.00, key: 'premium' },
 ];
 
-async function fireCAPI(plan: { name: string; value: number; key: string }) {
+async function fireCAPI(plan: { name: string; value: number; key: string }, userId?: string) {
   try {
-    const { data: pixels } = await supabase
-      .from('facebook_pixel_config')
-      .select('pixel_id, access_token, dedup_key')
-      .eq('is_active', true);
-
-    if (!pixels?.length) return;
-
-    const eventId = `${pixels[0].dedup_key || 'dedup'}_${Date.now()}`;
-
-    for (const px of pixels) {
-      await fetch(
-        `https://graph.facebook.com/v21.0/${px.pixel_id}/events?access_token=${px.access_token}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            data: [{
-              event_name: 'Purchase',
-              event_time: Math.floor(Date.now() / 1000),
-              event_id: eventId,
-              event_source_url: window.location.href,
-              action_source: 'website',
-              user_data: {
-                client_user_agent: navigator.userAgent,
-                client_ip_address: '',
-              },
-              custom_data: {
-                content_name: plan.name,
-                content_category: 'Plano',
-                value: plan.value,
-                currency: 'BRL',
-                content_ids: [plan.key],
-                content_type: 'product',
-              },
-            }],
-          }),
-        }
-      );
+    const { data, error } = await supabase.functions.invoke('fire-purchase-event', {
+      body: {
+        plan_name: plan.name,
+        plan_value: plan.value,
+        plan_key: plan.key,
+        user_id: userId || null,
+        event_source_url: window.location.href,
+      },
+    });
+    if (error) {
+      console.warn('[ThankYou] CAPI edge function error:', error);
+    } else {
+      console.log('[ThankYou] CAPI Purchase sent via server for', plan.name, data);
     }
-    console.log('[ThankYou] CAPI Purchase event sent for', plan.name);
   } catch (e) {
     console.warn('[ThankYou] CAPI error:', e);
   }
