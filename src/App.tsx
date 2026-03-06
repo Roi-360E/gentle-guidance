@@ -48,6 +48,7 @@ const App = () => (
               <Route path="/voice-rewrite" element={<ProtectedRoute><VoiceRewrite /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </FacebookPixelProvider>
           </ProcessingProvider>
         </AuthProvider>
       </BrowserRouter>
