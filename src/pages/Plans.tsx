@@ -186,6 +186,8 @@ export default function Plans() {
           currency: 'BRL',
         }, user?.id);
       } else if (data.type === 'checkout') {
+        // Small delay to ensure Pixel beacon completes before redirect
+        await new Promise(resolve => setTimeout(resolve, 500));
         window.location.href = data.initPoint;
       }
     } catch (err) {
