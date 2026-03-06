@@ -63,6 +63,12 @@ export default function Plans() {
         }
         setPlansLoading(false);
       });
+
+    // Track ViewContent on plans page
+    trackPixelEvent('ViewContent', {
+      content_name: 'Plans Page',
+      content_category: 'Pricing',
+    });
   }, []);
 
   // Check admin role
