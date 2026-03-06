@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { trackViewContent, trackInitiateCheckout } from '@/lib/facebook-pixel';
 import {
   Zap,
   Rocket,
