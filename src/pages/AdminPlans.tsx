@@ -86,6 +86,10 @@ export default function AdminPlans() {
   const [testEventCode, setTestEventCode] = useState('');
   const [lastTestResult, setLastTestResult] = useState<{ pixelName: string; code: string; success: boolean; error?: string } | null>(null);
 
+  // Funnel state
+  const [funnelData, setFunnelData] = useState<{ event_name: string; count: number }[]>([]);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     supabase
