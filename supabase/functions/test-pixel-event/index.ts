@@ -57,8 +57,8 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { pixel_id, access_token, pixel_name, test_event_code } = body;
-    console.log("test-pixel-event: pixel_id=", pixel_id, "has_token=", !!access_token, "test_code=", test_event_code);
+    const { pixel_id, access_token, pixel_name, test_event_code, dedup_key } = body;
+    console.log("test-pixel-event: pixel_id=", pixel_id, "has_token=", !!access_token, "test_code=", test_event_code, "dedup_key=", dedup_key);
 
     if (!pixel_id || !access_token) {
       return new Response(JSON.stringify({ error: "pixel_id e access_token são obrigatórios" }), {
@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
     }
 
     const testEventCode = test_event_code || ("TEST" + crypto.randomUUID().replace(/-/g, "").substring(0, 10).toUpperCase());
+    const eventId = (dedup_key ? dedup_key + "_" : "") + "test_" + crypto.randomUUID();
 
     const encoder = new TextEncoder();
     const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode("test@escalaxpro.com"));
@@ -78,6 +79,7 @@ Deno.serve(async (req) => {
       data: [
         {
           event_name: "Purchase",
+          event_id: eventId,
           event_time: Math.floor(Date.now() / 1000),
           action_source: "website",
           event_source_url: "https://escalaxpro.com",

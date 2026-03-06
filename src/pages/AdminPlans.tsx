@@ -72,6 +72,7 @@ export default function AdminPlans() {
   const [pixelName, setPixelName] = useState('');
   const [pixelId, setPixelId] = useState('');
   const [pixelAccessToken, setPixelAccessToken] = useState('');
+  const [pixelDedupKey, setPixelDedupKey] = useState('');
   const [pixelActive, setPixelActive] = useState(false);
   const [pixelLoading, setPixelLoading] = useState(false);
   const [pixelSaving, setPixelSaving] = useState(false);
@@ -146,7 +147,7 @@ export default function AdminPlans() {
       return;
     }
     setPixelSaving(true);
-    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, is_active: pixelActive, updated_at: new Date().toISOString() };
+    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, dedup_key: pixelDedupKey.trim(), is_active: pixelActive, updated_at: new Date().toISOString() };
 
     const { error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
 
@@ -157,6 +158,7 @@ export default function AdminPlans() {
       setPixelName('');
       setPixelId('');
       setPixelAccessToken('');
+      setPixelDedupKey('');
       setPixelActive(false);
       await loadPixelConfig();
     }
@@ -193,6 +195,7 @@ export default function AdminPlans() {
           pixel_id: pixel.pixel_id,
           access_token: pixel.access_token,
           pixel_name: pixel.name,
+          dedup_key: pixel.dedup_key || '',
           test_event_code: testEventCode.trim() || undefined,
         },
       });
@@ -894,6 +897,19 @@ export default function AdminPlans() {
                         onChange={e => setPixelAccessToken(e.target.value)}
                         className="font-mono text-xs min-h-[80px]"
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-dedup">Chave de Deduplicação (event_id)</Label>
+                      <Input
+                        id="pixel-dedup"
+                        placeholder="Ex: escalax_pixel1 (prefixo único para evitar eventos duplicados)"
+                        value={pixelDedupKey}
+                        onChange={e => setPixelDedupKey(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Essa chave é usada como prefixo do <code className="bg-muted px-1 rounded">event_id</code> enviado ao Facebook, evitando que o mesmo evento seja contado duas vezes.
+                      </p>
                     </div>
 
                     <div className="flex items-center justify-between border rounded-lg p-4">

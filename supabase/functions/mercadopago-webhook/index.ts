@@ -234,6 +234,7 @@ async function fireFacebookPurchaseEvent(supabase: any, payment: any) {
         data: [
           {
             event_name: "Purchase",
+            event_id: (pixelConfig.dedup_key ? pixelConfig.dedup_key + "_" : "") + "purchase_" + payment.id,
             event_time: Math.floor(Date.now() / 1000),
             action_source: "website",
             user_data: {
