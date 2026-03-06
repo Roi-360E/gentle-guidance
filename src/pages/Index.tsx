@@ -201,6 +201,13 @@ const Index = () => {
       return;
     }
 
+    // Track StartTrial on first processing
+    trackCustomEvent('StartTrial', {
+      content_name: 'Video Processing',
+      combinations: totalCombinations,
+      plan: currentPlan,
+    }, user.id);
+
     startProcessing({
       hooks, bodies, ctas, settings, currentPlan, tokenBalance, videoCount,
       userId: user.id,
@@ -210,7 +217,6 @@ const Index = () => {
       },
     });
   }, [canProcess, hooks, bodies, ctas, settings, currentPlan, tokenBalance, videoCount, totalCombinations, navigate, user, startProcessing]);
-
   const handleCancel = () => {
     cancelProcessing();
   };
