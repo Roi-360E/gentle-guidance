@@ -935,7 +935,7 @@ export default function AdminPlans() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => testPixelPurchase(px)}
+                          onClick={() => openTestDialog(px)}
                           disabled={testingPixelId === px.id}
                           className="gap-1"
                         >
