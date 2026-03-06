@@ -31,9 +31,8 @@ import { useUtmCapture } from '@/hooks/useUtmCapture';
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  useUtmCapture(user?.id);
-  const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  useUtmCapture(user?.id);
   const { isProcessing, currentProgress, processingPhase, combinations, startProcessing, cancelProcessing, setCombinations } = useProcessing();
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [videoCount, setVideoCount] = useState(0);
