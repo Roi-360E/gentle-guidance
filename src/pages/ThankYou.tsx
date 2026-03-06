@@ -67,18 +67,37 @@ export default function ThankYou() {
   const pixelFired = useRef(false);
 
   const isTest = searchParams.get('test') === '1';
+  const isReal = searchParams.get('real') === '1';
 
   useEffect(() => {
     if (pixelFired.current) return;
 
-    const planName = isTest ? 'Plano Pro' : (localStorage.getItem('checkout_plan_name') || '');
-    const planValue = isTest ? 47.00 : parseFloat(localStorage.getItem('checkout_plan_value') || '0');
-    const planKey = isTest ? 'pro' : (localStorage.getItem('checkout_plan_key') || '');
-    const method = isTest ? 'Teste' : (localStorage.getItem('checkout_method') || 'Cartão/Boleto');
+    let planName: string;
+    let planValue: number;
+    let planKey: string;
+    let method: string;
+
+    if (isReal) {
+      // Disparo REAL de um único evento Purchase (sem test_event_code)
+      planName = 'Plano Pro';
+      planValue = 47.00;
+      planKey = 'pro';
+      method = 'Cartão/Boleto';
+    } else if (isTest) {
+      planName = 'Plano Pro';
+      planValue = 47.00;
+      planKey = 'pro';
+      method = 'Teste';
+    } else {
+      planName = localStorage.getItem('checkout_plan_name') || '';
+      planValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
+      planKey = localStorage.getItem('checkout_plan_key') || '';
+      method = localStorage.getItem('checkout_method') || 'Cartão/Boleto';
+    }
 
     const fireEvent = () => {
       pixelFired.current = true;
-      console.log('[ThankYou] Disparando Purchase', { planName, planValue, planKey, method, isTest });
+      console.log('[ThankYou] Disparando Purchase', { planName, planValue, planKey, method, isTest, isReal });
 
       // Browser-side fbq
       trackPixelEvent('Purchase', {
@@ -111,7 +130,7 @@ export default function ThankYou() {
         });
       }
 
-      if (!isTest) {
+      if (!isTest && !isReal) {
         localStorage.removeItem('checkout_plan_name');
         localStorage.removeItem('checkout_plan_value');
         localStorage.removeItem('checkout_plan_key');
