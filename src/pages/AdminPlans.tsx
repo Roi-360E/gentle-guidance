@@ -1026,6 +1026,84 @@ export default function AdminPlans() {
           </TabsContent>
         </Tabs>
       </main>
+      {/* Test Pixel Dialog */}
+      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crosshair className="w-5 h-5 text-primary" />
+              Testar Evento de Compra
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {testDialogPixel && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Pixel:</span>{' '}
+                <strong>{testDialogPixel.name || 'Sem nome'}</strong>
+                <span className="text-muted-foreground ml-2 font-mono text-xs">({testDialogPixel.pixel_id})</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="dialog-test-code">Test Event Code do Facebook</Label>
+              <Input
+                id="dialog-test-code"
+                placeholder="Ex: TEST12345"
+                value={testEventCode}
+                onChange={e => setTestEventCode(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Acesse o <strong>Gerenciador de Eventos do Facebook</strong> → seu Pixel → <strong>Eventos de Teste</strong> para obter o código. Se deixar vazio, um código será gerado automaticamente.
+              </p>
+            </div>
+
+            {lastTestResult && (
+              <div className={`rounded-lg p-4 space-y-2 ${lastTestResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-destructive/10 border border-destructive/30'}`}>
+                <p className="font-medium text-sm">
+                  {lastTestResult.success ? '✅ Evento enviado com sucesso!' : '❌ Erro no envio'}
+                </p>
+                {lastTestResult.code && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <code className="bg-muted border rounded px-3 py-1.5 text-sm font-mono flex-1 truncate">{lastTestResult.code}</code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(lastTestResult.code);
+                          toast.success('Código copiado!');
+                        } catch { toast.error('Erro ao copiar'); }
+                      }}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+                {lastTestResult.error && (
+                  <p className="text-xs text-destructive">{lastTestResult.error}</p>
+                )}
+                {lastTestResult.success && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Cole o código acima em <strong>Gerenciador de Eventos → Eventos de Teste</strong> no Facebook para visualizar este evento.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTestDialogOpen(false)}>Fechar</Button>
+            <Button
+              onClick={testPixelPurchase}
+              disabled={testingPixelId !== null}
+              className="gap-2"
+            >
+              {testingPixelId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
+              Enviar Evento de Teste
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
