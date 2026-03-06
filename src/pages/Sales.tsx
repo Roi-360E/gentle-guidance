@@ -104,6 +104,20 @@ export default function Sales() {
   const navigate = useNavigate();
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 
+  // Track ViewContent on page load
+  useEffect(() => {
+    trackPixelEvent('ViewContent', {
+      content_name: 'Sales Page',
+      content_category: 'Landing',
+    });
+  }, []);
+
+  // Scroll depth tracking
+  useScrollDepth('Sales');
+
+  // UTM capture
+  useUtmCapture();
+
   const scrollToCTA = () => {
     document.getElementById('checkout')?.scrollIntoView({ behavior: 'smooth' });
   };

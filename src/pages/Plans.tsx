@@ -178,15 +178,13 @@ export default function Plans() {
         setPollingPayment(true);
 
         // Track AddPaymentInfo when Pix QR code is generated
-        if (typeof window !== 'undefined' && (window as any).fbq) {
-          const plan = plans.find(p => p.plan_key === planKey);
-          (window as any).fbq('track', 'AddPaymentInfo', {
-            content_name: plan?.name || planKey,
-            content_category: 'Pix',
-            value: plan?.price || 0,
-            currency: 'BRL',
-          });
-        }
+        const plan = plans.find(p => p.plan_key === planKey);
+        trackPixelEvent('AddPaymentInfo', {
+          content_name: plan?.name || planKey,
+          content_category: 'Pix',
+          value: plan?.price || 0,
+          currency: 'BRL',
+        }, user?.id);
       } else if (data.type === 'checkout') {
         window.location.href = data.initPoint;
       }
