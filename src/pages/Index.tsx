@@ -28,6 +28,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { trackPixelEvent, trackCustomEvent } from '@/lib/pixel-tracker';
 import { useUtmCapture } from '@/hooks/useUtmCapture';
+import { usePowerUserTracking } from '@/hooks/useAudienceEvents';
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -36,6 +37,7 @@ const Index = () => {
   const { isProcessing, currentProgress, processingPhase, combinations, startProcessing, cancelProcessing, setCombinations } = useProcessing();
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [videoCount, setVideoCount] = useState(0);
+  usePowerUserTracking(videoCount, user?.id);
   const [isFirstMonth, setIsFirstMonth] = useState(true);
   const [hooks, setHooks] = useState<VideoFileWithProgress[]>([]);
   const [bodies, setBodies] = useState<VideoFileWithProgress[]>([]);

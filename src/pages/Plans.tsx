@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, Zap, Crown, ArrowLeft, Check, Loader2, Copy, CheckCircle2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
+import { useHighIntentTracking } from '@/hooks/useAudienceEvents';
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-checkout`;
 
@@ -39,6 +40,7 @@ export default function Plans() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  useHighIntentTracking(user?.id);
   const [loading, setLoading] = useState<string | null>(null);
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [pixData, setPixData] = useState<PixData | null>(null);
@@ -87,25 +89,41 @@ export default function Plans() {
   // Check payment return from Checkout Pro
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
+    if (!paymentStatus) return;
+
+    // Recover plan info saved before redirect
+    const savedPlan = localStorage.getItem('checkout_plan_name') || '';
+    const savedValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
+    const savedPlanKey = localStorage.getItem('checkout_plan_key') || '';
+
     if (paymentStatus === 'success') {
       toast.success('Pagamento aprovado! Seu plano foi ativado.');
-      // Fire AddPaymentInfo (user filled card/boleto info on Mercado Pago)
       trackPixelEvent('AddPaymentInfo', {
+        content_name: savedPlan,
         content_category: 'Cartão/Boleto',
+        value: savedValue,
         currency: 'BRL',
       }, user?.id);
-      // Fire Purchase (payment confirmed by Mercado Pago redirect)
       trackPixelEvent('Purchase', {
+        content_name: savedPlan,
         content_category: 'Cartão/Boleto',
+        value: savedValue,
         currency: 'BRL',
+        content_ids: [savedPlanKey],
+        content_type: 'product',
       }, user?.id);
+      // Clean up
+      localStorage.removeItem('checkout_plan_name');
+      localStorage.removeItem('checkout_plan_value');
+      localStorage.removeItem('checkout_plan_key');
     } else if (paymentStatus === 'failure') {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
       toast.info('Pagamento pendente. Será ativado assim que confirmado.');
-      // User filled payment info even if pending
       trackPixelEvent('AddPaymentInfo', {
+        content_name: savedPlan,
         content_category: 'Cartão/Boleto',
+        value: savedValue,
         currency: 'BRL',
       }, user?.id);
     }
@@ -137,13 +155,22 @@ export default function Plans() {
         .single();
       if (data?.status === 'confirmed') {
         setPollingPayment(false);
+        const confirmedPlanKey = localStorage.getItem('pix_plan_key') || '';
+        const confirmedPlanName = localStorage.getItem('pix_plan_name') || '';
+        const confirmedPlanValue = parseFloat(localStorage.getItem('pix_plan_value') || '0');
         setPixData(null);
         toast.success('Pagamento Pix confirmado! Plano ativado.');
-        // Fire Purchase event for Pix confirmation
         trackPixelEvent('Purchase', {
+          content_name: confirmedPlanName,
           content_category: 'Pix',
+          value: confirmedPlanValue,
           currency: 'BRL',
+          content_ids: [confirmedPlanKey],
+          content_type: 'product',
         }, user?.id);
+        localStorage.removeItem('pix_plan_key');
+        localStorage.removeItem('pix_plan_name');
+        localStorage.removeItem('pix_plan_value');
         const monthYear = new Date().toISOString().substring(0, 7);
         const { data: usage } = await supabase
           .from('video_usage')
@@ -193,8 +220,12 @@ export default function Plans() {
         setPixData({ qrCode: data.qrCode, qrCodeBase64: data.qrCodeBase64, paymentId: data.paymentId, mpPaymentId: data.mpPaymentId, expiresAt: data.expiresAt });
         setPollingPayment(true);
 
+        // Save plan info for Purchase event on Pix confirmation
+        localStorage.setItem('pix_plan_key', planKey);
+        localStorage.setItem('pix_plan_name', plan?.name || planKey);
+        localStorage.setItem('pix_plan_value', String(plan?.price || 0));
+
         // Track AddPaymentInfo when Pix QR code is generated
-        const plan = plans.find(p => p.plan_key === planKey);
         trackPixelEvent('AddPaymentInfo', {
           content_name: plan?.name || planKey,
           content_category: 'Pix',
@@ -202,6 +233,11 @@ export default function Plans() {
           currency: 'BRL',
         }, user?.id);
       } else if (data.type === 'checkout') {
+        // Save plan info in localStorage before redirect
+        localStorage.setItem('checkout_plan_key', planKey);
+        localStorage.setItem('checkout_plan_name', plan?.name || planKey);
+        localStorage.setItem('checkout_plan_value', String(plan?.price || 0));
+
         // Small delay to ensure Pixel beacon completes before redirect
         await new Promise(resolve => setTimeout(resolve, 500));
         window.location.href = data.initPoint;
