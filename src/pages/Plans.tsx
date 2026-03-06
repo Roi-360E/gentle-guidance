@@ -89,7 +89,13 @@ export default function Plans() {
     const paymentStatus = searchParams.get('payment');
     if (paymentStatus === 'success') {
       toast.success('Pagamento aprovado! Seu plano foi ativado.');
+      // Fire AddPaymentInfo (user filled card/boleto info on Mercado Pago)
       trackPixelEvent('AddPaymentInfo', {
+        content_category: 'Cartão/Boleto',
+        currency: 'BRL',
+      }, user?.id);
+      // Fire Purchase (payment confirmed by Mercado Pago redirect)
+      trackPixelEvent('Purchase', {
         content_category: 'Cartão/Boleto',
         currency: 'BRL',
       }, user?.id);
@@ -97,6 +103,11 @@ export default function Plans() {
       toast.error('Pagamento não aprovado. Tente novamente.');
     } else if (paymentStatus === 'pending') {
       toast.info('Pagamento pendente. Será ativado assim que confirmado.');
+      // User filled payment info even if pending
+      trackPixelEvent('AddPaymentInfo', {
+        content_category: 'Cartão/Boleto',
+        currency: 'BRL',
+      }, user?.id);
     }
   }, [searchParams]);
 
@@ -128,6 +139,11 @@ export default function Plans() {
         setPollingPayment(false);
         setPixData(null);
         toast.success('Pagamento Pix confirmado! Plano ativado.');
+        // Fire Purchase event for Pix confirmation
+        trackPixelEvent('Purchase', {
+          content_category: 'Pix',
+          currency: 'BRL',
+        }, user?.id);
         const monthYear = new Date().toISOString().substring(0, 7);
         const { data: usage } = await supabase
           .from('video_usage')
