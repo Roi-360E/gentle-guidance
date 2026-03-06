@@ -79,6 +79,7 @@ export default function AdminPlans() {
   const [pixelLoading, setPixelLoading] = useState(false);
   const [pixelSaving, setPixelSaving] = useState(false);
   const [savedPixels, setSavedPixels] = useState<any[]>([]);
+  const [editingPixelId, setEditingPixelId] = useState<string | null>(null);
   const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
   const [testingPixelId, setTestingPixelId] = useState<string | null>(null);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
@@ -208,18 +209,24 @@ export default function AdminPlans() {
     setPixelSaving(true);
     const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, dedup_key: pixelDedupKey.trim(), pixel_snippet: pixelSnippet.trim(), is_active: pixelActive, updated_at: new Date().toISOString() };
 
-    const { error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
+    let error;
+    if (editingPixelId) {
+      ({ error } = await supabase.from('facebook_pixel_config' as any).update(payload as any).eq('id', editingPixelId));
+    } else {
+      ({ error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any));
+    }
 
     if (error) {
       toast.error('Erro ao salvar Pixel: ' + error.message);
     } else {
-      toast.success('Pixel salvo com sucesso!');
+      toast.success(editingPixelId ? 'Pixel atualizado com sucesso!' : 'Pixel salvo com sucesso!');
       setPixelName('');
       setPixelId('');
       setPixelAccessToken('');
       setPixelDedupKey('');
       setPixelSnippet('');
       setPixelActive(false);
+      setEditingPixelId(null);
       await loadPixelConfig();
     }
     setPixelSaving(false);
@@ -1002,10 +1009,25 @@ export default function AdminPlans() {
                       <Switch checked={pixelActive} onCheckedChange={setPixelActive} />
                     </div>
 
-                    <Button onClick={savePixelConfig} disabled={pixelSaving} className="w-full gap-2">
-                      {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Salvar Configuração
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button onClick={savePixelConfig} disabled={pixelSaving} className="flex-1 gap-2">
+                        {pixelSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {editingPixelId ? 'Atualizar Pixel' : 'Salvar Configuração'}
+                      </Button>
+                      {editingPixelId && (
+                        <Button variant="outline" onClick={() => {
+                          setEditingPixelId(null);
+                          setPixelName('');
+                          setPixelId('');
+                          setPixelAccessToken('');
+                          setPixelDedupKey('');
+                          setPixelSnippet('');
+                          setPixelActive(false);
+                        }}>
+                          Cancelar
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </CardContent>
@@ -1028,6 +1050,24 @@ export default function AdminPlans() {
                         </Badge>
                       </div>
                       <div className="flex gap-2 shrink-0 ml-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingPixelId(px.id);
+                            setPixelName(px.name || '');
+                            setPixelId(px.pixel_id || '');
+                            setPixelAccessToken(px.access_token || '');
+                            setPixelDedupKey(px.dedup_key || '');
+                            setPixelSnippet(px.pixel_snippet || '');
+                            setPixelActive(px.is_active ?? false);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="gap-1"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          Editar
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
