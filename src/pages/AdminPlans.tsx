@@ -92,6 +92,7 @@ export default function AdminPlans() {
 
   // Domain verification state
   const [domainVerifCode, setDomainVerifCode] = useState('');
+  const [domainVerifContent, setDomainVerifContent] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
