@@ -914,6 +914,20 @@ export default function AdminPlans() {
                       </p>
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-snippet">Código do Meta Pixel (Snippet)</Label>
+                      <Textarea
+                        id="pixel-snippet"
+                        placeholder="Cole aqui o código completo do Meta Pixel fornecido pelo Facebook (<!-- Meta Pixel Code --> ... <!-- End Meta Pixel Code -->)"
+                        value={pixelSnippet}
+                        onChange={e => setPixelSnippet(e.target.value)}
+                        className="font-mono text-xs min-h-[160px]"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Cole o snippet completo do Meta Pixel. Ele será injetado automaticamente em todas as páginas do site para rastrear <code className="bg-muted px-1 rounded">PageView</code> e outros eventos do browser.
+                      </p>
+                    </div>
+
                     <div className="flex items-center justify-between border rounded-lg p-4">
                       <div>
                         <p className="font-medium text-sm">Ativar rastreamento</p>
