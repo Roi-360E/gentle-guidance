@@ -136,6 +136,17 @@ export default function Plans() {
       return;
     }
     setLoading(`${planKey}-${method}`);
+
+    // Track InitiateCheckout event on Facebook Pixel
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      const plan = plans.find(p => p.plan_key === planKey);
+      (window as any).fbq('track', 'InitiateCheckout', {
+        content_name: plan?.name || planKey,
+        content_category: method === 'pix' ? 'Pix' : 'Cartão/Boleto',
+        value: plan?.price || 0,
+        currency: 'BRL',
+      });
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
