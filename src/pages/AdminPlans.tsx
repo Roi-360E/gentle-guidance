@@ -95,6 +95,9 @@ export default function AdminPlans() {
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [savedDomainFiles, setSavedDomainFiles] = useState<{ id: string; pixel_id: string; pixel_snippet: string }[]>([]);
+  const [domainMetaTag, setDomainMetaTag] = useState('');
+  const [domainMetaSaving, setDomainMetaSaving] = useState(false);
+  const [domainMetaStatus, setDomainMetaStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
   const loadDomainFiles = async () => {
     const { data } = await supabase
