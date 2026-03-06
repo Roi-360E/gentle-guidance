@@ -1258,7 +1258,7 @@ export default function AdminPlans() {
                   </Button>
 
                   {domainVerifStatus === 'saved' && (
-                    <div className="flex items-center gap-1.5 text-sm text-green-600">
+                    <div className="flex items-center gap-1.5 text-sm text-primary">
                       <CheckCircle2 className="w-4 h-4" />
                       Código salvo com sucesso
                     </div>
