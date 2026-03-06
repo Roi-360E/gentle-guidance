@@ -148,7 +148,7 @@ export default function AdminPlans() {
       return;
     }
     setPixelSaving(true);
-    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, dedup_key: pixelDedupKey.trim(), is_active: pixelActive, updated_at: new Date().toISOString() };
+    const payload = { name: pixelName, pixel_id: pixelId, access_token: pixelAccessToken, dedup_key: pixelDedupKey.trim(), pixel_snippet: pixelSnippet.trim(), is_active: pixelActive, updated_at: new Date().toISOString() };
 
     const { error } = await supabase.from('facebook_pixel_config' as any).insert(payload as any);
 
