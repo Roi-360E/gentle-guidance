@@ -158,6 +158,7 @@ export default function AdminPlans() {
       setPixelName('');
       setPixelId('');
       setPixelAccessToken('');
+      setPixelDedupKey('');
       setPixelActive(false);
       await loadPixelConfig();
     }
