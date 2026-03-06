@@ -98,7 +98,7 @@ export default function ThankYou() {
               content_ids: [p.key],
               content_type: 'product',
             }, user?.id);
-            fireCAPI(p);
+            fireCAPI(p, user?.id);
             console.log(`[ThankYou] Test Purchase fired: ${p.name} R$${p.value}`);
           }, (i + 1) * 1000);
         });
