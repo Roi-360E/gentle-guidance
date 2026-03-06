@@ -77,6 +77,8 @@ export default function AdminPlans() {
   const [savedPixels, setSavedPixels] = useState<any[]>([]);
   const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
   const [testingPixelId, setTestingPixelId] = useState<string | null>(null);
+  const [testEventCode, setTestEventCode] = useState('');
+  const [lastTestResult, setLastTestResult] = useState<{ pixelName: string; code: string; success: boolean; error?: string } | null>(null);
 
   useEffect(() => {
     if (!user) return;
