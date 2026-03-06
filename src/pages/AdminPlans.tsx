@@ -120,12 +120,15 @@ export default function AdminPlans() {
 
   const loadPixelConfig = async () => {
     setPixelLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('facebook_pixel_config' as any)
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (data) {
+    if (error) {
+      console.error('Error loading pixels:', error);
+      toast.error('Erro ao carregar pixels: ' + error.message);
+    } else if (data) {
       setSavedPixels(data as any[]);
     }
     setPixelLoading(false);
