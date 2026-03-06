@@ -28,6 +28,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { trackPixelEvent, trackCustomEvent } from '@/lib/pixel-tracker';
 import { useUtmCapture } from '@/hooks/useUtmCapture';
+import { usePowerUserTracking } from '@/hooks/useAudienceEvents';
 
 const Index = () => {
   const { user, signOut } = useAuth();

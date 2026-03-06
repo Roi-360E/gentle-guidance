@@ -40,6 +40,7 @@ export default function Plans() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  useHighIntentTracking(user?.id);
   const [loading, setLoading] = useState<string | null>(null);
   const [currentPlan, setCurrentPlan] = useState<string>('free');
   const [pixData, setPixData] = useState<PixData | null>(null);
