@@ -173,36 +173,24 @@ export default function AdminPlans() {
   const testPixelPurchase = async (pixel: any) => {
     setTestingPixelId(pixel.id);
     try {
-      const hashedData = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('test@test.com'));
-      const hashArray = Array.from(new Uint8Array(hashedData));
-      const hashedEmail = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const { data, error } = await supabase.functions.invoke('test-pixel-event', {
+        body: { pixel_id: pixel.pixel_id, access_token: pixel.access_token, pixel_name: pixel.name },
+      });
 
-      const eventData = {
-        data: [{
-          event_name: 'Purchase',
-          event_time: Math.floor(Date.now() / 1000),
-          action_source: 'website',
-          user_data: { em: [hashedEmail] },
-          custom_data: {
-            value: 1.00,
-            currency: 'BRL',
-            content_name: 'Evento de Teste',
-            content_type: 'product',
-          },
-        }],
-        test_event_code: 'TEST' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-      };
-
-      const res = await fetch(
-        `https://graph.facebook.com/v19.0/${pixel.pixel_id}/events?access_token=${pixel.access_token}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(eventData) }
-      );
-      const result = await res.json();
-
-      if (result.error) {
-        toast.error(`Erro no Pixel "${pixel.name}": ${result.error.message}`);
-      } else {
-        toast.success(`Evento de teste enviado para "${pixel.name}"! Verifique no Gerenciador de Eventos do Facebook.`);
+      if (error) {
+        toast.error('Erro ao chamar função: ' + error.message);
+      } else if (data?.error) {
+        toast.error(`Erro no Pixel "${pixel.name}": ${data.error}`);
+      } else if (data?.success) {
+        toast.success(
+          `✅ Evento de teste enviado para "${pixel.name}"!\n\n📋 Test Event Code: ${data.test_event_code}\n\nCopie esse código e cole no Gerenciador de Eventos do Facebook para visualizar o evento.`,
+          { duration: 15000 }
+        );
+        // Copy to clipboard
+        try {
+          await navigator.clipboard.writeText(data.test_event_code);
+          toast.info('Test Event Code copiado para a área de transferência!');
+        } catch {}
       }
     } catch (err: any) {
       toast.error('Erro ao enviar evento de teste: ' + err.message);
