@@ -175,7 +175,16 @@ export default function AdminPlans() {
     setDeletingPixelId(null);
   };
 
-  const testPixelPurchase = async (pixel: any) => {
+  const openTestDialog = (pixel: any) => {
+    setTestDialogPixel(pixel);
+    setTestEventCode('');
+    setLastTestResult(null);
+    setTestDialogOpen(true);
+  };
+
+  const testPixelPurchase = async () => {
+    if (!testDialogPixel) return;
+    const pixel = testDialogPixel;
     setTestingPixelId(pixel.id);
     setLastTestResult(null);
     try {
@@ -190,27 +199,15 @@ export default function AdminPlans() {
 
       if (error) {
         const msg = error.message || 'Erro desconhecido';
-        if (msg.includes('autenticado') || msg.includes('autorizado') || msg.includes('Session')) {
-          toast.error('Sessão expirada. Faça login novamente.');
-        } else {
-          toast.error('Erro ao chamar função: ' + msg);
-        }
         setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: msg });
       } else if (data?.error) {
-        if (data.error.includes('autenticado') || data.error.includes('Acesso negado')) {
-          toast.error('Sessão expirada ou sem permissão. Faça login novamente.');
-        } else {
-          toast.error(`Erro no Pixel "${pixel.name}": ${data.error}`);
-        }
         setLastTestResult({ pixelName: pixel.name, code: data.test_event_code || '', success: false, error: data.error });
       } else if (data?.success) {
         const code = data.test_event_code;
         setLastTestResult({ pixelName: pixel.name, code, success: true });
-        toast.success(`Evento de teste enviado para "${pixel.name}"!`, { duration: 8000 });
         try { await navigator.clipboard.writeText(code); } catch {}
       }
     } catch (err: any) {
-      toast.error('Erro ao enviar evento de teste: ' + err.message);
       setLastTestResult({ pixelName: pixel.name, code: '', success: false, error: err.message });
     }
     setTestingPixelId(null);
