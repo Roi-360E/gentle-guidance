@@ -77,6 +77,7 @@ export type Database = {
         Row: {
           access_token: string
           created_at: string
+          dedup_key: string
           id: string
           is_active: boolean
           name: string
@@ -86,6 +87,7 @@ export type Database = {
         Insert: {
           access_token?: string
           created_at?: string
+          dedup_key?: string
           id?: string
           is_active?: boolean
           name?: string
@@ -95,6 +97,7 @@ export type Database = {
         Update: {
           access_token?: string
           created_at?: string
+          dedup_key?: string
           id?: string
           is_active?: boolean
           name?: string

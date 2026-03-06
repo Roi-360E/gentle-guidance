@@ -1,0 +1,1 @@
+ALTER TABLE public.facebook_pixel_config ADD COLUMN dedup_key text NOT NULL DEFAULT '';
