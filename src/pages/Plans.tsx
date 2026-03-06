@@ -139,6 +139,11 @@ export default function Plans() {
         setPollingPayment(false);
         setPixData(null);
         toast.success('Pagamento Pix confirmado! Plano ativado.');
+        // Fire Purchase event for Pix confirmation
+        trackPixelEvent('Purchase', {
+          content_category: 'Pix',
+          currency: 'BRL',
+        }, user?.id);
         const monthYear = new Date().toISOString().substring(0, 7);
         const { data: usage } = await supabase
           .from('video_usage')
