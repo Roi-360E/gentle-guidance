@@ -91,8 +91,7 @@ export default function AdminPlans() {
   const [funnelLoading, setFunnelLoading] = useState(false);
 
   // Domain verification state
-  const [domainVerifCode, setDomainVerifCode] = useState('');
-  const [domainVerifContent, setDomainVerifContent] = useState('');
+  const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
