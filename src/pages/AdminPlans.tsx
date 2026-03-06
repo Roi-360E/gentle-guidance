@@ -1113,6 +1113,15 @@ export default function AdminPlans() {
                           Testar Compra
                         </Button>
                         <Button
+                          size="sm"
+                          onClick={fireRealPurchase}
+                          disabled={firingRealPurchase || !px.is_active}
+                          className="gap-1 bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          {firingRealPurchase ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CreditCard className="w-3.5 h-3.5" />}
+                          Compra Real
+                        </Button>
+                        <Button
                           variant="destructive"
                           size="sm"
                           onClick={() => deletePixel(px.id)}
