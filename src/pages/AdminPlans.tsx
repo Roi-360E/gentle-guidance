@@ -82,6 +82,7 @@ export default function AdminPlans() {
   const [editingPixelId, setEditingPixelId] = useState<string | null>(null);
   const [deletingPixelId, setDeletingPixelId] = useState<string | null>(null);
   const [testingPixelId, setTestingPixelId] = useState<string | null>(null);
+  const [firingRealPurchase, setFiringRealPurchase] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testDialogPixel, setTestDialogPixel] = useState<any>(null);
   const [testEventCode, setTestEventCode] = useState('');
@@ -242,6 +243,39 @@ export default function AdminPlans() {
       setSavedPixels(prev => prev.filter(p => p.id !== id));
     }
     setDeletingPixelId(null);
+  };
+
+  const fireRealPurchase = async () => {
+    setFiringRealPurchase(true);
+    try {
+      // Fire browser-side fbq
+      const fbq = (window as any).fbq;
+      if (fbq && typeof fbq === 'function') {
+        fbq('track', 'Purchase', { currency: 'BRL', value: 38.00, content_name: 'Starter', content_type: 'product', content_ids: ['starter'] });
+      }
+
+      // Fire CAPI via edge function
+      const { data, error } = await supabase.functions.invoke('fire-purchase-event', {
+        body: {
+          plan_name: 'Starter',
+          plan_value: 38.00,
+          plan_key: 'starter',
+          user_id: user?.id || null,
+          event_source_url: window.location.origin + '/obrigado',
+        },
+      });
+
+      if (error) {
+        toast.error('Erro ao disparar evento: ' + error.message);
+      } else if (data?.success) {
+        toast.success('✅ Evento de compra REAL disparado com sucesso via Browser + CAPI!');
+      } else {
+        toast.error('Falha: ' + JSON.stringify(data));
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setFiringRealPurchase(false);
   };
 
   const openTestDialog = (pixel: any) => {
@@ -1091,6 +1125,32 @@ export default function AdminPlans() {
                       </div>
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Fire Real Purchase Button */}
+            {savedPixels.some(p => p.is_active) && (
+              <Card className="border-2 border-green-500/40 bg-green-500/5">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-green-600" />
+                    Disparar Compra Real
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Este botão dispara um evento de <strong>Purchase real</strong> (Plano Starter — R$ 38,00) em <strong>todos os pixels ativos</strong>, tanto via Browser (fbq) quanto via Conversions API (CAPI). Não é um evento de teste.
+                  </p>
+                  <Button
+                    onClick={fireRealPurchase}
+                    disabled={firingRealPurchase}
+                    className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
+                    size="lg"
+                  >
+                    {firingRealPurchase ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                    {firingRealPurchase ? 'Disparando...' : '🚀 Disparar Evento de Compra Real'}
+                  </Button>
                 </CardContent>
               </Card>
             )}
