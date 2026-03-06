@@ -549,7 +549,7 @@ export default function AdminPlans() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs defaultValue="plans" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="plans" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Planos
             </TabsTrigger>
@@ -561,6 +561,9 @@ export default function AdminPlans() {
             </TabsTrigger>
             <TabsTrigger value="funnel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Funil
+            </TabsTrigger>
+            <TabsTrigger value="domain" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Domínio
             </TabsTrigger>
           </TabsList>
 
