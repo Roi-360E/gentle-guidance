@@ -73,6 +73,7 @@ export default function AdminPlans() {
   const [pixelId, setPixelId] = useState('');
   const [pixelAccessToken, setPixelAccessToken] = useState('');
   const [pixelDedupKey, setPixelDedupKey] = useState('');
+  const [pixelSnippet, setPixelSnippet] = useState('');
   const [pixelActive, setPixelActive] = useState(false);
   const [pixelLoading, setPixelLoading] = useState(false);
   const [pixelSaving, setPixelSaving] = useState(false);
