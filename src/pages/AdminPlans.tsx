@@ -898,6 +898,19 @@ export default function AdminPlans() {
                       />
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="pixel-dedup">Chave de Deduplicação (event_id)</Label>
+                      <Input
+                        id="pixel-dedup"
+                        placeholder="Ex: escalax_pixel1 (prefixo único para evitar eventos duplicados)"
+                        value={pixelDedupKey}
+                        onChange={e => setPixelDedupKey(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Essa chave é usada como prefixo do <code className="bg-muted px-1 rounded">event_id</code> enviado ao Facebook, evitando que o mesmo evento seja contado duas vezes.
+                      </p>
+                    </div>
+
                     <div className="flex items-center justify-between border rounded-lg p-4">
                       <div>
                         <p className="font-medium text-sm">Ativar rastreamento</p>
