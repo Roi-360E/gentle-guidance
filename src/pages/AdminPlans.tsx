@@ -1038,6 +1038,24 @@ export default function AdminPlans() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => {
+                            setEditingPixelId(px.id);
+                            setPixelName(px.name || '');
+                            setPixelId(px.pixel_id || '');
+                            setPixelAccessToken(px.access_token || '');
+                            setPixelDedupKey(px.dedup_key || '');
+                            setPixelSnippet(px.pixel_snippet || '');
+                            setPixelActive(px.is_active ?? false);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="gap-1"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => openTestDialog(px)}
                           disabled={testingPixelId === px.id}
                           className="gap-1"
