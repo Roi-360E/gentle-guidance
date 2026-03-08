@@ -199,8 +199,11 @@ async function processApprovedPayment(
 
   console.log(`[MP Webhook] ✅ Payment ${internalPaymentId} confirmed! Plan: ${payment.plan} for user: ${payment.user_id}`);
 
-  // Fire Facebook Conversions API event
-  await fireFacebookPurchaseEvent(supabase, payment);
+  // Fire Facebook Conversions API event + UTMFY order
+  await Promise.all([
+    fireFacebookPurchaseEvent(supabase, payment),
+    fireUtmifyOrder(supabase, payment),
+  ]);
 }
 
 async function fireFacebookPurchaseEvent(supabase: any, payment: any) {
