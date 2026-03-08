@@ -277,3 +277,98 @@ async function sha256(message: string): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+async function fireUtmifyOrder(supabase: any, payment: any) {
+  try {
+    const UTMIFY_API_TOKEN = Deno.env.get("UTMIFY_API_TOKEN");
+    if (!UTMIFY_API_TOKEN) {
+      console.log("[UTMIFY] No API token configured, skipping");
+      return;
+    }
+
+    // Get user profile
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email, name")
+      .eq("user_id", payment.user_id)
+      .single();
+
+    // Get UTM data for this user
+    const { data: utmData } = await supabase
+      .from("utm_tracking")
+      .select("*")
+      .eq("user_id", payment.user_id)
+      .order("captured_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    // Get plan details
+    const { data: planData } = await supabase
+      .from("subscription_plans")
+      .select("name, price")
+      .eq("plan_key", payment.plan)
+      .single();
+
+    const now = new Date();
+    const createdAt = now.toISOString().replace("T", " ").substring(0, 19);
+    const priceInCents = Math.round(Number(payment.amount) * 100);
+
+    const orderPayload = {
+      orderId: payment.id,
+      platform: "EscalaXPro",
+      paymentMethod: "pix" as const,
+      status: "paid" as const,
+      createdAt,
+      approvedDate: createdAt,
+      refundedAt: null,
+      customer: {
+        name: profile?.name || "Cliente",
+        email: profile?.email || "",
+        phone: null,
+        document: null,
+        country: "BR",
+      },
+      products: [
+        {
+          id: payment.plan,
+          name: planData?.name || payment.plan,
+          planId: payment.plan,
+          planName: planData?.name || payment.plan,
+          quantity: 1,
+          priceInCents,
+        },
+      ],
+      trackingParameters: {
+        src: null,
+        sck: null,
+        utm_source: utmData?.utm_source || null,
+        utm_campaign: utmData?.utm_campaign || null,
+        utm_medium: utmData?.utm_medium || null,
+        utm_content: utmData?.utm_content || null,
+        utm_term: utmData?.utm_term || null,
+      },
+      commission: {
+        totalPriceInCents: priceInCents,
+        gatewayFeeInCents: 0,
+        userCommissionInCents: priceInCents,
+        currency: "BRL" as const,
+      },
+    };
+
+    console.log("[UTMIFY] Sending order:", JSON.stringify(orderPayload));
+
+    const res = await fetch("https://api.utmify.com.br/api-credentials/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-token": UTMIFY_API_TOKEN,
+      },
+      body: JSON.stringify(orderPayload),
+    });
+
+    const result = await res.text();
+    console.log(`[UTMIFY] Response (${res.status}):`, result);
+  } catch (err) {
+    console.error("[UTMIFY] Error sending order:", err);
+  }
+}
