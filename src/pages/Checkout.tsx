@@ -106,50 +106,39 @@ export default function Checkout() {
   const [installments, setInstallments] = useState(1);
   const [availableInstallments, setAvailableInstallments] = useState<{value: number; label: string}[]>([]);
 
-  // Initialize MercadoPago SDK (lightweight)
+  // Initialize MercadoPago SDK + Load plan IN PARALLEL for <3s load
   useEffect(() => {
-    const init = async () => {
+    if (!planKey) { setPlanLoading(false); setPlanError(true); return; }
+
+    const loadPlanData = async () => {
+      const { data, error } = await supabase
+        .from('subscription_plans' as any)
+        .select('*')
+        .eq('plan_key', planKey)
+        .eq('is_active', true)
+        .single();
+      if (error || !data) { setPlanError(true); return; }
+      const p = data as any;
+      setPlan({
+        ...p,
+        features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
+      });
+      trackPixelEvent('InitiateCheckout', { content_name: p.name, value: p.price, currency: 'BRL' }, user?.id);
+    };
+
+    const loadSdk = async () => {
       try {
         const res = await fetch(PUBLIC_KEY_URL, {
           headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
         });
         const data = await res.json();
-        if (data.publicKey) {
-          mpRef.current = await loadMPSdk(data.publicKey);
-        }
+        if (data.publicKey) mpRef.current = await loadMPSdk(data.publicKey);
       } catch (err) {
         console.error('[Checkout] Failed to init MercadoPago:', err);
       }
     };
-    init();
-  }, []);
 
-  // Load plan + set email
-  useEffect(() => {
-    if (!planKey) { setPlanLoading(false); setPlanError(true); return; }
-    const loadPlan = async () => {
-      try {
-        setPlanLoading(true);
-        const { data, error } = await supabase
-          .from('subscription_plans' as any)
-          .select('*')
-          .eq('plan_key', planKey)
-          .eq('is_active', true)
-          .single();
-        if (error || !data) { setPlanError(true); setPlanLoading(false); return; }
-        const p = data as any;
-        setPlan({
-          ...p,
-          features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
-        });
-        setPlanLoading(false);
-        trackPixelEvent('InitiateCheckout', { content_name: p.name, value: p.price, currency: 'BRL' }, user?.id);
-      } catch {
-        setPlanError(true);
-        setPlanLoading(false);
-      }
-    };
-    loadPlan();
+    Promise.all([loadPlanData(), loadSdk()]).finally(() => setPlanLoading(false));
   }, [planKey]);
 
   // Set email from user
