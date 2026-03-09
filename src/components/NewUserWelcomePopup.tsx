@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Zap, ArrowRight, Flame } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
+// Module-level flag: resets on every page reload (works correctly in PWAs unlike sessionStorage)
+const popupDismissedThisLoad = new Set<string>();
+
 interface NewUserWelcomePopupProps {
   userId: string | undefined;
   currentPlan: string;
@@ -20,8 +23,8 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   useEffect(() => {
     if (!userId) return;
 
-    const dismissed = sessionStorage.getItem(`welcome_popup_${userId}`);
-    if (dismissed) return;
+    // Only dismiss for this page load (module-level Set resets on reload)
+    if (popupDismissedThisLoad.has(userId)) return;
 
     const fetchNextPlan = async () => {
       const { data: plans } = await supabase
@@ -49,7 +52,6 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
           if (nextPlan) {
             suggested = nextPlan;
           } else {
-            // User already has the highest plan
             return;
           }
         }
@@ -57,29 +59,27 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
 
       setSuggestedPlanName(suggested.name);
       setSuggestedPlanPrice(Number(suggested.price));
-      // Open popup only after data is ready
       setTimeout(() => setOpen(true), 500);
     };
 
     fetchNextPlan();
   }, [userId, currentPlan]);
 
-  const handleGoToPlans = () => {
-    sessionStorage.setItem(`welcome_popup_${userId}`, 'true');
+  const dismiss = () => {
+    popupDismissedThisLoad.add(userId!);
     setOpen(false);
-    navigate('/plans');
   };
 
-  const handleDismiss = () => {
-    sessionStorage.setItem(`welcome_popup_${userId}`, 'true');
-    setOpen(false);
+  const handleGoToPlans = () => {
+    dismiss();
+    navigate('/plans');
   };
 
   if (!suggestedPlanName) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleDismiss(); }}>
-      <DialogContent className="sm:max-w-md border-primary/30 shadow-[0_0_40px_rgba(var(--primary),0.15)]">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) dismiss(); }}>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md border-primary/30 shadow-[0_0_40px_rgba(var(--primary),0.15)]">
         <DialogHeader>
           <div className="flex justify-center mb-3">
             <div className="relative">
@@ -117,7 +117,7 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
             {currentPlan === 'free' ? 'Ver Planos e Recarregar' : 'Fazer Upgrade'}
             <ArrowRight className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" onClick={handleDismiss} className="w-full text-muted-foreground text-sm">
+          <Button variant="ghost" onClick={dismiss} className="w-full text-muted-foreground text-sm">
             Agora não
           </Button>
         </div>
