@@ -221,39 +221,33 @@ export async function preProcessInputCached(
   const startTime = performance.now();
   console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
 
-  // ─── ALWAYS try stream copy first (remux ~0.05-0.3s) ───
-  const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
-  let exitCode = await ff.exec(copyArgs);
-  checkAbort(abortSignal);
-
-  if (exitCode === 0) {
-    try { await ff.deleteFile(rawName); } catch {}
-    preProcessCache.set(file, outputName);
-    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-    console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
-    return outputName;
-  }
-  console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to ultra-fast re-encode...`);
-
-  // ─── FALLBACK: minimal re-encode with shortest duration limit ───
+  // ─── Re-encode with WhatsApp/CapCut-friendly settings ───
+  // Always re-encode to control bitrate and ensure compatibility
   const args: string[] = ['-i', rawName];
   if (scale) {
-    args.push('-vf', `scale=${scale}`);
+    args.push('-vf', `scale=${scale},setsar=1`);
   }
   args.push(
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
-    '-tune', 'fastdecode',
-    '-crf', '32',
-    '-r', '24',
+    '-profile:v', 'main',
+    '-level', '3.1',
+    '-pix_fmt', 'yuv420p',
+    '-crf', '23',
+    '-maxrate', '2500k',
+    '-bufsize', '5000k',
+    '-r', '30',
     '-c:a', 'aac',
-    '-b:a', '96k',
+    '-b:a', '128k',
     '-ar', '44100',
     '-ac', '2',
+    '-movflags', '+faststart',
     '-threads', '0',
     '-y',
     outputName
   );
+
+  let exitCode;
 
   exitCode = await ff.exec(args);
   checkAbort(abortSignal);
