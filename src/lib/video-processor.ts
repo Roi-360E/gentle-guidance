@@ -479,7 +479,9 @@ export async function concatenateVideos(
           `[2:v]scale=${scale},setsar=1[v2];` +
           `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
           '-y', outputFile,
         ]);
       } else {
