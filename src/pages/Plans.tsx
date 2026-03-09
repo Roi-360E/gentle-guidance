@@ -29,13 +29,12 @@ const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 export default function Plans() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   useHighIntentTracking(user?.id);
   const [loading, setLoading] = useState<string | null>(null);
   const [currentPlan, setCurrentPlan] = useState<string>('free');
-  const [pixData, setPixData] = useState<PixData | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [pollingPayment, setPollingPayment] = useState(false);
+  const [plans, setPlans] = useState<PlanData[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
