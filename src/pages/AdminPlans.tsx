@@ -33,6 +33,7 @@ interface Plan {
   is_active: boolean;
   has_ai_chat: boolean;
   has_auto_subtitles: boolean;
+  has_voice_rewrite: boolean;
 }
 
 interface UserRow {
