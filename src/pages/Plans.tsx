@@ -327,16 +327,9 @@ export default function Plans() {
                         </Button>
                       )}
                       {plan.price > 0 && (
-                        <>
-                          <Button className="w-full" onClick={() => handleCheckout(plan.plan_key, 'checkout')} disabled={!!loading}>
-                            {loading === `${plan.plan_key}-checkout` ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                            Pagar com Cartão/Boleto
-                          </Button>
-                          <Button variant="outline" className="w-full" onClick={() => handleCheckout(plan.plan_key, 'pix')} disabled={!!loading}>
-                            {loading === `${plan.plan_key}-pix` ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                            Pagar com Pix
-                          </Button>
-                        </>
+                        <Button className="w-full" onClick={() => handleCheckout(plan.plan_key)} disabled={!!loading}>
+                          Assinar {plan.name}
+                        </Button>
                       )}
                     </div>
                   )}
