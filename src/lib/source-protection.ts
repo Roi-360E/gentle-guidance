@@ -80,26 +80,7 @@ export function enableSourceProtection() {
   window.addEventListener('copy', (e) => { e.preventDefault(); }, true);
   window.addEventListener('cut', (e) => { e.preventDefault(); }, true);
 
-  // 6. DevTools detection
-  let devtoolsOpen = false;
-  const threshold = 160;
-
-  const checkDevTools = () => {
-    try {
-      const start = performance.now();
-      (function() {}).constructor('debugger')();
-      const end = performance.now();
-
-      if (end - start > threshold && !devtoolsOpen) {
-        devtoolsOpen = true;
-        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:2rem"><div><h1 style="font-size:2rem;margin-bottom:1rem">⚠️ Acesso não autorizado</h1><p>Feche as ferramentas de desenvolvedor para continuar usando o aplicativo.</p></div></div>';
-      }
-    } catch {
-      // CSP or other environment restriction — silently skip
-    }
-  };
-
-  setInterval(checkDevTools, 2000);
+  // 6. DevTools detection removed — it caused blank screens in restricted environments
 
   // 7. Console warning
   console.log('%c⛔ ATENÇÃO!', 'color: red; font-size: 40px; font-weight: bold;');
