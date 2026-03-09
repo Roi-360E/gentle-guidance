@@ -22,6 +22,7 @@ import ResetPassword from "./pages/ResetPassword";
 import AdminPlans from "./pages/AdminPlans";
 import VoiceRewrite from "./pages/VoiceRewrite";
 import ThankYou from "./pages/ThankYou";
+import Checkout from "./pages/Checkout";
 
 const queryClient = new QueryClient();
 
