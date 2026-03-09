@@ -18,14 +18,14 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   const [lowestPlanPrice, setLowestPlanPrice] = useState(0);
 
   useEffect(() => {
-    if (!userId || currentPlan !== 'free') return;
+    if (!userId) return;
 
     // Check if popup was already dismissed this session
     const dismissed = sessionStorage.getItem(`welcome_popup_${userId}`);
     if (dismissed) return;
 
-    // Show popup for free plan users with 0 tokens
-    if (tokenBalance === 0) {
+    // Show popup for users with 0 or fewer tokens (any plan)
+    if (tokenBalance <= 0) {
       setOpen(true);
     }
 
