@@ -1,24 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Zap, Crown, ArrowLeft, Check, Loader2, Copy, CheckCircle2, Settings } from 'lucide-react';
+import { Sparkles, Zap, Crown, ArrowLeft, Check, Loader2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 import { useHighIntentTracking } from '@/hooks/useAudienceEvents';
-
-const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-checkout`;
-
-interface PixData {
-  qrCode: string;
-  qrCodeBase64: string;
-  paymentId: string;
-  mpPaymentId: number;
-  expiresAt: string;
-}
 
 interface PlanData {
   id: string;
@@ -39,13 +29,9 @@ const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 export default function Plans() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   useHighIntentTracking(user?.id);
   const [loading, setLoading] = useState<string | null>(null);
   const [currentPlan, setCurrentPlan] = useState<string>('free');
-  const [pixData, setPixData] = useState<PixData | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [pollingPayment, setPollingPayment] = useState(false);
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -71,57 +57,21 @@ export default function Plans() {
         setPlansLoading(false);
       });
 
-    // Track ViewContent on plans page
     trackPixelEvent('ViewContent', {
       content_name: 'Plans Page',
       content_category: 'Pricing',
     });
   }, []);
 
-  // Check admin role using security definer function
+  // Check admin role
   useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
+    if (!user) { setIsAdmin(false); return; }
     supabase
       .rpc('has_role', { _user_id: user.id, _role: 'admin' })
       .then(({ data, error }) => {
-        if (error) {
-          console.error('Error checking admin role:', error);
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(data === true);
-        }
+        if (error) { setIsAdmin(false); } else { setIsAdmin(data === true); }
       });
   }, [user]);
-
-  // Check payment return from Checkout Pro
-  useEffect(() => {
-    const paymentStatus = searchParams.get('payment');
-    if (!paymentStatus) return;
-
-    // Recover plan info saved before redirect
-    const savedPlan = localStorage.getItem('checkout_plan_name') || '';
-    const savedValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
-    const savedPlanKey = localStorage.getItem('checkout_plan_key') || '';
-
-    if (paymentStatus === 'success') {
-      // Redirect to thank you page (pixel fires there)
-      navigate('/obrigado', { replace: true });
-      return;
-    } else if (paymentStatus === 'failure') {
-      toast.error('Pagamento não aprovado. Tente novamente.');
-    } else if (paymentStatus === 'pending') {
-      toast.info('Pagamento pendente. Será ativado assim que confirmado.');
-      trackPixelEvent('AddPaymentInfo', {
-        content_name: savedPlan,
-        content_category: 'Cartão/Boleto',
-        value: savedValue,
-        currency: 'BRL',
-      }, user?.id);
-    }
-  }, [searchParams]);
 
   // Load current plan
   useEffect(() => {
@@ -138,107 +88,12 @@ export default function Plans() {
       });
   }, [user]);
 
-  // Poll for Pix payment confirmation
-  useEffect(() => {
-    if (!pixData || !pollingPayment) return;
-    const interval = setInterval(async () => {
-      const { data } = await supabase
-        .from('payments')
-        .select('status')
-        .eq('id', pixData.paymentId)
-        .single();
-      if (data?.status === 'confirmed') {
-        setPollingPayment(false);
-        setPixData(null);
-        // Copy pix plan info to checkout keys so ThankYou page can read them
-        const pixKey = localStorage.getItem('pix_plan_key') || '';
-        const pixName = localStorage.getItem('pix_plan_name') || '';
-        const pixValue = localStorage.getItem('pix_plan_value') || '0';
-        localStorage.setItem('checkout_plan_key', pixKey);
-        localStorage.setItem('checkout_plan_name', pixName);
-        localStorage.setItem('checkout_plan_value', pixValue);
-        localStorage.setItem('checkout_method', 'Pix');
-        localStorage.removeItem('pix_plan_key');
-        localStorage.removeItem('pix_plan_name');
-        localStorage.removeItem('pix_plan_value');
-        navigate('/obrigado');
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [pixData, pollingPayment, user]);
-
-  const handleCheckout = async (planKey: string, method: 'checkout' | 'pix') => {
+  const handleCheckout = (planKey: string) => {
     if (!user) {
       toast.error('Faça login para continuar.');
       return;
     }
-    setLoading(`${planKey}-${method}`);
-
-    // Track InitiateCheckout event
-    const plan = plans.find(p => p.plan_key === planKey);
-    trackPixelEvent('InitiateCheckout', {
-      content_name: plan?.name || planKey,
-      content_category: method === 'pix' ? 'Pix' : 'Cartão/Boleto',
-      value: plan?.price || 0,
-      currency: 'BRL',
-    }, user?.id);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada');
-      const res = await fetch(FUNCTION_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ plan: planKey, paymentMethod: method === 'pix' ? 'pix' : undefined }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Erro ${res.status}`);
-      }
-      const data = await res.json();
-      if (data.type === 'pix') {
-        setPixData({ qrCode: data.qrCode, qrCodeBase64: data.qrCodeBase64, paymentId: data.paymentId, mpPaymentId: data.mpPaymentId, expiresAt: data.expiresAt });
-        setPollingPayment(true);
-
-        // Save plan info for Purchase event on Pix confirmation
-        localStorage.setItem('pix_plan_key', planKey);
-        localStorage.setItem('pix_plan_name', plan?.name || planKey);
-        localStorage.setItem('pix_plan_value', String(plan?.price || 0));
-
-        // Track AddPaymentInfo when Pix QR code is generated
-        trackPixelEvent('AddPaymentInfo', {
-          content_name: plan?.name || planKey,
-          content_category: 'Pix',
-          value: plan?.price || 0,
-          currency: 'BRL',
-        }, user?.id);
-      } else if (data.type === 'checkout') {
-        // Save plan info in localStorage before redirect
-        localStorage.setItem('checkout_plan_key', planKey);
-        localStorage.setItem('checkout_plan_name', plan?.name || planKey);
-        localStorage.setItem('checkout_plan_value', String(plan?.price || 0));
-
-        // Small delay to ensure Pixel beacon completes before redirect
-        await new Promise(resolve => setTimeout(resolve, 500));
-        window.location.href = data.initPoint;
-      }
-    } catch (err) {
-      console.error('Checkout error:', err);
-      toast.error(err instanceof Error ? err.message : 'Erro ao processar pagamento');
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const copyPixCode = () => {
-    if (!pixData?.qrCode) return;
-    navigator.clipboard.writeText(pixData.qrCode);
-    setCopied(true);
-    toast.success('Código Pix copiado!');
-    setTimeout(() => setCopied(false), 3000);
+    navigate(`/checkout?plan=${planKey}`);
   };
 
   if (plansLoading) {
@@ -271,42 +126,6 @@ export default function Plans() {
       </header>
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* Pix payment modal */}
-        {pixData && (
-          <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <Card className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto">
-              <CardHeader className="text-center">
-                <CardTitle className="text-lg">Pagamento via Pix</CardTitle>
-                <p className="text-sm text-muted-foreground">Escaneie o QR Code ou copie o código</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {pixData.qrCodeBase64 && (
-                  <div className="flex justify-center">
-                    <img src={`data:image/png;base64,${pixData.qrCodeBase64}`} alt="QR Code Pix" className="w-56 h-56 rounded-lg border border-border" />
-                  </div>
-                )}
-                {pixData.qrCode && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Código Pix Copia e Cola:</p>
-                    <div className="relative">
-                      <textarea readOnly value={pixData.qrCode} className="w-full h-20 text-xs bg-muted rounded-lg p-3 resize-none border border-border" />
-                      <Button size="sm" variant="outline" className="absolute top-2 right-2" onClick={copyPixCode}>
-                        {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {pollingPayment && (
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Aguardando confirmação do pagamento...
-                  </div>
-                )}
-                <Button variant="outline" className="w-full" onClick={() => { setPixData(null); setPollingPayment(false); }}>Fechar</Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
         {/* Plans grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {plans.map((plan) => {
@@ -385,16 +204,9 @@ export default function Plans() {
                         </Button>
                       )}
                       {plan.price > 0 && (
-                        <>
-                          <Button className="w-full" onClick={() => handleCheckout(plan.plan_key, 'checkout')} disabled={!!loading}>
-                            {loading === `${plan.plan_key}-checkout` ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                            Pagar com Cartão/Boleto
-                          </Button>
-                          <Button variant="outline" className="w-full" onClick={() => handleCheckout(plan.plan_key, 'pix')} disabled={!!loading}>
-                            {loading === `${plan.plan_key}-pix` ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                            Pagar com Pix
-                          </Button>
-                        </>
+                        <Button className="w-full" onClick={() => handleCheckout(plan.plan_key)}>
+                          Assinar {plan.name}
+                        </Button>
                       )}
                     </div>
                   )}
@@ -405,7 +217,7 @@ export default function Plans() {
         </div>
 
         <div className="text-center text-sm text-muted-foreground space-y-1">
-          <p>Pagamento processado de forma segura pelo Mercado Pago.</p>
+          <p>Pagamento processado de forma segura.</p>
           <p>Após a confirmação, seu plano é ativado automaticamente.</p>
         </div>
       </main>

@@ -136,9 +136,9 @@ serve(async (req) => {
       external_reference: payment.id,
       notification_url: webhookUrl,
       back_urls: {
-        success: `${req.headers.get("origin") || "https://deploysites.online"}/plans?payment=success`,
-        failure: `${req.headers.get("origin") || "https://deploysites.online"}/plans?payment=failure`,
-        pending: `${req.headers.get("origin") || "https://deploysites.online"}/plans?payment=pending`,
+        success: `${req.headers.get("origin") || "https://deploysites.online"}/checkout?plan=${plan}&payment=success`,
+        failure: `${req.headers.get("origin") || "https://deploysites.online"}/checkout?plan=${plan}&payment=failure`,
+        pending: `${req.headers.get("origin") || "https://deploysites.online"}/checkout?plan=${plan}&payment=pending`,
       },
       auto_return: "approved",
     };
