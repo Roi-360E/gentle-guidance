@@ -229,7 +229,17 @@ export default function Checkout() {
     );
   }
 
-  if (!plan) return null;
+  if (planError || !plan) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-foreground text-lg font-semibold">Plano não encontrado</p>
+          <p className="text-muted-foreground text-sm">O plano solicitado não está disponível.</p>
+          <Button onClick={() => navigate('/plans')}>Ver Planos Disponíveis</Button>
+        </div>
+      </div>
+    );
+  }
 
   const Icon = ICON_MAP[plan.icon] || Sparkles;
 
