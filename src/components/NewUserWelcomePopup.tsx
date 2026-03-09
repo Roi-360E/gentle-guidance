@@ -27,10 +27,6 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
       if (elapsed < 24 * 60 * 60 * 1000) return;
     }
 
-    // Show popup after a short delay so page renders first
-    const timer = setTimeout(() => setOpen(true), 800);
-    return () => clearTimeout(timer);
-
     // Fetch lowest paid plan
     const fetchLowestPlan = async () => {
       const { data } = await supabase
@@ -47,7 +43,11 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
       }
     };
     fetchLowestPlan();
-  }, [userId, currentPlan, tokenBalance]);
+
+    // Show popup after a short delay so page renders first
+    const timer = setTimeout(() => setOpen(true), 800);
+    return () => clearTimeout(timer);
+  }, [userId]);
 
   const handleGoToPlans = () => {
     localStorage.setItem(`welcome_popup_${userId}`, String(Date.now()));
