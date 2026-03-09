@@ -10,64 +10,68 @@ const isIframe = (() => {
 
 // Detect Instagram/Facebook in-app browser and redirect to native browser
 if (!isIframe) {
-  (function redirectFromInAppBrowser() {
+  try {
     const ua = navigator.userAgent || '';
     const isInApp = /Instagram|FBAN|FBAV/i.test(ua);
-    if (!isInApp) return;
-
-    const currentUrl = window.location.href;
-
-    const isAndroid = /Android/i.test(ua);
-    if (isAndroid) {
-      const intentUrl = `intent://${currentUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
-      window.location.href = intentUrl;
-      return;
-    }
-
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    if (isIOS) {
-      window.location.href = `x-safari-${currentUrl}`;
-      setTimeout(() => {
-        const banner = document.createElement('div');
-        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#0f0a1a;color:#fff;padding:16px;text-align:center;font-family:system-ui;font-size:14px;';
-        banner.innerHTML = `
-          <p style="margin:0 0 8px">Para melhor experiência, abra no Safari</p>
-          <p style="margin:0;font-size:12px;opacity:0.7">Toque nos 3 pontos (⋯) no canto superior e selecione "Abrir no navegador"</p>
-        `;
-        document.body.prepend(banner);
-      }, 500);
-    }
-  })();
-}
-
-// Enable source code protection in production
-enableSourceProtection();
-
-// Force cache clear on new versions — skip in iframe to preserve auth session
-if (!isIframe) {
-  const APP_VERSION = '2.2.1';
-  const storedVersion = localStorage.getItem('escalax_version');
-  if (storedVersion !== APP_VERSION) {
-    console.log(`[EscalaX] Atualizando v${storedVersion || '?'} → v${APP_VERSION}`);
-    // Preserve Supabase auth keys during cache clear
-    const authKeys: [string, string | null][] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-        authKeys.push([key, localStorage.getItem(key)]);
+    if (isInApp) {
+      const currentUrl = window.location.href;
+      const isAndroid = /Android/i.test(ua);
+      if (isAndroid) {
+        window.location.href = `intent://${currentUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+      } else if (/iPhone|iPad|iPod/i.test(ua)) {
+        window.location.href = `x-safari-${currentUrl}`;
       }
     }
-    localStorage.clear();
-    sessionStorage.clear();
-    // Restore auth keys
-    authKeys.forEach(([key, val]) => { if (val) localStorage.setItem(key, val); });
-    localStorage.setItem('escalax_version', APP_VERSION);
-    if ('caches' in window) {
-      caches.keys().then(names => names.forEach(name => caches.delete(name)));
-    }
+  } catch (e) {
+    console.warn('[EscalaX] In-app redirect skipped:', e);
   }
 }
 
-console.log('[EscalaX] App mounting...');
-createRoot(document.getElementById("root")!).render(<App />);
-console.log('[EscalaX] App mounted');
+// Enable source code protection in production (safe — returns early in iframe/dev)
+try {
+  enableSourceProtection();
+} catch (e) {
+  console.warn('[EscalaX] Source protection skipped:', e);
+}
+
+// Force cache clear on new versions — skip in iframe to preserve auth session
+if (!isIframe) {
+  try {
+    const APP_VERSION = '2.2.1';
+    const storedVersion = localStorage.getItem('escalax_version');
+    if (storedVersion !== APP_VERSION) {
+      const authKeys: [string, string | null][] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+          authKeys.push([key, localStorage.getItem(key)]);
+        }
+      }
+      localStorage.clear();
+      sessionStorage.clear();
+      authKeys.forEach(([key, val]) => { if (val) localStorage.setItem(key, val); });
+      localStorage.setItem('escalax_version', APP_VERSION);
+      if ('caches' in window) {
+        caches.keys().then(names => names.forEach(name => caches.delete(name)));
+      }
+    }
+  } catch (e) {
+    console.warn('[EscalaX] Cache clear skipped:', e);
+  }
+}
+
+// Mount app with error handling
+try {
+  const root = document.getElementById("root");
+  if (root) {
+    createRoot(root).render(<App />);
+  } else {
+    console.error('[EscalaX] #root element not found');
+  }
+} catch (e) {
+  console.error('[EscalaX] Fatal mount error:', e);
+  const root = document.getElementById("root");
+  if (root) {
+    root.innerHTML = `<div style="padding:2rem;color:white;background:#0f0a1a;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui"><div style="text-align:center"><h1>Erro ao carregar</h1><p>${e instanceof Error ? e.message : 'Erro desconhecido'}</p><button onclick="location.reload()" style="margin-top:1rem;padding:0.5rem 1rem;background:#7c3aed;color:white;border:none;border-radius:8px;cursor:pointer">Recarregar</button></div></div>`;
+  }
+}
