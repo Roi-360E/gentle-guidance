@@ -326,7 +326,7 @@ const Index = () => {
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/auto-subtitles'); setMobileMenuOpen(false); }}>
               <Type className="w-4 h-4" /> Legendas Automáticas
             </Button>
-            {currentPlan === 'unlimited' && (
+            {hasVoiceRewrite && (
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/voice-rewrite'); setMobileMenuOpen(false); }}>
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
