@@ -4,10 +4,13 @@
  */
 
 export function enableSourceProtection() {
-  // Disable in dev mode AND in Lovable preview/iframe environments
+  // Disable in dev mode
   if (import.meta.env.DEV) return;
+  
+  // Disable in Lovable preview/iframe environments AND lovable.app domains
   try {
-    if (window.self !== window.top) return; // inside iframe (Lovable preview)
+    if (window.self !== window.top) return;
+    if (window.location.hostname.includes('lovable.app')) return;
   } catch { return; }
 
   // 1. Block right-click on ALL targets with capture phase (highest priority)
