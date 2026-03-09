@@ -3,6 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import { enableSourceProtection } from "./lib/source-protection";
 
+
 // Detect Instagram/Facebook in-app browser and redirect to native browser
 (function redirectFromInAppBrowser() {
   const ua = navigator.userAgent || '';
@@ -41,7 +42,7 @@ import { enableSourceProtection } from "./lib/source-protection";
 enableSourceProtection();
 
 // Force cache clear on new versions
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.2.1';
 const storedVersion = localStorage.getItem('escalax_version');
 if (storedVersion !== APP_VERSION) {
   console.log(`[EscalaX] Atualizando v${storedVersion || '?'} → v${APP_VERSION}`);
