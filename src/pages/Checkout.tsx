@@ -55,8 +55,14 @@ export default function Checkout() {
 
   // Load plan
   useEffect(() => {
-    if (!planKey) { navigate('/plans'); return; }
+    if (!planKey) { 
+      setPlanLoading(false);
+      setPlanError(true);
+      return; 
+    }
     console.log('[Checkout] Loading plan:', planKey);
+    setPlanLoading(true);
+    setPlanError(false);
     supabase
       .from('subscription_plans' as any)
       .select('*')
@@ -67,8 +73,8 @@ export default function Checkout() {
         console.log('[Checkout] Plan query result:', { data, error });
         if (error || !data) { 
           console.error('[Checkout] Plan not found:', error);
-          toast.error('Plano não encontrado'); 
-          navigate('/plans'); 
+          setPlanLoading(false);
+          setPlanError(true);
           return; 
         }
         const p = data as any;
@@ -82,6 +88,11 @@ export default function Checkout() {
           value: p.price,
           currency: 'BRL',
         }, user?.id);
+      })
+      .catch((err) => {
+        console.error('[Checkout] Unexpected error:', err);
+        setPlanLoading(false);
+        setPlanError(true);
       });
   }, [planKey]);
 
