@@ -127,7 +127,7 @@ const VoiceRewrite = () => {
     return `${m}:${s}`;
   };
 
-  // Check access (unlimited plan only) + load TTS credits
+  // Check access dynamically from admin-configured plans + load TTS credits
   useEffect(() => {
     if (!user) return;
     const checkAccess = async () => {
@@ -138,8 +138,16 @@ const VoiceRewrite = () => {
         .eq('user_id', user.id)
         .eq('month_year', monthYear)
         .single();
-      setHasAccess(data?.plan === 'unlimited');
       setTtsCredits((data as any)?.tts_credits ?? 0);
+
+      const planKey = data?.plan || 'free';
+      const { data: planData } = await supabase
+        .from('subscription_plans')
+        .select('has_voice_rewrite')
+        .eq('plan_key', planKey)
+        .eq('is_active', true)
+        .maybeSingle();
+      setHasAccess((planData as any)?.has_voice_rewrite === true);
     };
     checkAccess();
   }, [user]);
