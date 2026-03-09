@@ -518,7 +518,9 @@ export async function concatenateVideos(
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+            '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+            '-an', '-movflags', '+faststart',
             '-y', outputFile,
           ]);
         }
