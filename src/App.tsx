@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,7 +23,8 @@ import ResetPassword from "./pages/ResetPassword";
 import AdminPlans from "./pages/AdminPlans";
 import VoiceRewrite from "./pages/VoiceRewrite";
 import ThankYou from "./pages/ThankYou";
-import Checkout from "./pages/Checkout";
+
+const Checkout = lazy(() => import("./pages/Checkout"));
 
 const queryClient = new QueryClient();
 
@@ -45,7 +47,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
-              <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+              <Route path="/checkout" element={<ProtectedRoute><Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><span className="animate-spin text-primary">⏳</span></div>}><Checkout /></Suspense></ProtectedRoute>} />
               <Route path="/admin/plans" element={<ProtectedRoute><AdminPlans /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
               <Route path="/auto-subtitles" element={<ProtectedRoute><AutoSubtitles /></ProtectedRoute>} />
