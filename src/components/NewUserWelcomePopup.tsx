@@ -53,7 +53,7 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   };
 
   const handleDismiss = () => {
-    localStorage.setItem(`welcome_popup_${userId}`, String(Date.now()));
+    sessionStorage.setItem(`welcome_popup_${userId}`, 'true');
     setOpen(false);
   };
 
