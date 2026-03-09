@@ -55,6 +55,7 @@ export default function Checkout() {
   // Load plan
   useEffect(() => {
     if (!planKey) { navigate('/plans'); return; }
+    console.log('[Checkout] Loading plan:', planKey);
     supabase
       .from('subscription_plans' as any)
       .select('*')
@@ -62,7 +63,13 @@ export default function Checkout() {
       .eq('is_active', true)
       .single()
       .then(({ data, error }) => {
-        if (error || !data) { toast.error('Plano não encontrado'); navigate('/plans'); return; }
+        console.log('[Checkout] Plan query result:', { data, error });
+        if (error || !data) { 
+          console.error('[Checkout] Plan not found:', error);
+          toast.error('Plano não encontrado'); 
+          navigate('/plans'); 
+          return; 
+        }
         const p = data as any;
         setPlan({
           ...p,
