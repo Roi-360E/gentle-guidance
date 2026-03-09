@@ -3,6 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import { enableSourceProtection } from "./lib/source-protection";
 
+
 // Detect Instagram/Facebook in-app browser and redirect to native browser
 (function redirectFromInAppBrowser() {
   const ua = navigator.userAgent || '';
