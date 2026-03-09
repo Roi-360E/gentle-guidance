@@ -63,13 +63,16 @@ export default function Checkout() {
     console.log('[Checkout] Loading plan:', planKey);
     setPlanLoading(true);
     setPlanError(false);
-    supabase
-      .from('subscription_plans' as any)
-      .select('*')
-      .eq('plan_key', planKey)
-      .eq('is_active', true)
-      .single()
-      .then(({ data, error }) => {
+    
+    const loadPlan = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('subscription_plans' as any)
+          .select('*')
+          .eq('plan_key', planKey)
+          .eq('is_active', true)
+          .single();
+        
         console.log('[Checkout] Plan query result:', { data, error });
         if (error || !data) { 
           console.error('[Checkout] Plan not found:', error);
@@ -88,12 +91,14 @@ export default function Checkout() {
           value: p.price,
           currency: 'BRL',
         }, user?.id);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('[Checkout] Unexpected error:', err);
         setPlanLoading(false);
         setPlanError(true);
-      });
+      }
+    };
+    
+    loadPlan();
   }, [planKey]);
 
   // Check payment return from Checkout Pro
