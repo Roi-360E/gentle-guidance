@@ -50,7 +50,8 @@ export default function Checkout() {
   const [copied, setCopied] = useState(false);
   const [pollingPayment, setPollingPayment] = useState(false);
   const [planLoading, setPlanLoading] = useState(true);
-  const [countdown, setCountdown] = useState(15 * 60); // 15 min urgency
+  const [planError, setPlanError] = useState(false);
+  const [countdown, setCountdown] = useState(15 * 60);
 
   // Load plan
   useEffect(() => {
