@@ -83,7 +83,20 @@ const Index = () => {
       if (data) {
         setCurrentPlan(data.plan);
         setVideoCount(data.video_count);
-        setTokenBalance((data as any).token_balance ?? 50);
+        setTokenBalance((data as any).token_balance ?? 0);
+      }
+      // Load plan features from admin-configured plans
+      const planKey = data?.plan || 'free';
+      const { data: planData } = await supabase
+        .from('subscription_plans')
+        .select('name, has_auto_subtitles, has_voice_rewrite')
+        .eq('plan_key', planKey)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (planData) {
+        setPlanName(planData.name);
+        setHasAutoSubtitles((planData as any).has_auto_subtitles === true);
+        setHasVoiceRewrite((planData as any).has_voice_rewrite === true);
       }
       // Check for active testimonial access (skip for admin to allow plan testing)
       if (user.email !== 'matheuslaurindo900@gmail.com') {
