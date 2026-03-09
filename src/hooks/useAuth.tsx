@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    setJustLoggedIn(true);
     return { error: null };
   };
 
