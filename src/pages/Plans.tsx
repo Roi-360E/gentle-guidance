@@ -55,9 +55,14 @@ export default function Plans() {
     supabase
       .from('subscription_plans' as any)
       .select('*')
+      .eq('is_active', true)
       .order('price', { ascending: true })
       .then(({ data, error }) => {
-        if (!error && data) {
+        if (error) {
+          console.error('Error loading plans:', error);
+          toast.error('Erro ao carregar planos. Recarregue a página.');
+        }
+        if (data && (data as any[]).length > 0) {
           setPlans((data as any[]).map((p: any) => ({
             ...p,
             features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
