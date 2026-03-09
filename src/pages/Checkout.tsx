@@ -11,7 +11,6 @@ import {
 import { toast } from 'sonner';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-checkout`;
 const PUBLIC_KEY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-public-key`;
@@ -39,6 +38,24 @@ interface PlanData {
 
 const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
+// Load MP SDK script once
+let mpSdkPromise: Promise<any> | null = null;
+function loadMPSdk(publicKey: string): Promise<any> {
+  if (mpSdkPromise) return mpSdkPromise;
+  mpSdkPromise = new Promise((resolve, reject) => {
+    if ((window as any).MercadoPago) {
+      resolve(new (window as any).MercadoPago(publicKey));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://sdk.mercadopago.com/js/v2';
+    script.onload = () => resolve(new (window as any).MercadoPago(publicKey));
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return mpSdkPromise;
+}
+
 export default function Checkout() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -54,42 +71,43 @@ export default function Checkout() {
   const [planLoading, setPlanLoading] = useState(true);
   const [planError, setPlanError] = useState(false);
   const [countdown, setCountdown] = useState(15 * 60);
-  const [mpReady, setMpReady] = useState(false);
   const [cardProcessing, setCardProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const mpInitialized = useRef(false);
+  const mpRef = useRef<any>(null);
 
-  // Initialize MercadoPago SDK
+  // Card form state
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardDocType, setCardDocType] = useState('CPF');
+  const [cardDocNumber, setCardDocNumber] = useState('');
+  const [cardEmail, setCardEmail] = useState('');
+  const [installments, setInstallments] = useState(1);
+  const [availableInstallments, setAvailableInstallments] = useState<{value: number; label: string}[]>([]);
+
+  // Initialize MercadoPago SDK (lightweight)
   useEffect(() => {
-    if (mpInitialized.current) return;
-    
-    const initMP = async () => {
+    const init = async () => {
       try {
         const res = await fetch(PUBLIC_KEY_URL, {
           headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
         });
         const data = await res.json();
         if (data.publicKey) {
-          initMercadoPago(data.publicKey, { locale: 'pt-BR' });
-          setMpReady(true);
-          mpInitialized.current = true;
+          mpRef.current = await loadMPSdk(data.publicKey);
         }
       } catch (err) {
         console.error('[Checkout] Failed to init MercadoPago:', err);
       }
     };
-    initMP();
+    init();
   }, []);
 
-  // Load plan
+  // Load plan + set email
   useEffect(() => {
-    if (!planKey) { 
-      setPlanLoading(false);
-      setPlanError(true);
-      return; 
-    }
-    
+    if (!planKey) { setPlanLoading(false); setPlanError(true); return; }
     const loadPlan = async () => {
       try {
         setPlanLoading(true);
@@ -99,23 +117,14 @@ export default function Checkout() {
           .eq('plan_key', planKey)
           .eq('is_active', true)
           .single();
-        
-        if (error || !data) { 
-          setPlanError(true);
-          setPlanLoading(false);
-          return; 
-        }
+        if (error || !data) { setPlanError(true); setPlanLoading(false); return; }
         const p = data as any;
         setPlan({
           ...p,
           features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
         });
         setPlanLoading(false);
-        trackPixelEvent('InitiateCheckout', {
-          content_name: p.name,
-          value: p.price,
-          currency: 'BRL',
-        }, user?.id);
+        trackPixelEvent('InitiateCheckout', { content_name: p.name, value: p.price, currency: 'BRL' }, user?.id);
       } catch {
         setPlanError(true);
         setPlanLoading(false);
@@ -123,6 +132,35 @@ export default function Checkout() {
     };
     loadPlan();
   }, [planKey]);
+
+  // Set email from user
+  useEffect(() => {
+    if (user?.email) setCardEmail(user.email);
+  }, [user]);
+
+  // Fetch installments when card number has 6+ digits
+  useEffect(() => {
+    const bin = cardNumber.replace(/\s/g, '').slice(0, 6);
+    if (bin.length < 6 || !mpRef.current || !plan) return;
+    
+    const fetchInstallments = async () => {
+      try {
+        const result = await mpRef.current.getInstallments({
+          amount: String(plan.price),
+          bin,
+        });
+        if (result?.[0]?.payer_costs) {
+          setAvailableInstallments(
+            result[0].payer_costs.map((c: any) => ({
+              value: c.installments,
+              label: c.recommended_message,
+            }))
+          );
+        }
+      } catch {}
+    };
+    fetchInstallments();
+  }, [cardNumber, plan]);
 
   // Check payment return
   useEffect(() => {
@@ -162,20 +200,52 @@ export default function Checkout() {
     return () => clearInterval(interval);
   }, [pixData, pollingPayment]);
 
-  // Handle Card Payment from Bricks SDK
-  const handleCardSubmit = useCallback(async (cardFormData: any) => {
-    if (!user || !plan) return;
+  // Format card number with spaces
+  const formatCardNumber = (v: string) => {
+    const digits = v.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  };
+
+  // Format expiry MM/YY
+  const formatExpiry = (v: string) => {
+    const digits = v.replace(/\D/g, '').slice(0, 4);
+    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return digits;
+  };
+
+  // Format CPF
+  const formatDoc = (v: string) => {
+    return v.replace(/\D/g, '').slice(0, 11);
+  };
+
+  // Handle Card Payment
+  const handleCardSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !plan || !mpRef.current) return;
     setCardProcessing(true);
     setPaymentError(null);
 
     trackPixelEvent('AddPaymentInfo', {
-      content_name: plan.name,
-      content_category: 'Cartão',
-      value: plan.price,
-      currency: 'BRL',
+      content_name: plan.name, content_category: 'Cartão', value: plan.price, currency: 'BRL',
     }, user.id);
 
     try {
+      const [expMonth, expYear] = cardExpiry.split('/');
+      const cardNumberClean = cardNumber.replace(/\s/g, '');
+
+      // Create card token
+      const tokenResult = await mpRef.current.createCardToken({
+        cardNumber: cardNumberClean,
+        cardholderName: cardName,
+        cardExpirationMonth: expMonth,
+        cardExpirationYear: `20${expYear}`,
+        securityCode: cardCvv,
+        identificationType: cardDocType,
+        identificationNumber: cardDocNumber,
+      });
+
+      if (!tokenResult?.id) throw new Error('Erro ao tokenizar cartão');
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
 
@@ -189,13 +259,11 @@ export default function Checkout() {
         body: JSON.stringify({
           plan: planKey,
           paymentMethod: 'card',
-          cardToken: cardFormData.token,
-          installments: cardFormData.installments,
-          issuerId: cardFormData.issuer_id,
-          paymentMethodId: cardFormData.payment_method_id,
-          payerEmail: cardFormData.payer?.email,
-          identificationType: cardFormData.payer?.identification?.type,
-          identificationNumber: cardFormData.payer?.identification?.number,
+          cardToken: tokenResult.id,
+          installments,
+          payerEmail: cardEmail,
+          identificationType: cardDocType,
+          identificationNumber: cardDocNumber,
         }),
       });
 
@@ -215,7 +283,7 @@ export default function Checkout() {
         toast.success('Pagamento aprovado!');
         setTimeout(() => navigate('/obrigado'), 2000);
       } else if (data.status === 'in_process' || data.status === 'pending') {
-        toast.info('Pagamento em processamento. Será ativado quando confirmado.');
+        toast.info('Pagamento em processamento.');
         setPaymentError('Pagamento em processamento. Aguarde a confirmação.');
       } else {
         const statusMessages: Record<string, string> = {
@@ -225,7 +293,7 @@ export default function Checkout() {
           'cc_rejected_bad_filled_security_code': 'Código de segurança incorreto.',
           'cc_rejected_blacklist': 'Cartão não autorizado.',
           'cc_rejected_call_for_authorize': 'Ligue para a operadora do cartão.',
-          'cc_rejected_card_disabled': 'Cartão desabilitado. Ative-o.',
+          'cc_rejected_card_disabled': 'Cartão desabilitado.',
           'cc_rejected_duplicated_payment': 'Pagamento duplicado.',
           'cc_rejected_high_risk': 'Pagamento recusado por segurança.',
           'cc_rejected_insufficient_amount': 'Saldo insuficiente.',
@@ -243,7 +311,7 @@ export default function Checkout() {
     } finally {
       setCardProcessing(false);
     }
-  }, [user, plan, planKey, navigate]);
+  }, [user, plan, planKey, navigate, cardNumber, cardName, cardExpiry, cardCvv, cardDocType, cardDocNumber, cardEmail, installments]);
 
   // Handle Pix Payment
   const handlePixPay = async () => {
@@ -252,10 +320,7 @@ export default function Checkout() {
     setPaymentError(null);
 
     trackPixelEvent('AddPaymentInfo', {
-      content_name: plan.name,
-      content_category: 'Pix',
-      value: plan.price,
-      currency: 'BRL',
+      content_name: plan.name, content_category: 'Pix', value: plan.price, currency: 'BRL',
     }, user.id);
 
     try {
@@ -279,11 +344,8 @@ export default function Checkout() {
 
       const data = await res.json();
       setPixData({
-        qrCode: data.qrCode,
-        qrCodeBase64: data.qrCodeBase64,
-        paymentId: data.paymentId,
-        mpPaymentId: data.mpPaymentId,
-        expiresAt: data.expiresAt,
+        qrCode: data.qrCode, qrCodeBase64: data.qrCodeBase64,
+        paymentId: data.paymentId, mpPaymentId: data.mpPaymentId, expiresAt: data.expiresAt,
       });
       setPollingPayment(true);
     } catch (err) {
@@ -320,7 +382,6 @@ export default function Checkout() {
     );
   }
 
-  // Error state
   if (planError || !plan) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -333,15 +394,10 @@ export default function Checkout() {
     );
   }
 
-  // Success state
   if (paymentSuccess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="text-center space-y-4"
-        >
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center space-y-4">
           <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-10 h-10 text-primary" />
           </div>
@@ -354,10 +410,10 @@ export default function Checkout() {
   }
 
   const Icon = ICON_MAP[plan.icon] || Sparkles;
+  const inputClass = "w-full rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all";
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/plans')} className="shrink-0">
@@ -371,13 +427,9 @@ export default function Checkout() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 sm:py-10">
-        {/* Urgency bar */}
         {countdown > 0 && !pixData && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 rounded-xl border border-primary/30 bg-primary/5 p-3 flex items-center justify-center gap-2 text-sm"
-          >
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+            className="mb-6 rounded-xl border border-primary/30 bg-primary/5 p-3 flex items-center justify-center gap-2 text-sm">
             <Clock className="w-4 h-4 text-primary animate-pulse" />
             <span className="text-muted-foreground">Oferta expira em</span>
             <span className="font-bold text-primary font-mono">{formatTime(countdown)}</span>
@@ -385,17 +437,11 @@ export default function Checkout() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Left: Payment */}
           <div className="lg:col-span-3 space-y-6">
             <AnimatePresence mode="wait">
               {pixData ? (
-                <motion.div
-                  key="pix-payment"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="rounded-2xl border border-border bg-card p-6 space-y-5"
-                >
+                <motion.div key="pix-payment" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                  className="rounded-2xl border border-border bg-card p-6 space-y-5">
                   <div className="text-center space-y-2">
                     <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                       <QrCode className="w-7 h-7 text-primary" />
@@ -416,11 +462,8 @@ export default function Checkout() {
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-muted-foreground">Código Pix Copia e Cola</label>
                       <div className="relative">
-                        <textarea 
-                          readOnly 
-                          value={pixData.qrCode} 
-                          className="w-full h-20 text-xs bg-muted rounded-xl p-3 resize-none border border-border font-mono text-foreground" 
-                        />
+                        <textarea readOnly value={pixData.qrCode}
+                          className="w-full h-20 text-xs bg-muted rounded-xl p-3 resize-none border border-border font-mono text-foreground" />
                         <Button size="sm" variant="secondary" className="absolute top-2 right-2" onClick={copyPixCode}>
                           {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
                           {copied ? 'Copiado!' : 'Copiar'}
@@ -441,29 +484,21 @@ export default function Checkout() {
                   </Button>
                 </motion.div>
               ) : (
-                <motion.div
-                  key="payment-methods"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-5"
-                >
+                <motion.div key="payment-methods" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                   <h2 className="text-xl font-bold text-foreground">Escolha o método de pagamento</h2>
 
-                  {/* Payment method tabs */}
                   <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => setSelectedMethod('card')}
+                    <button onClick={() => setSelectedMethod('card')}
                       className={`relative rounded-xl border-2 p-4 transition-all text-left ${
                         selectedMethod === 'card'
                           ? 'border-primary bg-primary/5 shadow-[0_0_20px_-5px_hsl(var(--primary)/0.3)]'
                           : 'border-border bg-card hover:border-muted-foreground/30'
-                      }`}
-                    >
+                      }`}>
                       <div className="flex items-center gap-3 mb-2">
                         <CreditCard className={`w-5 h-5 ${selectedMethod === 'card' ? 'text-primary' : 'text-muted-foreground'}`} />
                         <span className="font-semibold text-sm text-foreground">Cartão de Crédito</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">Parcelamento disponível</p>
+                      <p className="text-xs text-muted-foreground">Até 12x sem juros</p>
                       {selectedMethod === 'card' && (
                         <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                           <Check className="w-3 h-3 text-primary-foreground" />
@@ -471,14 +506,12 @@ export default function Checkout() {
                       )}
                     </button>
 
-                    <button
-                      onClick={() => setSelectedMethod('pix')}
+                    <button onClick={() => setSelectedMethod('pix')}
                       className={`relative rounded-xl border-2 p-4 transition-all text-left ${
                         selectedMethod === 'pix'
                           ? 'border-primary bg-primary/5 shadow-[0_0_20px_-5px_hsl(var(--primary)/0.3)]'
                           : 'border-border bg-card hover:border-muted-foreground/30'
-                      }`}
-                    >
+                      }`}>
                       <div className="flex items-center gap-3 mb-2">
                         <QrCode className={`w-5 h-5 ${selectedMethod === 'pix' ? 'text-primary' : 'text-muted-foreground'}`} />
                         <span className="font-semibold text-sm text-foreground">Pix</span>
@@ -492,95 +525,103 @@ export default function Checkout() {
                     </button>
                   </div>
 
-                  {/* Error message */}
                   {paymentError && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 flex items-start gap-2 text-sm text-destructive"
-                    >
+                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
+                      className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 flex items-start gap-2 text-sm text-destructive">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>{paymentError}</span>
                     </motion.div>
                   )}
 
-                  {/* Card Payment - MercadoPago Bricks */}
+                  {/* Card Payment - Custom Form */}
                   {selectedMethod === 'card' && (
-                    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
-                      {mpReady && plan ? (
-                        <>
-                          {cardProcessing && (
-                            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-2xl">
-                              <div className="text-center space-y-2">
-                                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-                                <p className="text-sm text-muted-foreground">Processando pagamento...</p>
-                              </div>
-                            </div>
-                          )}
-                          <div className="[&_iframe]:!rounded-xl [&_.mercadopago-form]:!bg-transparent">
-                            <CardPayment
-                              initialization={{ amount: plan.price }}
-                              onSubmit={handleCardSubmit}
-                              customization={{
-                                visual: {
-                                  style: {
-                                    customVariables: {
-                                      baseColor: '#8B5CF6',
-                                      textPrimaryColor: '#e4e4e7',
-                                      textSecondaryColor: '#a1a1aa',
-                                      inputBackgroundColor: '#1e1b2e',
-                                      formBackgroundColor: 'transparent',
-                                      borderColor: '#2e2b3e',
-                                    },
-                                  },
-                                },
-                                paymentMethods: {
-                                  maxInstallments: 12,
-                                },
-                              }}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                          <span className="ml-2 text-sm text-muted-foreground">Carregando formulário de pagamento...</span>
+                    <form onSubmit={handleCardSubmit} className="rounded-2xl border border-border bg-card p-5 space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Número do Cartão</label>
+                        <input type="text" inputMode="numeric" placeholder="0000 0000 0000 0000"
+                          value={cardNumber} onChange={e => setCardNumber(formatCardNumber(e.target.value))}
+                          className={inputClass} required />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Nome no Cartão</label>
+                        <input type="text" placeholder="NOME COMO ESTÁ NO CARTÃO"
+                          value={cardName} onChange={e => setCardName(e.target.value.toUpperCase())}
+                          className={inputClass} required />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Validade</label>
+                          <input type="text" inputMode="numeric" placeholder="MM/AA"
+                            value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))}
+                            className={inputClass} required />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">CVV</label>
+                          <input type="text" inputMode="numeric" placeholder="123" maxLength={4}
+                            value={cardCvv} onChange={e => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                            className={inputClass} required />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">CPF do Titular</label>
+                        <input type="text" inputMode="numeric" placeholder="00000000000"
+                          value={cardDocNumber} onChange={e => setCardDocNumber(formatDoc(e.target.value))}
+                          className={inputClass} required />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">E-mail</label>
+                        <input type="email" placeholder="seu@email.com"
+                          value={cardEmail} onChange={e => setCardEmail(e.target.value)}
+                          className={inputClass} required />
+                      </div>
+
+                      {availableInstallments.length > 1 && (
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Parcelas</label>
+                          <select value={installments} onChange={e => setInstallments(Number(e.target.value))}
+                            className={inputClass}>
+                            {availableInstallments.map(inst => (
+                              <option key={inst.value} value={inst.value}>{inst.label}</option>
+                            ))}
+                          </select>
                         </div>
                       )}
-                    </div>
+
+                      <Button type="submit" disabled={cardProcessing}
+                        className="w-full h-14 text-base font-bold rounded-xl bg-primary hover:bg-primary/90 shadow-[0_0_30px_-5px_hsl(var(--primary)/0.4)] transition-all hover:shadow-[0_0_40px_-5px_hsl(var(--primary)/0.6)]">
+                        {cardProcessing ? (
+                          <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Processando...</>
+                        ) : (
+                          <><CreditCard className="w-5 h-5 mr-2" /> Pagar R$ {plan.price.toFixed(2).replace('.', ',')}</>
+                        )}
+                      </Button>
+                    </form>
                   )}
 
                   {/* Pix Payment */}
                   {selectedMethod === 'pix' && (
                     <div className="space-y-4">
-                      <Button
-                        onClick={handlePixPay}
-                        disabled={loading}
-                        className="w-full h-14 text-base font-bold rounded-xl bg-primary hover:bg-primary/90 shadow-[0_0_30px_-5px_hsl(var(--primary)/0.4)] transition-all hover:shadow-[0_0_40px_-5px_hsl(var(--primary)/0.6)]"
-                      >
-                        {loading ? (
-                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        ) : (
-                          <QrCode className="w-5 h-5 mr-2" />
-                        )}
+                      <Button onClick={handlePixPay} disabled={loading}
+                        className="w-full h-14 text-base font-bold rounded-xl bg-primary hover:bg-primary/90 shadow-[0_0_30px_-5px_hsl(var(--primary)/0.4)] transition-all hover:shadow-[0_0_40px_-5px_hsl(var(--primary)/0.6)]">
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <QrCode className="w-5 h-5 mr-2" />}
                         {loading ? 'Gerando Pix...' : `Pagar R$ ${plan.price.toFixed(2).replace('.', ',')} com Pix`}
                       </Button>
                     </div>
                   )}
 
-                  {/* Trust badges */}
                   <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Shield className="w-4 h-4 text-primary" />
-                      Pagamento 100% seguro
+                      <Shield className="w-4 h-4 text-primary" /> Pagamento 100% seguro
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <CheckCircle2 className="w-4 h-4 text-primary" />
-                      Garantia de 7 dias
+                      <CheckCircle2 className="w-4 h-4 text-primary" /> Garantia de 7 dias
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Zap className="w-4 h-4 text-primary" />
-                      Ativação instantânea
+                      <Zap className="w-4 h-4 text-primary" /> Ativação instantânea
                     </div>
                   </div>
                 </motion.div>
@@ -610,7 +651,6 @@ export default function Checkout() {
                 )}
               </div>
 
-              {/* Features */}
               <ul className="space-y-2 pb-4 border-b border-border">
                 {plan.features.slice(0, 5).map((feature, i) => (
                   <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -618,12 +658,8 @@ export default function Checkout() {
                     {feature}
                   </li>
                 ))}
-                {plan.features.length > 5 && (
-                  <li className="text-xs text-primary pl-5">+{plan.features.length - 5} benefícios inclusos</li>
-                )}
               </ul>
 
-              {/* Price */}
               <div className="space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Plano {plan.name}</span>
