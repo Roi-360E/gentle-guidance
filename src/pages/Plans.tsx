@@ -35,9 +35,6 @@ export default function Plans() {
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [plans, setPlans] = useState<PlanData[]>([]);
-  const [plansLoading, setPlansLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // Load plans from database
   useEffect(() => {
@@ -60,57 +57,21 @@ export default function Plans() {
         setPlansLoading(false);
       });
 
-    // Track ViewContent on plans page
     trackPixelEvent('ViewContent', {
       content_name: 'Plans Page',
       content_category: 'Pricing',
     });
   }, []);
 
-  // Check admin role using security definer function
+  // Check admin role
   useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
+    if (!user) { setIsAdmin(false); return; }
     supabase
       .rpc('has_role', { _user_id: user.id, _role: 'admin' })
       .then(({ data, error }) => {
-        if (error) {
-          console.error('Error checking admin role:', error);
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(data === true);
-        }
+        if (error) { setIsAdmin(false); } else { setIsAdmin(data === true); }
       });
   }, [user]);
-
-  // Check payment return from Checkout Pro
-  useEffect(() => {
-    const paymentStatus = searchParams.get('payment');
-    if (!paymentStatus) return;
-
-    // Recover plan info saved before redirect
-    const savedPlan = localStorage.getItem('checkout_plan_name') || '';
-    const savedValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
-    const savedPlanKey = localStorage.getItem('checkout_plan_key') || '';
-
-    if (paymentStatus === 'success') {
-      // Redirect to thank you page (pixel fires there)
-      navigate('/obrigado', { replace: true });
-      return;
-    } else if (paymentStatus === 'failure') {
-      toast.error('Pagamento não aprovado. Tente novamente.');
-    } else if (paymentStatus === 'pending') {
-      toast.info('Pagamento pendente. Será ativado assim que confirmado.');
-      trackPixelEvent('AddPaymentInfo', {
-        content_name: savedPlan,
-        content_category: 'Cartão/Boleto',
-        value: savedValue,
-        currency: 'BRL',
-      }, user?.id);
-    }
-  }, [searchParams]);
 
   // Load current plan
   useEffect(() => {
@@ -127,49 +88,12 @@ export default function Plans() {
       });
   }, [user]);
 
-  // Poll for Pix payment confirmation
-  useEffect(() => {
-    if (!pixData || !pollingPayment) return;
-    const interval = setInterval(async () => {
-      const { data } = await supabase
-        .from('payments')
-        .select('status')
-        .eq('id', pixData.paymentId)
-        .single();
-      if (data?.status === 'confirmed') {
-        setPollingPayment(false);
-        setPixData(null);
-        // Copy pix plan info to checkout keys so ThankYou page can read them
-        const pixKey = localStorage.getItem('pix_plan_key') || '';
-        const pixName = localStorage.getItem('pix_plan_name') || '';
-        const pixValue = localStorage.getItem('pix_plan_value') || '0';
-        localStorage.setItem('checkout_plan_key', pixKey);
-        localStorage.setItem('checkout_plan_name', pixName);
-        localStorage.setItem('checkout_plan_value', pixValue);
-        localStorage.setItem('checkout_method', 'Pix');
-        localStorage.removeItem('pix_plan_key');
-        localStorage.removeItem('pix_plan_name');
-        localStorage.removeItem('pix_plan_value');
-        navigate('/obrigado');
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [pixData, pollingPayment, user]);
-
   const handleCheckout = (planKey: string) => {
     if (!user) {
       toast.error('Faça login para continuar.');
       return;
     }
     navigate(`/checkout?plan=${planKey}`);
-  };
-
-  const copyPixCode = () => {
-    if (!pixData?.qrCode) return;
-    navigator.clipboard.writeText(pixData.qrCode);
-    setCopied(true);
-    toast.success('Código Pix copiado!');
-    setTimeout(() => setCopied(false), 3000);
   };
 
   if (plansLoading) {
@@ -202,42 +126,6 @@ export default function Plans() {
       </header>
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* Pix payment modal */}
-        {pixData && (
-          <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <Card className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto">
-              <CardHeader className="text-center">
-                <CardTitle className="text-lg">Pagamento via Pix</CardTitle>
-                <p className="text-sm text-muted-foreground">Escaneie o QR Code ou copie o código</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {pixData.qrCodeBase64 && (
-                  <div className="flex justify-center">
-                    <img src={`data:image/png;base64,${pixData.qrCodeBase64}`} alt="QR Code Pix" className="w-56 h-56 rounded-lg border border-border" />
-                  </div>
-                )}
-                {pixData.qrCode && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Código Pix Copia e Cola:</p>
-                    <div className="relative">
-                      <textarea readOnly value={pixData.qrCode} className="w-full h-20 text-xs bg-muted rounded-lg p-3 resize-none border border-border" />
-                      <Button size="sm" variant="outline" className="absolute top-2 right-2" onClick={copyPixCode}>
-                        {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {pollingPayment && (
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Aguardando confirmação do pagamento...
-                  </div>
-                )}
-                <Button variant="outline" className="w-full" onClick={() => { setPixData(null); setPollingPayment(false); }}>Fechar</Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
         {/* Plans grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {plans.map((plan) => {
@@ -316,7 +204,7 @@ export default function Plans() {
                         </Button>
                       )}
                       {plan.price > 0 && (
-                        <Button className="w-full" onClick={() => handleCheckout(plan.plan_key)} disabled={!!loading}>
+                        <Button className="w-full" onClick={() => handleCheckout(plan.plan_key)}>
                           Assinar {plan.name}
                         </Button>
                       )}
@@ -329,7 +217,7 @@ export default function Plans() {
         </div>
 
         <div className="text-center text-sm text-muted-foreground space-y-1">
-          <p>Pagamento processado de forma segura pelo Mercado Pago.</p>
+          <p>Pagamento processado de forma segura.</p>
           <p>Após a confirmação, seu plano é ativado automaticamente.</p>
         </div>
       </main>
