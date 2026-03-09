@@ -20,8 +20,9 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   useEffect(() => {
     if (!userId) return;
 
-    const dismissed = sessionStorage.getItem(`welcome_popup_${userId}`);
-    if (dismissed) return;
+    // Use a per-page-load flag (reset on each full navigation/reload)
+    // sessionStorage persists in PWAs, so we use a module-level flag instead
+    if (popupShownThisLoad.has(userId)) return;
 
     const fetchNextPlan = async () => {
       const { data: plans } = await supabase
