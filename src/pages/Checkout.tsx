@@ -53,15 +53,24 @@ function loadMPSdk(publicKey: string): Promise<any> {
     const script = document.createElement('script');
     script.src = 'https://sdk.mercadopago.com/js/v2';
     script.async = true;
+    // Set crossorigin for better mobile compatibility (in-app browsers)
+    script.crossOrigin = 'anonymous';
     script.onload = () => {
       // Restore fbq if it was overwritten by the MP SDK
       if (existingFbq && !(window as any).fbq) {
         (window as any).fbq = existingFbq;
       }
-      resolve(new (window as any).MercadoPago(publicKey));
+      try {
+        resolve(new (window as any).MercadoPago(publicKey));
+      } catch (e) {
+        reject(e);
+      }
     };
-    script.onerror = reject;
-    document.body.appendChild(script); // Append to body to avoid head conflicts with pixel scripts
+    script.onerror = () => {
+      mpSdkPromise = null; // Allow retry on failure (common on slow mobile networks)
+      reject(new Error('Failed to load MercadoPago SDK'));
+    };
+    document.body.appendChild(script);
   });
   return mpSdkPromise;
 }
