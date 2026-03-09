@@ -20,12 +20,16 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   useEffect(() => {
     if (!userId) return;
 
-    // Check if popup was already dismissed this session
-    const dismissed = sessionStorage.getItem(`welcome_popup_${userId}`);
-    if (dismissed) return;
+    // Check if popup was already dismissed recently (24h cooldown)
+    const dismissedAt = localStorage.getItem(`welcome_popup_${userId}`);
+    if (dismissedAt) {
+      const elapsed = Date.now() - Number(dismissedAt);
+      if (elapsed < 24 * 60 * 60 * 1000) return;
+    }
 
-    // Show popup immediately for all users
-    setOpen(true);
+    // Show popup after a short delay so page renders first
+    const timer = setTimeout(() => setOpen(true), 800);
+    return () => clearTimeout(timer);
 
     // Fetch lowest paid plan
     const fetchLowestPlan = async () => {
@@ -46,13 +50,13 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   }, [userId, currentPlan, tokenBalance]);
 
   const handleGoToPlans = () => {
-    sessionStorage.setItem(`welcome_popup_${userId}`, 'true');
+    localStorage.setItem(`welcome_popup_${userId}`, String(Date.now()));
     setOpen(false);
     navigate('/plans');
   };
 
   const handleDismiss = () => {
-    sessionStorage.setItem(`welcome_popup_${userId}`, 'true');
+    localStorage.setItem(`welcome_popup_${userId}`, String(Date.now()));
     setOpen(false);
   };
 
