@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Zap, ArrowRight } from 'lucide-react';
+import { Zap, ArrowRight, Flame } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface NewUserWelcomePopupProps {
@@ -24,10 +24,8 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
     const dismissed = sessionStorage.getItem(`welcome_popup_${userId}`);
     if (dismissed) return;
 
-    // Show popup for users with 0 or fewer tokens (any plan)
-    if (tokenBalance <= 0) {
-      setOpen(true);
-    }
+    // Show popup immediately for all users
+    setOpen(true);
 
     // Fetch lowest paid plan
     const fetchLowestPlan = async () => {
@@ -60,30 +58,47 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleDismiss(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md border-primary/30 shadow-[0_0_40px_rgba(var(--primary),0.15)]">
         <DialogHeader>
-          <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-primary/10 p-4">
-              <Zap className="h-8 w-8 text-primary" />
+          <div className="flex justify-center mb-3">
+            <div className="relative">
+              <div className="rounded-full bg-gradient-to-br from-primary to-primary/60 p-5 shadow-lg">
+                <Flame className="h-10 w-10 text-primary-foreground animate-pulse" />
+              </div>
+              <div className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-0.5 rounded-full">
+                OFERTA
+              </div>
             </div>
           </div>
-          <DialogTitle className="text-center text-xl">
-            Bem-vindo ao EscalaX Pro! 🚀
+          <DialogTitle className="text-center text-2xl font-bold">
+            🚀 Comece a Criar Agora!
           </DialogTitle>
-          <DialogDescription className="text-center text-base mt-2">
-            Para começar a criar seus vídeos, faça sua primeira recarga de tokens.
+          <DialogDescription className="text-center text-base mt-3 space-y-2">
+            <span className="block">
+              Recarregue seus tokens e desbloqueie o poder de criar vídeos combinados ilimitados!
+            </span>
             {lowestPlanName && (
-              <span className="block mt-2 font-medium text-foreground">
-                Planos a partir de <strong className="text-primary">R$ {lowestPlanPrice.toFixed(2).replace('.', ',')}</strong> ({lowestPlanName})
+              <span className="block mt-3 text-lg font-semibold text-foreground">
+                A partir de apenas{' '}
+                <span className="text-primary text-xl font-bold">
+                  R$ {lowestPlanPrice.toFixed(2).replace('.', ',')}
+                </span>
+              </span>
+            )}
+            {lowestPlanName && (
+              <span className="block text-sm text-muted-foreground">
+                Plano {lowestPlanName} • Acesso imediato
               </span>
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-3 mt-4">
-          <Button onClick={handleGoToPlans} className="w-full gap-2">
-            Ver Planos <ArrowRight className="h-4 w-4" />
+        <div className="flex flex-col gap-3 mt-5">
+          <Button onClick={handleGoToPlans} size="lg" className="w-full gap-2 text-base font-semibold shadow-md">
+            <Zap className="h-5 w-5" />
+            Ver Planos e Recarregar
+            <ArrowRight className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" onClick={handleDismiss} className="w-full text-muted-foreground">
+          <Button variant="ghost" onClick={handleDismiss} className="w-full text-muted-foreground text-sm">
             Agora não
           </Button>
         </div>
