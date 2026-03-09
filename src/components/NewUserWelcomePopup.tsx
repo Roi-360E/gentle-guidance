@@ -14,37 +14,59 @@ interface NewUserWelcomePopupProps {
 export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUserWelcomePopupProps) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [lowestPlanName, setLowestPlanName] = useState('');
-  const [lowestPlanPrice, setLowestPlanPrice] = useState(0);
+  const [suggestedPlanName, setSuggestedPlanName] = useState('');
+  const [suggestedPlanPrice, setSuggestedPlanPrice] = useState(0);
 
   useEffect(() => {
     if (!userId) return;
 
-    // Check if popup was already dismissed in this session
     const dismissed = sessionStorage.getItem(`welcome_popup_${userId}`);
     if (dismissed) return;
 
-    // Fetch lowest paid plan
-    const fetchLowestPlan = async () => {
-      const { data } = await supabase
+    const fetchNextPlan = async () => {
+      // Get all active paid plans ordered by price
+      const { data: plans } = await supabase
         .from('subscription_plans')
-        .select('name, price')
+        .select('name, price, plan_key')
         .eq('is_active', true)
         .gt('price', 0)
-        .order('price', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (data) {
-        setLowestPlanName(data.name);
-        setLowestPlanPrice(Number(data.price));
-      }
-    };
-    fetchLowestPlan();
+        .order('price', { ascending: true });
 
-    // Show popup after a short delay so page renders first
+      if (!plans || plans.length === 0) return;
+
+      let suggested = plans[0]; // default: cheapest plan
+
+      if (currentPlan && currentPlan !== 'free') {
+        // Find current plan's price
+        const { data: currentPlanData } = await supabase
+          .from('subscription_plans')
+          .select('price')
+          .eq('plan_key', currentPlan)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (currentPlanData) {
+          const currentPrice = Number(currentPlanData.price);
+          // Find next plan with higher price
+          const nextPlan = plans.find(p => Number(p.price) > currentPrice);
+          if (nextPlan) {
+            suggested = nextPlan;
+          } else {
+            // User already has the highest plan, don't show popup
+            return;
+          }
+        }
+      }
+
+      setSuggestedPlanName(suggested.name);
+      setSuggestedPlanPrice(Number(suggested.price));
+    };
+
+    fetchNextPlan();
+
     const timer = setTimeout(() => setOpen(true), 800);
     return () => clearTimeout(timer);
-  }, [userId]);
+  }, [userId, currentPlan]);
 
   const handleGoToPlans = () => {
     sessionStorage.setItem(`welcome_popup_${userId}`, 'true');
@@ -57,6 +79,8 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
     setOpen(false);
   };
 
+  if (!suggestedPlanName) return null;
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleDismiss(); }}>
       <DialogContent className="sm:max-w-md border-primary/30 shadow-[0_0_40px_rgba(var(--primary),0.15)]">
@@ -67,36 +91,34 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
                 <Flame className="h-10 w-10 text-primary-foreground animate-pulse" />
               </div>
               <div className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-0.5 rounded-full">
-                OFERTA
+                UPGRADE
               </div>
             </div>
           </div>
           <DialogTitle className="text-center text-2xl font-bold">
-            🚀 Comece a Criar Agora!
+            {currentPlan === 'free' ? '🚀 Comece a Criar Agora!' : '⚡ Faça Upgrade!'}
           </DialogTitle>
           <DialogDescription className="text-center text-base mt-3 space-y-2">
             <span className="block">
-              Recarregue seus tokens e desbloqueie o poder de criar vídeos combinados ilimitados!
+              {currentPlan === 'free'
+                ? 'Recarregue seus tokens e desbloqueie o poder de criar vídeos combinados ilimitados!'
+                : 'Desbloqueie ainda mais recursos com um plano superior!'}
             </span>
-            {lowestPlanName && (
-              <span className="block mt-3 text-lg font-semibold text-foreground">
-                A partir de apenas{' '}
-                <span className="text-primary text-xl font-bold">
-                  R$ {lowestPlanPrice.toFixed(2).replace('.', ',')}
-                </span>
+            <span className="block mt-3 text-lg font-semibold text-foreground">
+              {currentPlan === 'free' ? 'A partir de apenas ' : 'Upgrade por '}
+              <span className="text-primary text-xl font-bold">
+                R$ {suggestedPlanPrice.toFixed(2).replace('.', ',')}
               </span>
-            )}
-            {lowestPlanName && (
-              <span className="block text-sm text-muted-foreground">
-                Plano {lowestPlanName} • Acesso imediato
-              </span>
-            )}
+            </span>
+            <span className="block text-sm text-muted-foreground">
+              Plano {suggestedPlanName} • Acesso imediato
+            </span>
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 mt-5">
           <Button onClick={handleGoToPlans} size="lg" className="w-full gap-2 text-base font-semibold shadow-md">
             <Zap className="h-5 w-5" />
-            Ver Planos e Recarregar
+            {currentPlan === 'free' ? 'Ver Planos e Recarregar' : 'Fazer Upgrade'}
             <ArrowRight className="h-5 w-5" />
           </Button>
           <Button variant="ghost" onClick={handleDismiss} className="w-full text-muted-foreground text-sm">
