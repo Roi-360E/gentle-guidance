@@ -620,6 +620,7 @@ const Index = () => {
         </div>
       </main>
       <ScriptChatFloat />
+      <NewUserWelcomePopup userId={user?.id} currentPlan={currentPlan} tokenBalance={tokenBalance} />
     </div>
   );
 };
