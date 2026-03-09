@@ -558,14 +558,14 @@ export default function Checkout() {
                     <form onSubmit={handleCardSubmit} className="rounded-2xl border border-border bg-card p-5 space-y-4">
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Número do Cartão</label>
-                        <input type="text" inputMode="numeric" placeholder="0000 0000 0000 0000"
+                        <input type="text" inputMode="numeric" autoComplete="cc-number" placeholder="0000 0000 0000 0000"
                           value={cardNumber} onChange={e => setCardNumber(formatCardNumber(e.target.value))}
                           className={inputClass} required />
                       </div>
 
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Nome no Cartão</label>
-                        <input type="text" placeholder="NOME COMO ESTÁ NO CARTÃO"
+                        <input type="text" autoComplete="cc-name" placeholder="NOME COMO ESTÁ NO CARTÃO"
                           value={cardName} onChange={e => setCardName(e.target.value.toUpperCase())}
                           className={inputClass} required />
                       </div>
@@ -573,13 +573,13 @@ export default function Checkout() {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="text-xs font-medium text-muted-foreground">Validade</label>
-                          <input type="text" inputMode="numeric" placeholder="MM/AA"
+                          <input type="text" inputMode="numeric" autoComplete="cc-exp" placeholder="MM/AA"
                             value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))}
                             className={inputClass} required />
                         </div>
                         <div className="space-y-1">
                           <label className="text-xs font-medium text-muted-foreground">CVV</label>
-                          <input type="text" inputMode="numeric" placeholder="123" maxLength={4}
+                          <input type="text" inputMode="numeric" autoComplete="cc-csc" placeholder="123" maxLength={4}
                             value={cardCvv} onChange={e => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
                             className={inputClass} required />
                         </div>
@@ -587,14 +587,14 @@ export default function Checkout() {
 
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">CPF do Titular</label>
-                        <input type="text" inputMode="numeric" placeholder="00000000000"
+                        <input type="text" inputMode="numeric" autoComplete="off" placeholder="00000000000"
                           value={cardDocNumber} onChange={e => setCardDocNumber(formatDoc(e.target.value))}
                           className={inputClass} required />
                       </div>
 
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">E-mail</label>
-                        <input type="email" placeholder="seu@email.com"
+                        <input type="email" autoComplete="email" placeholder="seu@email.com"
                           value={cardEmail} onChange={e => setCardEmail(e.target.value)}
                           className={inputClass} required />
                       </div>
@@ -603,7 +603,7 @@ export default function Checkout() {
                         <div className="space-y-1">
                           <label className="text-xs font-medium text-muted-foreground">Parcelas</label>
                           <select value={installments} onChange={e => setInstallments(Number(e.target.value))}
-                            className={inputClass}>
+                            className={`${inputClass} bg-muted/50`}>
                             {availableInstallments.map(inst => (
                               <option key={inst.value} value={inst.value}>{inst.label}</option>
                             ))}
