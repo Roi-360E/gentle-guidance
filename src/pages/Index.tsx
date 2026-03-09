@@ -376,7 +376,7 @@ const Index = () => {
             </div>
             <div>
               <p className="font-bold text-foreground">
-                {{ free: 'Gratuito', professional: 'Profissional', advanced: 'Avançado', premium: 'Premium', enterprise: 'Empresarial', unlimited: 'Ilimitado' }[currentPlan] || 'Gratuito'}
+                {planName}
               </p>
               <p className="text-xs text-muted-foreground">
                 {currentPlan === 'unlimited' 
