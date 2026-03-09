@@ -50,24 +50,34 @@ export default function Checkout() {
   const [copied, setCopied] = useState(false);
   const [pollingPayment, setPollingPayment] = useState(false);
   const [planLoading, setPlanLoading] = useState(true);
-  const [countdown, setCountdown] = useState(15 * 60); // 15 min urgency
+  const [planError, setPlanError] = useState(false);
+  const [countdown, setCountdown] = useState(15 * 60);
 
   // Load plan
   useEffect(() => {
-    if (!planKey) { navigate('/plans'); return; }
+    if (!planKey) { 
+      setPlanLoading(false);
+      setPlanError(true);
+      return; 
+    }
     console.log('[Checkout] Loading plan:', planKey);
-    supabase
-      .from('subscription_plans' as any)
-      .select('*')
-      .eq('plan_key', planKey)
-      .eq('is_active', true)
-      .single()
-      .then(({ data, error }) => {
+    setPlanLoading(true);
+    setPlanError(false);
+    
+    const loadPlan = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('subscription_plans' as any)
+          .select('*')
+          .eq('plan_key', planKey)
+          .eq('is_active', true)
+          .single();
+        
         console.log('[Checkout] Plan query result:', { data, error });
         if (error || !data) { 
           console.error('[Checkout] Plan not found:', error);
-          toast.error('Plano não encontrado'); 
-          navigate('/plans'); 
+          setPlanLoading(false);
+          setPlanError(true);
           return; 
         }
         const p = data as any;
@@ -81,7 +91,14 @@ export default function Checkout() {
           value: p.price,
           currency: 'BRL',
         }, user?.id);
-      });
+      } catch (err) {
+        console.error('[Checkout] Unexpected error:', err);
+        setPlanLoading(false);
+        setPlanError(true);
+      }
+    };
+    
+    loadPlan();
   }, [planKey]);
 
   // Check payment return from Checkout Pro
@@ -212,7 +229,17 @@ export default function Checkout() {
     );
   }
 
-  if (!plan) return null;
+  if (planError || !plan) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-foreground text-lg font-semibold">Plano não encontrado</p>
+          <p className="text-muted-foreground text-sm">O plano solicitado não está disponível.</p>
+          <Button onClick={() => navigate('/plans')}>Ver Planos Disponíveis</Button>
+        </div>
+      </div>
+    );
+  }
 
   const Icon = ICON_MAP[plan.icon] || Sparkles;
 
