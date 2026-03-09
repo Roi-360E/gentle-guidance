@@ -127,7 +127,7 @@ const VoiceRewrite = () => {
     return `${m}:${s}`;
   };
 
-  // Check access (unlimited plan only) + load TTS credits
+  // Check access dynamically from admin-configured plans + load TTS credits
   useEffect(() => {
     if (!user) return;
     const checkAccess = async () => {
@@ -138,8 +138,16 @@ const VoiceRewrite = () => {
         .eq('user_id', user.id)
         .eq('month_year', monthYear)
         .single();
-      setHasAccess(data?.plan === 'unlimited');
       setTtsCredits((data as any)?.tts_credits ?? 0);
+
+      const planKey = data?.plan || 'free';
+      const { data: planData } = await supabase
+        .from('subscription_plans')
+        .select('has_voice_rewrite')
+        .eq('plan_key', planKey)
+        .eq('is_active', true)
+        .maybeSingle();
+      setHasAccess((planData as any)?.has_voice_rewrite === true);
     };
     checkAccess();
   }, [user]);
@@ -441,7 +449,7 @@ const VoiceRewrite = () => {
           </div>
           <h1 className="text-2xl font-bold text-foreground">Recurso Exclusivo</h1>
           <p className="text-muted-foreground">
-            O Voice Rewrite está disponível exclusivamente no plano <strong className="text-primary">Ilimitado</strong>.
+            O Voice Rewrite está disponível apenas para planos que incluem esse recurso.
             Faça upgrade para reescrever o áudio dos seus vídeos com vozes IA profissionais.
           </p>
           <div className="flex gap-3 justify-center">

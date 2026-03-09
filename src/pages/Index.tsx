@@ -20,7 +20,7 @@ import {
 
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
-import { calculateTokenCost, hasEnoughTokens, TOKEN_PLANS } from '@/lib/token-calculator';
+import { calculateTokenCost, hasEnoughTokens } from '@/lib/token-calculator';
 import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Lock, Mic } from 'lucide-react';
 import { ScriptChatFloat } from '@/components/ScriptChat';
 import { InstagramConnect } from '@/components/InstagramConnect';
@@ -55,7 +55,10 @@ const Index = () => {
   
   
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
-  const [tokenBalance, setTokenBalance] = useState<number>(50);
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [planName, setPlanName] = useState<string>('Gratuito');
+  const [hasAutoSubtitles, setHasAutoSubtitles] = useState(false);
+  const [hasVoiceRewrite, setHasVoiceRewrite] = useState(false);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -80,7 +83,20 @@ const Index = () => {
       if (data) {
         setCurrentPlan(data.plan);
         setVideoCount(data.video_count);
-        setTokenBalance((data as any).token_balance ?? 50);
+        setTokenBalance((data as any).token_balance ?? 0);
+      }
+      // Load plan features from admin-configured plans
+      const planKey = data?.plan || 'free';
+      const { data: planData } = await supabase
+        .from('subscription_plans')
+        .select('name, has_auto_subtitles, has_voice_rewrite')
+        .eq('plan_key', planKey)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (planData) {
+        setPlanName(planData.name);
+        setHasAutoSubtitles((planData as any).has_auto_subtitles === true);
+        setHasVoiceRewrite((planData as any).has_voice_rewrite === true);
       }
       // Check for active testimonial access (skip for admin to allow plan testing)
       if (user.email !== 'matheuslaurindo900@gmail.com') {
@@ -276,9 +292,9 @@ const Index = () => {
             </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/auto-subtitles')}>
               <Type className="w-4 h-4" /> Legendas Auto
-              {currentPlan === 'free' && <Lock className="w-3 h-3 text-muted-foreground" />}
+              {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            {currentPlan === 'unlimited' && (
+            {hasVoiceRewrite && (
               <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/voice-rewrite')}>
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
@@ -310,7 +326,7 @@ const Index = () => {
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/auto-subtitles'); setMobileMenuOpen(false); }}>
               <Type className="w-4 h-4" /> Legendas Automáticas
             </Button>
-            {currentPlan === 'unlimited' && (
+            {hasVoiceRewrite && (
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/voice-rewrite'); setMobileMenuOpen(false); }}>
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
@@ -360,7 +376,7 @@ const Index = () => {
             </div>
             <div>
               <p className="font-bold text-foreground">
-                {{ free: 'Gratuito', professional: 'Profissional', advanced: 'Avançado', premium: 'Premium', enterprise: 'Empresarial', unlimited: 'Ilimitado' }[currentPlan] || 'Gratuito'}
+                {planName}
               </p>
               <p className="text-xs text-muted-foreground">
                 {currentPlan === 'unlimited' 

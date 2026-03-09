@@ -33,6 +33,7 @@ interface Plan {
   is_active: boolean;
   has_ai_chat: boolean;
   has_auto_subtitles: boolean;
+  has_voice_rewrite: boolean;
 }
 
 interface UserRow {
@@ -153,6 +154,7 @@ export default function AdminPlans() {
         features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
         has_ai_chat: p.has_ai_chat ?? false,
         has_auto_subtitles: p.has_auto_subtitles ?? false,
+        has_voice_rewrite: p.has_voice_rewrite ?? false,
       })));
     }
     setLoading(false);
@@ -489,6 +491,7 @@ export default function AdminPlans() {
       is_active: true,
       has_ai_chat: false,
       has_auto_subtitles: false,
+      has_voice_rewrite: false,
     };
     setPlans([...plans, newPlan]);
   };
@@ -556,6 +559,7 @@ export default function AdminPlans() {
           is_active: plan.is_active,
           has_ai_chat: plan.has_ai_chat,
           has_auto_subtitles: plan.has_auto_subtitles,
+          has_voice_rewrite: plan.has_voice_rewrite,
         };
 
         if (plan.id) {
@@ -790,6 +794,15 @@ export default function AdminPlans() {
                         />
                         <Label className="text-xs flex items-center gap-1">
                           Legendas Auto
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={plan.has_voice_rewrite}
+                          onCheckedChange={v => updatePlan(index, 'has_voice_rewrite', v)}
+                        />
+                        <Label className="text-xs flex items-center gap-1">
+                          Voice Rewrite
                         </Label>
                       </div>
                     </div>
