@@ -78,16 +78,21 @@ export default function Plans() {
     });
   }, []);
 
-  // Check admin role
+  // Check admin role using security definer function
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
     supabase
-      .from('user_roles' as any)
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .then(({ data }) => {
-        if (data && (data as any[]).length > 0) setIsAdmin(true);
+      .rpc('has_role', { _user_id: user.id, _role: 'admin' })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Error checking admin role:', error);
+          setIsAdmin(false);
+        } else {
+          setIsAdmin(data === true);
+        }
       });
   }, [user]);
 
