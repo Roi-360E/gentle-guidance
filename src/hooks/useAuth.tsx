@@ -6,6 +6,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  justLoggedIn: boolean;
+  clearJustLoggedIn: () => void;
   signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -17,6 +19,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
+
+  const clearJustLoggedIn = () => setJustLoggedIn(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -64,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    setJustLoggedIn(true);
     return { error: null };
   };
 
@@ -72,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, justLoggedIn, clearJustLoggedIn, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

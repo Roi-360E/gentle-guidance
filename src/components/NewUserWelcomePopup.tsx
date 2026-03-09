@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Zap, ArrowRight, Flame } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
-// No dismissal tracking - popup shows every time the user lands on home
 interface NewUserWelcomePopupProps {
   userId: string | undefined;
   currentPlan: string;
@@ -14,12 +14,13 @@ interface NewUserWelcomePopupProps {
 
 export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUserWelcomePopupProps) => {
   const navigate = useNavigate();
+  const { justLoggedIn, clearJustLoggedIn } = useAuth();
   const [open, setOpen] = useState(false);
   const [suggestedPlanName, setSuggestedPlanName] = useState('');
   const [suggestedPlanPrice, setSuggestedPlanPrice] = useState(0);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !justLoggedIn) return;
 
     const fetchNextPlan = async () => {
       const { data: plans } = await supabase
@@ -58,9 +59,10 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
     };
 
     fetchNextPlan();
-  }, [userId, currentPlan]);
+  }, [userId, currentPlan, justLoggedIn]);
 
   const dismiss = () => {
+    clearJustLoggedIn();
     setOpen(false);
   };
 
