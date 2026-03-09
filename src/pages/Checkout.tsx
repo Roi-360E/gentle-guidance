@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
   ArrowLeft, Check, Loader2, Copy, CheckCircle2, Shield, Lock, 
-  Zap, Clock, CreditCard, QrCode, Sparkles, Crown, Star
+  Zap, Clock, CreditCard, QrCode, Sparkles, Crown, Star, AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 import { motion, AnimatePresence } from 'framer-motion';
+import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-checkout`;
+const PUBLIC_KEY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-public-key`;
 
 interface PixData {
   qrCode: string;
@@ -45,13 +47,40 @@ export default function Checkout() {
   
   const [plan, setPlan] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<'checkout' | 'pix'>('checkout');
+  const [selectedMethod, setSelectedMethod] = useState<'card' | 'pix'>('card');
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [copied, setCopied] = useState(false);
   const [pollingPayment, setPollingPayment] = useState(false);
   const [planLoading, setPlanLoading] = useState(true);
   const [planError, setPlanError] = useState(false);
   const [countdown, setCountdown] = useState(15 * 60);
+  const [mpReady, setMpReady] = useState(false);
+  const [cardProcessing, setCardProcessing] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const mpInitialized = useRef(false);
+
+  // Initialize MercadoPago SDK
+  useEffect(() => {
+    if (mpInitialized.current) return;
+    
+    const initMP = async () => {
+      try {
+        const res = await fetch(PUBLIC_KEY_URL, {
+          headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        });
+        const data = await res.json();
+        if (data.publicKey) {
+          initMercadoPago(data.publicKey, { locale: 'pt-BR' });
+          setMpReady(true);
+          mpInitialized.current = true;
+        }
+      } catch (err) {
+        console.error('[Checkout] Failed to init MercadoPago:', err);
+      }
+    };
+    initMP();
+  }, []);
 
   // Load plan
   useEffect(() => {
@@ -60,12 +89,10 @@ export default function Checkout() {
       setPlanError(true);
       return; 
     }
-    console.log('[Checkout] Loading plan:', planKey);
-    setPlanLoading(true);
-    setPlanError(false);
     
     const loadPlan = async () => {
       try {
+        setPlanLoading(true);
         const { data, error } = await supabase
           .from('subscription_plans' as any)
           .select('*')
@@ -73,11 +100,9 @@ export default function Checkout() {
           .eq('is_active', true)
           .single();
         
-        console.log('[Checkout] Plan query result:', { data, error });
         if (error || !data) { 
-          console.error('[Checkout] Plan not found:', error);
-          setPlanLoading(false);
           setPlanError(true);
+          setPlanLoading(false);
           return; 
         }
         const p = data as any;
@@ -91,30 +116,24 @@ export default function Checkout() {
           value: p.price,
           currency: 'BRL',
         }, user?.id);
-      } catch (err) {
-        console.error('[Checkout] Unexpected error:', err);
-        setPlanLoading(false);
+      } catch {
         setPlanError(true);
+        setPlanLoading(false);
       }
     };
-    
     loadPlan();
   }, [planKey]);
 
-  // Check payment return from Checkout Pro
+  // Check payment return
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
     if (!paymentStatus) return;
-    if (paymentStatus === 'success') {
-      navigate('/obrigado', { replace: true });
-    } else if (paymentStatus === 'failure') {
-      toast.error('Pagamento não aprovado. Tente novamente.');
-    } else if (paymentStatus === 'pending') {
-      toast.info('Pagamento pendente. Será ativado assim que confirmado.');
-    }
+    if (paymentStatus === 'success') navigate('/obrigado', { replace: true });
+    else if (paymentStatus === 'failure') toast.error('Pagamento não aprovado.');
+    else if (paymentStatus === 'pending') toast.info('Pagamento pendente.');
   }, [searchParams]);
 
-  // Countdown timer
+  // Countdown
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
@@ -133,29 +152,25 @@ export default function Checkout() {
       if (data?.status === 'confirmed') {
         setPollingPayment(false);
         setPixData(null);
-        const pixKey = localStorage.getItem('pix_plan_key') || '';
-        const pixName = localStorage.getItem('pix_plan_name') || '';
-        const pixValue = localStorage.getItem('pix_plan_value') || '0';
-        localStorage.setItem('checkout_plan_key', pixKey);
-        localStorage.setItem('checkout_plan_name', pixName);
-        localStorage.setItem('checkout_plan_value', pixValue);
+        localStorage.setItem('checkout_plan_key', planKey);
+        localStorage.setItem('checkout_plan_name', plan?.name || '');
+        localStorage.setItem('checkout_plan_value', String(plan?.price || 0));
         localStorage.setItem('checkout_method', 'Pix');
-        localStorage.removeItem('pix_plan_key');
-        localStorage.removeItem('pix_plan_name');
-        localStorage.removeItem('pix_plan_value');
         navigate('/obrigado');
       }
     }, 5000);
     return () => clearInterval(interval);
   }, [pixData, pollingPayment]);
 
-  const handlePay = async () => {
+  // Handle Card Payment from Bricks SDK
+  const handleCardSubmit = useCallback(async (cardFormData: any) => {
     if (!user || !plan) return;
-    setLoading(true);
+    setCardProcessing(true);
+    setPaymentError(null);
 
     trackPixelEvent('AddPaymentInfo', {
       content_name: plan.name,
-      content_category: selectedMethod === 'pix' ? 'Pix' : 'Cartão/Boleto',
+      content_category: 'Cartão',
       value: plan.price,
       currency: 'BRL',
     }, user.id);
@@ -171,7 +186,17 @@ export default function Checkout() {
           'Content-Type': 'application/json',
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ plan: planKey, paymentMethod: selectedMethod === 'pix' ? 'pix' : undefined }),
+        body: JSON.stringify({
+          plan: planKey,
+          paymentMethod: 'card',
+          cardToken: cardFormData.token,
+          installments: cardFormData.installments,
+          issuerId: cardFormData.issuer_id,
+          paymentMethodId: cardFormData.payment_method_id,
+          payerEmail: cardFormData.payer?.email,
+          identificationType: cardFormData.payer?.identification?.type,
+          identificationNumber: cardFormData.payer?.identification?.number,
+        }),
       });
 
       if (!res.ok) {
@@ -180,28 +205,90 @@ export default function Checkout() {
       }
 
       const data = await res.json();
-      if (data.type === 'pix') {
-        setPixData({
-          qrCode: data.qrCode,
-          qrCodeBase64: data.qrCodeBase64,
-          paymentId: data.paymentId,
-          mpPaymentId: data.mpPaymentId,
-          expiresAt: data.expiresAt,
-        });
-        setPollingPayment(true);
-        localStorage.setItem('pix_plan_key', planKey);
-        localStorage.setItem('pix_plan_name', plan.name);
-        localStorage.setItem('pix_plan_value', String(plan.price));
-      } else if (data.type === 'checkout') {
+      
+      if (data.status === 'approved') {
+        setPaymentSuccess(true);
         localStorage.setItem('checkout_plan_key', planKey);
         localStorage.setItem('checkout_plan_name', plan.name);
         localStorage.setItem('checkout_plan_value', String(plan.price));
-        await new Promise(resolve => setTimeout(resolve, 500));
-        window.location.href = data.initPoint;
+        localStorage.setItem('checkout_method', 'Cartão');
+        toast.success('Pagamento aprovado!');
+        setTimeout(() => navigate('/obrigado'), 2000);
+      } else if (data.status === 'in_process' || data.status === 'pending') {
+        toast.info('Pagamento em processamento. Será ativado quando confirmado.');
+        setPaymentError('Pagamento em processamento. Aguarde a confirmação.');
+      } else {
+        const statusMessages: Record<string, string> = {
+          'cc_rejected_bad_filled_card_number': 'Número do cartão incorreto.',
+          'cc_rejected_bad_filled_date': 'Data de validade incorreta.',
+          'cc_rejected_bad_filled_other': 'Dados do cartão incorretos.',
+          'cc_rejected_bad_filled_security_code': 'Código de segurança incorreto.',
+          'cc_rejected_blacklist': 'Cartão não autorizado.',
+          'cc_rejected_call_for_authorize': 'Ligue para a operadora do cartão.',
+          'cc_rejected_card_disabled': 'Cartão desabilitado. Ative-o.',
+          'cc_rejected_duplicated_payment': 'Pagamento duplicado.',
+          'cc_rejected_high_risk': 'Pagamento recusado por segurança.',
+          'cc_rejected_insufficient_amount': 'Saldo insuficiente.',
+          'cc_rejected_max_attempts': 'Limite de tentativas atingido.',
+        };
+        const msg = statusMessages[data.statusDetail] || 'Pagamento não aprovado. Tente outro método.';
+        setPaymentError(msg);
+        toast.error(msg);
       }
     } catch (err) {
-      console.error('Checkout error:', err);
-      toast.error(err instanceof Error ? err.message : 'Erro ao processar pagamento');
+      console.error('Card payment error:', err);
+      const msg = err instanceof Error ? err.message : 'Erro ao processar pagamento';
+      setPaymentError(msg);
+      toast.error(msg);
+    } finally {
+      setCardProcessing(false);
+    }
+  }, [user, plan, planKey, navigate]);
+
+  // Handle Pix Payment
+  const handlePixPay = async () => {
+    if (!user || !plan) return;
+    setLoading(true);
+    setPaymentError(null);
+
+    trackPixelEvent('AddPaymentInfo', {
+      content_name: plan.name,
+      content_category: 'Pix',
+      value: plan.price,
+      currency: 'BRL',
+    }, user.id);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada');
+
+      const res = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ plan: planKey, paymentMethod: 'pix' }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${res.status}`);
+      }
+
+      const data = await res.json();
+      setPixData({
+        qrCode: data.qrCode,
+        qrCodeBase64: data.qrCodeBase64,
+        paymentId: data.paymentId,
+        mpPaymentId: data.mpPaymentId,
+        expiresAt: data.expiresAt,
+      });
+      setPollingPayment(true);
+    } catch (err) {
+      console.error('Pix error:', err);
+      toast.error(err instanceof Error ? err.message : 'Erro ao gerar Pix');
     } finally {
       setLoading(false);
     }
@@ -221,22 +308,47 @@ export default function Checkout() {
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
+  // Loading state
   if (planLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="text-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Carregando checkout...</p>
+        </div>
       </div>
     );
   }
 
+  // Error state
   if (planError || !plan) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
           <p className="text-foreground text-lg font-semibold">Plano não encontrado</p>
-          <p className="text-muted-foreground text-sm">O plano solicitado não está disponível.</p>
           <Button onClick={() => navigate('/plans')}>Ver Planos Disponíveis</Button>
         </div>
+      </div>
+    );
+  }
+
+  // Success state
+  if (paymentSuccess) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="text-center space-y-4"
+        >
+          <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-10 h-10 text-primary" />
+          </div>
+          <h2 className="text-2xl font-bold text-foreground">Pagamento Aprovado!</h2>
+          <p className="text-muted-foreground">Redirecionando...</p>
+          <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" />
+        </motion.div>
       </div>
     );
   }
@@ -247,7 +359,7 @@ export default function Checkout() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/plans')} className="shrink-0">
             <ArrowLeft className="w-4 h-4 mr-1" /> Planos
           </Button>
@@ -258,7 +370,7 @@ export default function Checkout() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-6 sm:py-10">
+      <main className="max-w-4xl mx-auto px-4 py-6 sm:py-10">
         {/* Urgency bar */}
         {countdown > 0 && !pixData && (
           <motion.div
@@ -307,7 +419,7 @@ export default function Checkout() {
                         <textarea 
                           readOnly 
                           value={pixData.qrCode} 
-                          className="w-full h-20 text-xs bg-muted rounded-xl p-3 resize-none border border-border font-mono" 
+                          className="w-full h-20 text-xs bg-muted rounded-xl p-3 resize-none border border-border font-mono text-foreground" 
                         />
                         <Button size="sm" variant="secondary" className="absolute top-2 right-2" onClick={copyPixCode}>
                           {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
@@ -337,22 +449,22 @@ export default function Checkout() {
                 >
                   <h2 className="text-xl font-bold text-foreground">Escolha o método de pagamento</h2>
 
-                  {/* Payment method selector */}
+                  {/* Payment method tabs */}
                   <div className="grid grid-cols-2 gap-3">
                     <button
-                      onClick={() => setSelectedMethod('checkout')}
+                      onClick={() => setSelectedMethod('card')}
                       className={`relative rounded-xl border-2 p-4 transition-all text-left ${
-                        selectedMethod === 'checkout'
+                        selectedMethod === 'card'
                           ? 'border-primary bg-primary/5 shadow-[0_0_20px_-5px_hsl(var(--primary)/0.3)]'
                           : 'border-border bg-card hover:border-muted-foreground/30'
                       }`}
                     >
                       <div className="flex items-center gap-3 mb-2">
-                        <CreditCard className={`w-5 h-5 ${selectedMethod === 'checkout' ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <span className="font-semibold text-sm text-foreground">Cartão / Boleto</span>
+                        <CreditCard className={`w-5 h-5 ${selectedMethod === 'card' ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <span className="font-semibold text-sm text-foreground">Cartão de Crédito</span>
                       </div>
                       <p className="text-xs text-muted-foreground">Parcelamento disponível</p>
-                      {selectedMethod === 'checkout' && (
+                      {selectedMethod === 'card' && (
                         <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                           <Check className="w-3 h-3 text-primary-foreground" />
                         </div>
@@ -380,24 +492,81 @@ export default function Checkout() {
                     </button>
                   </div>
 
-                  {/* CTA Button */}
-                  <Button
-                    onClick={handlePay}
-                    disabled={loading}
-                    className="w-full h-14 text-base font-bold rounded-xl bg-primary hover:bg-primary/90 shadow-[0_0_30px_-5px_hsl(var(--primary)/0.4)] transition-all hover:shadow-[0_0_40px_-5px_hsl(var(--primary)/0.6)]"
-                  >
-                    {loading ? (
-                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                    ) : (
-                      <Lock className="w-5 h-5 mr-2" />
-                    )}
-                    {loading
-                      ? 'Processando...'
-                      : selectedMethod === 'pix'
-                      ? `Pagar R$ ${plan.price.toFixed(2).replace('.', ',')} com Pix`
-                      : `Pagar R$ ${plan.price.toFixed(2).replace('.', ',')} com Cartão`
-                    }
-                  </Button>
+                  {/* Error message */}
+                  {paymentError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 flex items-start gap-2 text-sm text-destructive"
+                    >
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{paymentError}</span>
+                    </motion.div>
+                  )}
+
+                  {/* Card Payment - MercadoPago Bricks */}
+                  {selectedMethod === 'card' && (
+                    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+                      {mpReady && plan ? (
+                        <>
+                          {cardProcessing && (
+                            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-2xl">
+                              <div className="text-center space-y-2">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                                <p className="text-sm text-muted-foreground">Processando pagamento...</p>
+                              </div>
+                            </div>
+                          )}
+                          <div className="[&_iframe]:!rounded-xl [&_.mercadopago-form]:!bg-transparent">
+                            <CardPayment
+                              initialization={{ amount: plan.price }}
+                              onSubmit={handleCardSubmit}
+                              customization={{
+                                visual: {
+                                  style: {
+                                    customVariables: {
+                                      baseColor: '#8B5CF6',
+                                      textPrimaryColor: '#e4e4e7',
+                                      textSecondaryColor: '#a1a1aa',
+                                      inputBackgroundColor: '#1e1b2e',
+                                      formBackgroundColor: 'transparent',
+                                      borderColor: '#2e2b3e',
+                                    },
+                                  },
+                                },
+                                paymentMethods: {
+                                  maxInstallments: 12,
+                                },
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                          <span className="ml-2 text-sm text-muted-foreground">Carregando formulário de pagamento...</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Pix Payment */}
+                  {selectedMethod === 'pix' && (
+                    <div className="space-y-4">
+                      <Button
+                        onClick={handlePixPay}
+                        disabled={loading}
+                        className="w-full h-14 text-base font-bold rounded-xl bg-primary hover:bg-primary/90 shadow-[0_0_30px_-5px_hsl(var(--primary)/0.4)] transition-all hover:shadow-[0_0_40px_-5px_hsl(var(--primary)/0.6)]"
+                      >
+                        {loading ? (
+                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        ) : (
+                          <QrCode className="w-5 h-5 mr-2" />
+                        )}
+                        {loading ? 'Gerando Pix...' : `Pagar R$ ${plan.price.toFixed(2).replace('.', ',')} com Pix`}
+                      </Button>
+                    </div>
+                  )}
 
                   {/* Trust badges */}
                   <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
