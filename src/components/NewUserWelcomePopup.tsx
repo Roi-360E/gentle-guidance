@@ -5,9 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Zap, ArrowRight, Flame } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
-// Module-level flag: resets on every page reload (works correctly in PWAs unlike sessionStorage)
-const popupDismissedThisLoad = new Set<string>();
-
+// No dismissal tracking - popup shows every time the user lands on home
 interface NewUserWelcomePopupProps {
   userId: string | undefined;
   currentPlan: string;
