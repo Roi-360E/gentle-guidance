@@ -21,9 +21,6 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   useEffect(() => {
     if (!userId) return;
 
-    // Only dismiss for this page load (module-level Set resets on reload)
-    if (popupDismissedThisLoad.has(userId)) return;
-
     const fetchNextPlan = async () => {
       const { data: plans } = await supabase
         .from('subscription_plans')
