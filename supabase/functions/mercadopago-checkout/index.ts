@@ -45,9 +45,9 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { plan, paymentMethod } = body as { plan: string; paymentMethod?: string };
+    const { plan, paymentMethod, cardToken, installments, issuerId, paymentMethodId, payerEmail, identificationType, identificationNumber } = body;
 
-    // Fetch plan details from database (using service role to bypass RLS for inactive plans)
+    // Fetch plan details from database
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceKey);
 
@@ -88,7 +88,7 @@ serve(async (req) => {
 
     const webhookUrl = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
 
-    // If user wants Pix specifically
+    // === PIX PAYMENT ===
     if (paymentMethod === "pix") {
       const pixPayload = {
         transaction_amount: price,
@@ -129,7 +129,129 @@ serve(async (req) => {
       });
     }
 
-    // Checkout Pro preference
+    // === CARD PAYMENT (via token from Bricks SDK) ===
+    if (paymentMethod === "card" && cardToken) {
+      const cardPayload: Record<string, unknown> = {
+        transaction_amount: price,
+        token: cardToken,
+        description: title,
+        installments: installments || 1,
+        payment_method_id: paymentMethodId,
+        payer: {
+          email: payerEmail || userEmail || "cliente@escala.com",
+          identification: identificationType && identificationNumber ? {
+            type: identificationType,
+            number: identificationNumber,
+          } : undefined,
+        },
+        external_reference: payment.id,
+        notification_url: webhookUrl,
+      };
+
+      if (issuerId) {
+        cardPayload.issuer_id = issuerId;
+      }
+
+      const cardRes = await fetch("https://api.mercadopago.com/v1/payments", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": `card-${payment.id}`,
+        },
+        body: JSON.stringify(cardPayload),
+      });
+
+      if (!cardRes.ok) {
+        const errText = await cardRes.text();
+        console.error("MercadoPago Card error:", errText);
+        return jsonResponse({ error: "Failed to process card payment", details: errText }, 500);
+      }
+
+      const cardData = await cardRes.json();
+      await supabase.from("payments").update({ pix_tx_id: String(cardData.id) }).eq("id", payment.id);
+
+      // If approved immediately
+      if (cardData.status === "approved") {
+        await supabase.from("payments").update({
+          status: "confirmed",
+          confirmed_at: new Date().toISOString(),
+        }).eq("id", payment.id);
+
+        // Update user plan
+        const monthYear = new Date().toISOString().slice(0, 7);
+        const planTokens = await adminClient
+          .from("subscription_plans")
+          .select("tokens")
+          .eq("plan_key", plan)
+          .single();
+
+        const tokens = planTokens.data?.tokens || 0;
+
+        await adminClient
+          .from("video_usage")
+          .update({ plan, token_balance: tokens })
+          .eq("user_id", userId)
+          .eq("month_year", monthYear);
+      }
+
+      return jsonResponse({
+        type: "card",
+        paymentId: payment.id,
+        mpPaymentId: cardData.id,
+        status: cardData.status,
+        statusDetail: cardData.status_detail,
+      });
+    }
+
+    // === BOLETO PAYMENT ===
+    if (paymentMethod === "boleto") {
+      const boletoPayload = {
+        transaction_amount: price,
+        description: title,
+        payment_method_id: "bolbradesco",
+        payer: {
+          email: payerEmail || userEmail || "cliente@escala.com",
+          first_name: "Cliente",
+          last_name: "EscalaXPro",
+          identification: identificationType && identificationNumber ? {
+            type: identificationType,
+            number: identificationNumber,
+          } : undefined,
+        },
+        external_reference: payment.id,
+        notification_url: webhookUrl,
+      };
+
+      const boletoRes = await fetch("https://api.mercadopago.com/v1/payments", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": `boleto-${payment.id}`,
+        },
+        body: JSON.stringify(boletoPayload),
+      });
+
+      if (!boletoRes.ok) {
+        const errText = await boletoRes.text();
+        console.error("MercadoPago Boleto error:", errText);
+        return jsonResponse({ error: "Failed to create boleto", details: errText }, 500);
+      }
+
+      const boletoData = await boletoRes.json();
+      await supabase.from("payments").update({ pix_tx_id: String(boletoData.id) }).eq("id", payment.id);
+
+      return jsonResponse({
+        type: "boleto",
+        paymentId: payment.id,
+        mpPaymentId: boletoData.id,
+        ticketUrl: boletoData.transaction_details?.external_resource_url,
+        barcode: boletoData.barcode?.content,
+      });
+    }
+
+    // === FALLBACK: Checkout Pro (should not reach here with new flow) ===
     const preferencePayload = {
       items: [{ title, quantity: 1, unit_price: price, currency_id: "BRL" }],
       payer: { email: userEmail || "cliente@escala.com" },
