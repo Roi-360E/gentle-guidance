@@ -55,4 +55,6 @@ if (storedVersion !== APP_VERSION) {
   }
 }
 
+console.log('[EscalaX] App mounting...');
 createRoot(document.getElementById("root")!).render(<App />);
+console.log('[EscalaX] App mounted');
