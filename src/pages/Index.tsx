@@ -292,9 +292,9 @@ const Index = () => {
             </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/auto-subtitles')}>
               <Type className="w-4 h-4" /> Legendas Auto
-              {currentPlan === 'free' && <Lock className="w-3 h-3 text-muted-foreground" />}
+              {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            {currentPlan === 'unlimited' && (
+            {hasVoiceRewrite && (
               <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/voice-rewrite')}>
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
