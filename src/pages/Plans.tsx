@@ -1,24 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Zap, Crown, ArrowLeft, Check, Loader2, Copy, CheckCircle2, Settings } from 'lucide-react';
+import { Sparkles, Zap, Crown, ArrowLeft, Check, Loader2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 import { useHighIntentTracking } from '@/hooks/useAudienceEvents';
-
-const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago-checkout`;
-
-interface PixData {
-  qrCode: string;
-  qrCodeBase64: string;
-  paymentId: string;
-  mpPaymentId: number;
-  expiresAt: string;
-}
 
 interface PlanData {
   id: string;
