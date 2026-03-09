@@ -24,7 +24,6 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
     if (dismissed) return;
 
     const fetchNextPlan = async () => {
-      // Get all active paid plans ordered by price
       const { data: plans } = await supabase
         .from('subscription_plans')
         .select('name, price, plan_key')
@@ -34,10 +33,9 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
 
       if (!plans || plans.length === 0) return;
 
-      let suggested = plans[0]; // default: cheapest plan
+      let suggested = plans[0];
 
       if (currentPlan && currentPlan !== 'free') {
-        // Find current plan's price
         const { data: currentPlanData } = await supabase
           .from('subscription_plans')
           .select('price')
@@ -47,12 +45,11 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
 
         if (currentPlanData) {
           const currentPrice = Number(currentPlanData.price);
-          // Find next plan with higher price
           const nextPlan = plans.find(p => Number(p.price) > currentPrice);
           if (nextPlan) {
             suggested = nextPlan;
           } else {
-            // User already has the highest plan, don't show popup
+            // User already has the highest plan
             return;
           }
         }
@@ -60,12 +57,11 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
 
       setSuggestedPlanName(suggested.name);
       setSuggestedPlanPrice(Number(suggested.price));
+      // Open popup only after data is ready
+      setTimeout(() => setOpen(true), 500);
     };
 
     fetchNextPlan();
-
-    const timer = setTimeout(() => setOpen(true), 800);
-    return () => clearTimeout(timer);
   }, [userId, currentPlan]);
 
   const handleGoToPlans = () => {
