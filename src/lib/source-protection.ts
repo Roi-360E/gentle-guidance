@@ -4,7 +4,11 @@
  */
 
 export function enableSourceProtection() {
+  // Disable in dev mode AND in Lovable preview/iframe environments
   if (import.meta.env.DEV) return;
+  try {
+    if (window.self !== window.top) return; // inside iframe (Lovable preview)
+  } catch { return; }
 
   // 1. Block right-click on ALL targets with capture phase (highest priority)
   const blockContextMenu = (e: Event) => {
