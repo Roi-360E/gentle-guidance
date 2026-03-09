@@ -491,6 +491,7 @@ export default function AdminPlans() {
       is_active: true,
       has_ai_chat: false,
       has_auto_subtitles: false,
+      has_voice_rewrite: false,
     };
     setPlans([...plans, newPlan]);
   };
