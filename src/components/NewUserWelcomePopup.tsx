@@ -61,7 +61,6 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   }, [userId, currentPlan]);
 
   const dismiss = () => {
-    popupDismissedThisLoad.add(userId!);
     setOpen(false);
   };
 
