@@ -449,7 +449,7 @@ const VoiceRewrite = () => {
           </div>
           <h1 className="text-2xl font-bold text-foreground">Recurso Exclusivo</h1>
           <p className="text-muted-foreground">
-            O Voice Rewrite está disponível exclusivamente no plano <strong className="text-primary">Ilimitado</strong>.
+            O Voice Rewrite está disponível apenas para planos que incluem esse recurso.
             Faça upgrade para reescrever o áudio dos seus vídeos com vozes IA profissionais.
           </p>
           <div className="flex gap-3 justify-center">
