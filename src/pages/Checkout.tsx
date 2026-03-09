@@ -38,20 +38,30 @@ interface PlanData {
 
 const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
-// Load MP SDK script once
+// Load MP SDK script once — isolated to avoid conflicts with Facebook Pixel (fbq)
 let mpSdkPromise: Promise<any> | null = null;
 function loadMPSdk(publicKey: string): Promise<any> {
   if (mpSdkPromise) return mpSdkPromise;
   mpSdkPromise = new Promise((resolve, reject) => {
+    // Preserve existing fbq reference before loading any external SDK
+    const existingFbq = (window as any).fbq;
+    
     if ((window as any).MercadoPago) {
       resolve(new (window as any).MercadoPago(publicKey));
       return;
     }
     const script = document.createElement('script');
     script.src = 'https://sdk.mercadopago.com/js/v2';
-    script.onload = () => resolve(new (window as any).MercadoPago(publicKey));
+    script.async = true;
+    script.onload = () => {
+      // Restore fbq if it was overwritten by the MP SDK
+      if (existingFbq && !(window as any).fbq) {
+        (window as any).fbq = existingFbq;
+      }
+      resolve(new (window as any).MercadoPago(publicKey));
+    };
     script.onerror = reject;
-    document.head.appendChild(script);
+    document.body.appendChild(script); // Append to body to avoid head conflicts with pixel scripts
   });
   return mpSdkPromise;
 }
