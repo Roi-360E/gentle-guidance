@@ -4,10 +4,13 @@
  */
 
 export function enableSourceProtection() {
-  // Disable in dev mode AND in Lovable preview/iframe environments
+  // Disable in dev mode
   if (import.meta.env.DEV) return;
+  
+  // Disable in Lovable preview/iframe environments AND lovable.app domains
   try {
-    if (window.self !== window.top) return; // inside iframe (Lovable preview)
+    if (window.self !== window.top) return;
+    if (window.location.hostname.includes('lovable.app')) return;
   } catch { return; }
 
   // 1. Block right-click on ALL targets with capture phase (highest priority)
@@ -82,13 +85,17 @@ export function enableSourceProtection() {
   const threshold = 160;
 
   const checkDevTools = () => {
-    const start = performance.now();
-    (function() {}).constructor('debugger')();
-    const end = performance.now();
+    try {
+      const start = performance.now();
+      (function() {}).constructor('debugger')();
+      const end = performance.now();
 
-    if (end - start > threshold && !devtoolsOpen) {
-      devtoolsOpen = true;
-      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:2rem"><div><h1 style="font-size:2rem;margin-bottom:1rem">⚠️ Acesso não autorizado</h1><p>Feche as ferramentas de desenvolvedor para continuar usando o aplicativo.</p></div></div>';
+      if (end - start > threshold && !devtoolsOpen) {
+        devtoolsOpen = true;
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:2rem"><div><h1 style="font-size:2rem;margin-bottom:1rem">⚠️ Acesso não autorizado</h1><p>Feche as ferramentas de desenvolvedor para continuar usando o aplicativo.</p></div></div>';
+      }
+    } catch {
+      // CSP or other environment restriction — silently skip
     }
   };
 
