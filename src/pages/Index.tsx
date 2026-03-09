@@ -55,7 +55,10 @@ const Index = () => {
   
   
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
-  const [tokenBalance, setTokenBalance] = useState<number>(50);
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [planName, setPlanName] = useState<string>('Gratuito');
+  const [hasAutoSubtitles, setHasAutoSubtitles] = useState(false);
+  const [hasVoiceRewrite, setHasVoiceRewrite] = useState(false);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
