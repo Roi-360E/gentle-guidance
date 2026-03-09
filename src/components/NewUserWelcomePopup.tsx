@@ -50,7 +50,7 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   }, [userId, currentPlan, tokenBalance]);
 
   const handleGoToPlans = () => {
-    sessionStorage.setItem(`welcome_popup_${userId}`, 'true');
+    localStorage.setItem(`welcome_popup_${userId}`, String(Date.now()));
     setOpen(false);
     navigate('/plans');
   };
