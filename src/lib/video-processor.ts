@@ -221,39 +221,33 @@ export async function preProcessInputCached(
   const startTime = performance.now();
   console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
 
-  // ─── ALWAYS try stream copy first (remux ~0.05-0.3s) ───
-  const copyArgs = ['-i', rawName, '-c', 'copy', '-movflags', '+faststart', '-y', outputName];
-  let exitCode = await ff.exec(copyArgs);
-  checkAbort(abortSignal);
-
-  if (exitCode === 0) {
-    try { await ff.deleteFile(rawName); } catch {}
-    preProcessCache.set(file, outputName);
-    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-    console.log(`[VideoProcessor] ⚡ Stream copy OK for "${file.name}" in ${elapsed}s`);
-    return outputName;
-  }
-  console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to ultra-fast re-encode...`);
-
-  // ─── FALLBACK: minimal re-encode with shortest duration limit ───
+  // ─── Re-encode with WhatsApp/CapCut-friendly settings ───
+  // Always re-encode to control bitrate and ensure compatibility
   const args: string[] = ['-i', rawName];
   if (scale) {
-    args.push('-vf', `scale=${scale}`);
+    args.push('-vf', `scale=${scale},setsar=1`);
   }
   args.push(
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
-    '-tune', 'fastdecode',
-    '-crf', '32',
-    '-r', '24',
+    '-profile:v', 'main',
+    '-level', '3.1',
+    '-pix_fmt', 'yuv420p',
+    '-crf', '23',
+    '-maxrate', '2500k',
+    '-bufsize', '5000k',
+    '-r', '30',
     '-c:a', 'aac',
-    '-b:a', '96k',
+    '-b:a', '128k',
     '-ar', '44100',
     '-ac', '2',
+    '-movflags', '+faststart',
     '-threads', '0',
     '-y',
     outputName
   );
+
+  let exitCode;
 
   exitCode = await ff.exec(args);
   checkAbort(abortSignal);
@@ -262,9 +256,13 @@ export async function preProcessInputCached(
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
     const args2: string[] = ['-i', rawName];
     if (scale) {
-      args2.push('-vf', `scale=${scale}`);
+      args2.push('-vf', `scale=${scale},setsar=1`);
     }
-    args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '32', '-r', '24', '-an', '-threads', '0', '-y', outputName);
+    args2.push(
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+      '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k', '-r', '30',
+      '-an', '-movflags', '+faststart', '-threads', '0', '-y', outputName
+    );
     exitCode = await ff.exec(args2);
     checkAbort(abortSignal);
     if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
@@ -429,7 +427,9 @@ export async function concatenateVideos(
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
           '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
           '-y', outputFile,
         ]);
         checkAbort(abortSignal);
@@ -441,7 +441,9 @@ export async function concatenateVideos(
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
           '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
           '-map', '[outv]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+          '-an', '-movflags', '+faststart',
           '-y', outputFile,
         ]);
         checkAbort(abortSignal);
@@ -477,7 +479,9 @@ export async function concatenateVideos(
           `[2:v]scale=${scale},setsar=1[v2];` +
           `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
           '-y', outputFile,
         ]);
       } else {
@@ -485,7 +489,9 @@ export async function concatenateVideos(
           '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
           '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-c:a', 'aac',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
           '-y', outputFile,
         ]);
       }
@@ -502,7 +508,9 @@ export async function concatenateVideos(
             `[2:v]scale=${scale},setsar=1[v2];` +
             `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+            '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+            '-an', '-movflags', '+faststart',
             '-y', outputFile,
           ]);
         } else {
@@ -510,7 +518,9 @@ export async function concatenateVideos(
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
             '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '30', '-an',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+            '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
+            '-an', '-movflags', '+faststart',
             '-y', outputFile,
           ]);
         }
