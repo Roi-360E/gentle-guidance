@@ -167,70 +167,12 @@ export default function Plans() {
     return () => clearInterval(interval);
   }, [pixData, pollingPayment, user]);
 
-  const handleCheckout = async (planKey: string, method: 'checkout' | 'pix') => {
+  const handleCheckout = (planKey: string) => {
     if (!user) {
       toast.error('Faça login para continuar.');
       return;
     }
-    setLoading(`${planKey}-${method}`);
-
-    // Track InitiateCheckout event
-    const plan = plans.find(p => p.plan_key === planKey);
-    trackPixelEvent('InitiateCheckout', {
-      content_name: plan?.name || planKey,
-      content_category: method === 'pix' ? 'Pix' : 'Cartão/Boleto',
-      value: plan?.price || 0,
-      currency: 'BRL',
-    }, user?.id);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada');
-      const res = await fetch(FUNCTION_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ plan: planKey, paymentMethod: method === 'pix' ? 'pix' : undefined }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Erro ${res.status}`);
-      }
-      const data = await res.json();
-      if (data.type === 'pix') {
-        setPixData({ qrCode: data.qrCode, qrCodeBase64: data.qrCodeBase64, paymentId: data.paymentId, mpPaymentId: data.mpPaymentId, expiresAt: data.expiresAt });
-        setPollingPayment(true);
-
-        // Save plan info for Purchase event on Pix confirmation
-        localStorage.setItem('pix_plan_key', planKey);
-        localStorage.setItem('pix_plan_name', plan?.name || planKey);
-        localStorage.setItem('pix_plan_value', String(plan?.price || 0));
-
-        // Track AddPaymentInfo when Pix QR code is generated
-        trackPixelEvent('AddPaymentInfo', {
-          content_name: plan?.name || planKey,
-          content_category: 'Pix',
-          value: plan?.price || 0,
-          currency: 'BRL',
-        }, user?.id);
-      } else if (data.type === 'checkout') {
-        // Save plan info in localStorage before redirect
-        localStorage.setItem('checkout_plan_key', planKey);
-        localStorage.setItem('checkout_plan_name', plan?.name || planKey);
-        localStorage.setItem('checkout_plan_value', String(plan?.price || 0));
-
-        // Small delay to ensure Pixel beacon completes before redirect
-        await new Promise(resolve => setTimeout(resolve, 500));
-        window.location.href = data.initPoint;
-      }
-    } catch (err) {
-      console.error('Checkout error:', err);
-      toast.error(err instanceof Error ? err.message : 'Erro ao processar pagamento');
-    } finally {
-      setLoading(null);
-    }
+    navigate(`/checkout?plan=${planKey}`);
   };
 
   const copyPixCode = () => {
