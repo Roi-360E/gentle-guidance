@@ -420,7 +420,8 @@ export default function Checkout() {
   }
 
   const Icon = ICON_MAP[plan.icon] || Sparkles;
-  const inputClass = "w-full rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all";
+  // Use text-base (16px) to prevent iOS auto-zoom on focus
+  const inputClass = "w-full rounded-xl border border-border bg-muted/50 px-4 py-3.5 text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none";
 
   return (
     <div className="min-h-screen bg-background">
