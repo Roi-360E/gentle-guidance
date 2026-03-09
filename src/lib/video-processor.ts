@@ -256,9 +256,13 @@ export async function preProcessInputCached(
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
     const args2: string[] = ['-i', rawName];
     if (scale) {
-      args2.push('-vf', `scale=${scale}`);
+      args2.push('-vf', `scale=${scale},setsar=1`);
     }
-    args2.push('-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode', '-crf', '32', '-r', '24', '-an', '-threads', '0', '-y', outputName);
+    args2.push(
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+      '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k', '-r', '30',
+      '-an', '-movflags', '+faststart', '-threads', '0', '-y', outputName
+    );
     exitCode = await ff.exec(args2);
     checkAbort(abortSignal);
     if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
