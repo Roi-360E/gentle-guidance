@@ -20,12 +20,9 @@ export const NewUserWelcomePopup = ({ userId, currentPlan, tokenBalance }: NewUs
   useEffect(() => {
     if (!userId) return;
 
-    // Check if popup was already dismissed recently (24h cooldown)
-    const dismissedAt = localStorage.getItem(`welcome_popup_${userId}`);
-    if (dismissedAt) {
-      const elapsed = Date.now() - Number(dismissedAt);
-      if (elapsed < 24 * 60 * 60 * 1000) return;
-    }
+    // Check if popup was already dismissed in this session
+    const dismissed = sessionStorage.getItem(`welcome_popup_${userId}`);
+    if (dismissed) return;
 
     // Fetch lowest paid plan
     const fetchLowestPlan = async () => {
