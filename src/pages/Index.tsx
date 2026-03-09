@@ -28,6 +28,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { trackPixelEvent, trackCustomEvent } from '@/lib/pixel-tracker';
 import { useUtmCapture } from '@/hooks/useUtmCapture';
+import { NewUserWelcomePopup } from '@/components/NewUserWelcomePopup';
 import { usePowerUserTracking } from '@/hooks/useAudienceEvents';
 
 const Index = () => {
@@ -619,6 +620,7 @@ const Index = () => {
         </div>
       </main>
       <ScriptChatFloat />
+      <NewUserWelcomePopup userId={user?.id} currentPlan={currentPlan} tokenBalance={tokenBalance} />
     </div>
   );
 };
