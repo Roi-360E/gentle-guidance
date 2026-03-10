@@ -640,12 +640,15 @@ export default function AdminPlans() {
           </div>
 
           <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 shrink-0">
-            <Label htmlFor="admin-devtools-toggle" className="text-xs sm:text-sm">DevTools</Label>
+            <Label htmlFor="admin-devtools-toggle" className="text-xs sm:text-sm">Bloquear Console</Label>
             <Switch
               id="admin-devtools-toggle"
-              checked={devToolsEnabled}
-              onCheckedChange={handleDevToolsToggle}
+              checked={consoleBlocked}
+              onCheckedChange={setConsoleBlocked}
             />
+            <Button size="sm" variant="outline" onClick={handleSaveDevTools} className="h-7 px-2 text-xs">
+              <Save className="w-3 h-3 mr-1" /> Salvar
+            </Button>
           </div>
         </div>
       </header>
