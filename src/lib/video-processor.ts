@@ -219,36 +219,63 @@ export async function preProcessInputCached(
   await ff.writeFile(rawName, data);
 
   const startTime = performance.now();
-  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (fast remux)`);
+  const scale = getScale(settings);
+  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (${scale ? 'scale+encode' : 'fast remux'})`);
 
   let exitCode: number;
 
-  // ─── ALWAYS FAST PATH: stream copy (remux only) ───
-  // Resolution scaling is deferred to concatenation phase for speed
-  exitCode = await ff.exec([
-    '-i', rawName,
-    '-c:v', 'copy',
-    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-    '-movflags', '+faststart',
-    '-y', outputName,
-  ]);
-  checkAbort(abortSignal);
-
-  // If stream copy fails (rare codec issues), lightweight re-encode
-  if (exitCode !== 0) {
-    console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, fast re-encode fallback`);
+  if (scale) {
+    // ─── SCALE + RE-ENCODE during pre-processing so concat can use stream copy ───
     exitCode = await ff.exec([
       '-i', rawName,
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-      '-pix_fmt', 'yuv420p',
+      '-vf', `scale=${scale},setsar=1`,
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main',
+      '-pix_fmt', 'yuv420p', '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
       '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
       '-movflags', '+faststart', '-threads', '0',
       '-y', outputName,
     ]);
     checkAbort(abortSignal);
+
+    // Fallback: no audio
+    if (exitCode !== 0) {
+      console.warn(`[VideoProcessor] Scale+encode failed for ${file.name}, trying without audio...`);
+      exitCode = await ff.exec([
+        '-i', rawName,
+        '-vf', `scale=${scale},setsar=1`,
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+        '-crf', '23', '-an', '-movflags', '+faststart',
+        '-y', outputName,
+      ]);
+      checkAbort(abortSignal);
+    }
+  } else {
+    // ─── NO SCALE: fast remux (stream copy) ───
+    exitCode = await ff.exec([
+      '-i', rawName,
+      '-c:v', 'copy',
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+      '-movflags', '+faststart',
+      '-y', outputName,
+    ]);
+    checkAbort(abortSignal);
+
+    // If stream copy fails, lightweight re-encode
+    if (exitCode !== 0) {
+      console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, fast re-encode fallback`);
+      exitCode = await ff.exec([
+        '-i', rawName,
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+        '-movflags', '+faststart', '-threads', '0',
+        '-y', outputName,
+      ]);
+      checkAbort(abortSignal);
+    }
   }
 
-  // Final fallback: no audio
+  // Final fallback: no audio, copy video
   if (exitCode !== 0) {
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
     exitCode = await ff.exec([
