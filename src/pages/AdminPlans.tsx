@@ -1133,14 +1133,33 @@ export default function AdminPlans() {
                   Configure como o agente de IA deve se comportar ao gerar mensagens de recuperação para WhatsApp.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Textarea
-                  value={agentPrompt}
-                  onChange={(e) => setAgentPrompt(e.target.value)}
-                  placeholder="Descreva como o agente deve se comportar..."
-                  rows={5}
-                  className="resize-y"
-                />
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="agent-whatsapp">Seu WhatsApp (remetente)</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="agent-whatsapp"
+                      placeholder="5547992176490"
+                      value={agentWhatsApp}
+                      onChange={(e) => setAgentWhatsApp(e.target.value.replace(/\D/g, ''))}
+                      maxLength={13}
+                      className="pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Código do país + DDD + número (ex: 5547992176490)</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-prompt">Comportamento do Agente</Label>
+                  <Textarea
+                    id="agent-prompt"
+                    value={agentPrompt}
+                    onChange={(e) => setAgentPrompt(e.target.value)}
+                    placeholder="Descreva como o agente deve se comportar..."
+                    rows={5}
+                    className="resize-y"
+                  />
+                </div>
                 <Button
                   onClick={saveAgentPrompt}
                   disabled={agentPromptSaving}
@@ -1148,7 +1167,7 @@ export default function AdminPlans() {
                   className="gap-2"
                 >
                   {agentPromptSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Salvar Prompt
+                  Salvar Configurações
                 </Button>
               </CardContent>
             </Card>
