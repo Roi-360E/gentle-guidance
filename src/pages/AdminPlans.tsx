@@ -93,6 +93,9 @@ export default function AdminPlans() {
   const [funnelData, setFunnelData] = useState<{ event_name: string; count: number }[]>([]);
   const [funnelLoading, setFunnelLoading] = useState(false);
 
+  // DevTools toggle
+  const [devToolsEnabled, setDevToolsEnabled] = useState(() => localStorage.getItem('devtools_unlocked') === '1');
+
   // Domain verification state
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
