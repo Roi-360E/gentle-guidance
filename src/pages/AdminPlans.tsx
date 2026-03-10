@@ -628,7 +628,7 @@ export default function AdminPlans() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
-        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate('/plans')} className="shrink-0 px-2 sm:px-3">
               <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">Voltar</span>
@@ -637,6 +637,15 @@ export default function AdminPlans() {
               <h1 className="text-base sm:text-xl font-bold text-foreground truncate">Painel Administrativo</h1>
               <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Planos, usuários e permissões</p>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 shrink-0">
+            <Label htmlFor="admin-devtools-toggle" className="text-xs sm:text-sm">DevTools</Label>
+            <Switch
+              id="admin-devtools-toggle"
+              checked={devToolsEnabled}
+              onCheckedChange={handleDevToolsToggle}
+            />
           </div>
         </div>
       </header>
