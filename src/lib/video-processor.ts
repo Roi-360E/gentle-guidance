@@ -307,50 +307,50 @@ export async function preProcessInputCached(
  * Returns a File with the preprocessed video, or null on failure.
  */
 async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<File | null> {
+  // Skip VPS for files > 10MB — upload latency makes it slower than local
+  if (file.size > 10 * 1024 * 1024) {
+    console.log(`[VPS-Preprocess] ⏭️ Skipping ${file.name} (${(file.size/1024/1024).toFixed(1)}MB > 10MB limit) — will use local`);
+    return null;
+  }
+
   const fileStart = performance.now();
   try {
     const formData = new FormData();
     formData.append('video', file, file.name);
 
-    // Send scale/resolution settings so VPS does native scaling
     if (settings) {
       const scale = getScale(settings);
       if (scale) formData.append('scale', scale);
       formData.append('preset', 'ultrafast');
-      formData.append('crf', '28'); // Higher CRF = faster encode, smaller output
+      formData.append('crf', '28');
     }
 
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+    // Aggressive 8s timeout — if VPS can't finish in 8s, local WASM is faster
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const uploadStart = performance.now();
     const res = await fetch(url, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
     });
-    const uploadMs = (performance.now() - uploadStart).toFixed(0);
 
     clearTimeout(timeoutId);
 
     const contentType = res.headers.get('content-type') || '';
-
     if (contentType.includes('application/json')) {
       const data = await res.json();
-      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error} (upload: ${uploadMs}ms)`);
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error}`);
       return null;
     }
-
     if (!res.ok) {
-      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: HTTP ${res.status} (upload: ${uploadMs}ms)`);
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: HTTP ${res.status}`);
       return null;
     }
 
-    const downloadStart = performance.now();
     const blob = await res.blob();
-    const downloadMs = (performance.now() - downloadStart).toFixed(0);
     const totalMs = (performance.now() - fileStart).toFixed(0);
 
     if (blob.size < 1000) {
@@ -358,12 +358,12 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
       return null;
     }
 
-    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${(file.size/1024/1024).toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB | upload: ${uploadMs}ms, download: ${downloadMs}ms, total: ${totalMs}ms`);
-
+    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${(file.size/1024/1024).toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms`);
     return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
-    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${err instanceof Error ? err.message : err} (${totalMs}ms)`);
+    const reason = err instanceof DOMException && err.name === 'AbortError' ? 'TIMEOUT (>8s)' : (err instanceof Error ? err.message : String(err));
+    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${reason} (${totalMs}ms) — falling back to local`);
     return null;
   }
 }
