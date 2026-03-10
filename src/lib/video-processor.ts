@@ -193,6 +193,8 @@ function checkAbort(signal?: AbortSignal): void {
 
 // ─── Pre-processing cache ───────────────────────────────────────────────
 const preProcessCache = new Map<File, string>();
+// Cache of VPS-preprocessed File objects (to avoid sending raw files to VPS concat)
+const vpsFileCache = new Map<File, File>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
