@@ -815,11 +815,17 @@ export async function processQueue(
     await Promise.all(Array.from(uniqueFiles).map(f => fetchFileCached(f)));
     console.log('[VideoProcessor] ✅ All files pre-loaded');
 
-    let ff = await getFFmpeg();
+    // Only init WASM if VPS files aren't cached (i.e., VPS preprocess didn't run)
+    let ff: FFmpeg | null = null;
+    const needsWasm = vpsFileCache.size === 0;
+
+    if (needsWasm) {
+      ff = await getFFmpeg();
+    }
 
     if (settings.preProcess) {
       console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
-      await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
+      await preProcessAllInputs(ff!, combinations, settings, (msg, pct) => {
         console.log(`[VideoProcessor] ${msg} (${pct}%)`);
       }, abortSignal);
     }
