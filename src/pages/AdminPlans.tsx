@@ -396,7 +396,36 @@ export default function AdminPlans() {
     setUsersLoading(false);
   };
 
-  const toggleUserAiChat = async (userId: string, currentValue: boolean) => {
+  const loadRecoveryLeads = async () => {
+    setRecoveryLoading(true);
+    // Get all profiles
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, name, email, phone, created_at');
+    
+    // Get all users who have at least one confirmed payment
+    const { data: paidUsers } = await supabase
+      .from('payments')
+      .select('user_id')
+      .eq('status', 'approved');
+    
+    const paidSet = new Set((paidUsers || []).map((p: any) => p.user_id));
+    
+    const leads: RecoveryLead[] = ((profiles || []) as any[])
+      .filter((p: any) => !paidSet.has(p.user_id) && p.phone)
+      .map((p: any) => ({
+        user_id: p.user_id,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        created_at: p.created_at,
+      }))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    setRecoveryLeads(leads);
+    setRecoveryLoading(false);
+  };
+
     setUpdatingUser(userId);
     const newValue = !currentValue;
     const { error } = await supabase
