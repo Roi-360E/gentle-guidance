@@ -82,6 +82,10 @@ export default function AdminPlans() {
   // Sales recovery state
   const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [agentPrompt, setAgentPrompt] = useState('');
+  const [agentPromptSaving, setAgentPromptSaving] = useState(false);
+  const [generatingMessageFor, setGeneratingMessageFor] = useState<string | null>(null);
+  const [generatedMessages, setGeneratedMessages] = useState<Record<string, string>>({});
 
   // Pixel state
   const [pixelName, setPixelName] = useState('');
