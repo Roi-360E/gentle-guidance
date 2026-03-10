@@ -381,7 +381,7 @@ export async function preProcessBatch(
 
   // Test VPS with first file
   onFileProgress?.(0, 'processing', 10);
-  const firstResult = await vpsPreprocessFile(files[0]);
+  const firstResult = await vpsPreprocessFile(files[0], settings);
   
   if (firstResult) {
     console.log(`[VideoProcessor] ⚡ VPS available! Processing all files via VPS...`);
