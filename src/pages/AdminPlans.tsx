@@ -79,6 +79,10 @@ export default function AdminPlans() {
   const [tokenEditUser, setTokenEditUser] = useState<string | null>(null);
   const [tokenEditValue, setTokenEditValue] = useState('');
 
+  // Sales recovery state
+  const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+
   // Pixel state
   const [pixelName, setPixelName] = useState('');
   const [pixelId, setPixelId] = useState('');
