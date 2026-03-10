@@ -375,26 +375,31 @@ export async function preProcessBatch(
   const totalStart = performance.now();
   console.log(`[VideoProcessor] 🚀 Batch pre-processing ${files.length} files for "${sectionLabel}" (VPS-first)`);
 
-  // ─── Try VPS for ALL files in parallel (native FFmpeg = blazing fast) ───
+  // ─── Process files sequentially in order (1, 2, 3, ...) for deterministic progress ───
   let vpsAvailable = true;
 
-  // Process ALL files via VPS in parallel (no sequential first-file test)
-  console.log(`[VideoProcessor] ⚡ Attempting VPS for all ${files.length} files in parallel...`);
+  console.log(`[VideoProcessor] 🔢 Processing ${files.length} files in order (1→${files.length})...`);
   
-  const vpsResults = await Promise.all(
-    files.map(async (file, idx) => {
-      checkAbort(abortSignal);
-      onFileProgress?.(idx, 'processing', 10);
-      const result = await vpsPreprocessFile(file, settings);
-      if (result) {
-        // Store VPS file for fast concat — NO WASM write needed (saves ~1-2s per file)
-        vpsFileCache.set(file, result);
-        onFileProgress?.(idx, 'done', 100);
-        return true;
+  const vpsResults: boolean[] = [];
+  for (let idx = 0; idx < files.length; idx++) {
+    checkAbort(abortSignal);
+    const file = files[idx];
+    onFileProgress?.(idx, 'processing', 10);
+    console.log(`[VideoProcessor] 📄 Pre-processing file ${idx + 1}/${files.length}: ${file.name}`);
+    const result = await vpsPreprocessFile(file, settings);
+    if (result) {
+      vpsFileCache.set(file, result);
+      onFileProgress?.(idx, 'done', 100);
+      vpsResults.push(true);
+    } else {
+      vpsResults.push(false);
+      // If first file fails, VPS is likely down — skip rest for VPS
+      if (idx === 0) {
+        console.log(`[VideoProcessor] ⚠️ First VPS file failed, switching to WASM for all`);
+        break;
       }
-      return false;
-    })
-  );
+    }
+  }
 
   const failedIndices = vpsResults.map((ok, i) => ok ? -1 : i).filter(i => i >= 0);
   const vpsSuccessCount = vpsResults.filter(Boolean).length;
@@ -534,10 +539,17 @@ async function vpsConcatenateFiles(
 
     const url = 'https://api.deploysites.online/concat';
 
-    onProgress?.(10);
+    onProgress?.(15);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+    // Start aggressive progress simulation while waiting for VPS
+    let simProgress = 15;
+    const progressTimer = setInterval(() => {
+      simProgress = Math.min(simProgress + 8, 85);
+      onProgress?.(simProgress);
+    }, 500);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -545,8 +557,9 @@ async function vpsConcatenateFiles(
       signal: controller.signal,
     });
 
+    clearInterval(progressTimer);
     clearTimeout(timeoutId);
-    onProgress?.(60);
+    onProgress?.(90);
 
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
@@ -633,7 +646,8 @@ export async function concatenateVideos(
   console.log(`[VideoProcessor] Concatenating combo ${combination.id}: ${combination.outputName} (WASM)`);
 
   const progressHandler = ({ progress }: { progress: number }) => {
-    const pct = Math.min(Math.round(progress * 100), 100);
+    // Accelerate progress reporting — multiply by 1.3 to make bar feel faster
+    const pct = Math.min(Math.round(progress * 130), 100);
     if (pct > 0) onProgress?.(pct);
   };
 
@@ -641,7 +655,8 @@ export async function concatenateVideos(
   const logHandler = ({ message }: { message: string }) => {
     const timeMatch = message.match(/time=(\d+):(\d+):(\d+)/);
     if (timeMatch) {
-      lastLogProgress = Math.min(lastLogProgress + 5, 90);
+      // Jump progress more aggressively (10% increments)
+      lastLogProgress = Math.min(lastLogProgress + 10, 95);
       onProgress?.(lastLogProgress);
     }
   };

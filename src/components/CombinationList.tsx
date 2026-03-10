@@ -67,12 +67,13 @@ export function CombinationList({
       </div>
 
       {/* Overall progress */}
+      {/* Overall progress — thicker bar with smooth animation */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>Progresso geral</span>
           <span>{Math.round(totalProgress)}%</span>
         </div>
-        <Progress value={totalProgress} className="h-2" />
+        <Progress value={totalProgress} className="h-2.5 [&>div]:transition-all [&>div]:duration-500 [&>div]:ease-out" />
       </div>
 
       {/* Current item progress */}
@@ -88,10 +89,13 @@ export function CombinationList({
             </span>
           </div>
           <div className="relative">
-            <Progress value={currentProgress > 0 ? currentProgress : undefined} className={`h-1.5 ${currentProgress === 0 ? 'animate-pulse' : ''}`} />
+            <Progress
+              value={currentProgress > 0 ? currentProgress : 5}
+              className="h-2 [&>div]:transition-all [&>div]:duration-300 [&>div]:ease-out"
+            />
           </div>
           <p className="text-xs text-muted-foreground">
-            Vídeo {doneCount + errorCount + 1} de {combinations.length}
+            Vídeo {doneCount + errorCount + 1} de {combinations.length} • {Math.round(totalProgress)}% concluído
           </p>
         </div>
       )}
