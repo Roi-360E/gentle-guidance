@@ -88,10 +88,13 @@ export function CombinationList({
             </span>
           </div>
           <div className="relative">
-            <Progress value={currentProgress > 0 ? currentProgress : undefined} className={`h-1.5 ${currentProgress === 0 ? 'animate-pulse' : ''}`} />
+            <Progress
+              value={currentProgress > 0 ? currentProgress : 5}
+              className="h-2 [&>div]:transition-all [&>div]:duration-300 [&>div]:ease-out"
+            />
           </div>
           <p className="text-xs text-muted-foreground">
-            Vídeo {doneCount + errorCount + 1} de {combinations.length}
+            Vídeo {doneCount + errorCount + 1} de {combinations.length} • {Math.round(totalProgress)}% concluído
           </p>
         </div>
       )}

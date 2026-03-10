@@ -375,26 +375,31 @@ export async function preProcessBatch(
   const totalStart = performance.now();
   console.log(`[VideoProcessor] 🚀 Batch pre-processing ${files.length} files for "${sectionLabel}" (VPS-first)`);
 
-  // ─── Try VPS for ALL files in parallel (native FFmpeg = blazing fast) ───
+  // ─── Process files sequentially in order (1, 2, 3, ...) for deterministic progress ───
   let vpsAvailable = true;
 
-  // Process ALL files via VPS in parallel (no sequential first-file test)
-  console.log(`[VideoProcessor] ⚡ Attempting VPS for all ${files.length} files in parallel...`);
+  console.log(`[VideoProcessor] 🔢 Processing ${files.length} files in order (1→${files.length})...`);
   
-  const vpsResults = await Promise.all(
-    files.map(async (file, idx) => {
-      checkAbort(abortSignal);
-      onFileProgress?.(idx, 'processing', 10);
-      const result = await vpsPreprocessFile(file, settings);
-      if (result) {
-        // Store VPS file for fast concat — NO WASM write needed (saves ~1-2s per file)
-        vpsFileCache.set(file, result);
-        onFileProgress?.(idx, 'done', 100);
-        return true;
+  const vpsResults: boolean[] = [];
+  for (let idx = 0; idx < files.length; idx++) {
+    checkAbort(abortSignal);
+    const file = files[idx];
+    onFileProgress?.(idx, 'processing', 10);
+    console.log(`[VideoProcessor] 📄 Pre-processing file ${idx + 1}/${files.length}: ${file.name}`);
+    const result = await vpsPreprocessFile(file, settings);
+    if (result) {
+      vpsFileCache.set(file, result);
+      onFileProgress?.(idx, 'done', 100);
+      vpsResults.push(true);
+    } else {
+      vpsResults.push(false);
+      // If first file fails, VPS is likely down — skip rest for VPS
+      if (idx === 0) {
+        console.log(`[VideoProcessor] ⚠️ First VPS file failed, switching to WASM for all`);
+        break;
       }
-      return false;
-    })
-  );
+    }
+  }
 
   const failedIndices = vpsResults.map((ok, i) => ok ? -1 : i).filter(i => i >= 0);
   const vpsSuccessCount = vpsResults.filter(Boolean).length;
