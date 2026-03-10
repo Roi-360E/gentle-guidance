@@ -67,12 +67,13 @@ export function CombinationList({
       </div>
 
       {/* Overall progress */}
+      {/* Overall progress — thicker bar with smooth animation */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>Progresso geral</span>
           <span>{Math.round(totalProgress)}%</span>
         </div>
-        <Progress value={totalProgress} className="h-2" />
+        <Progress value={totalProgress} className="h-2.5 [&>div]:transition-all [&>div]:duration-500 [&>div]:ease-out" />
       </div>
 
       {/* Current item progress */}
