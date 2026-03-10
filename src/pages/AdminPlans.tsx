@@ -93,16 +93,16 @@ export default function AdminPlans() {
   const [funnelData, setFunnelData] = useState<{ event_name: string; count: number }[]>([]);
   const [funnelLoading, setFunnelLoading] = useState(false);
 
-  // DevTools toggle
-  const [devToolsEnabled, setDevToolsEnabled] = useState(() => localStorage.getItem('devtools_unlocked') === '1');
-  const handleDevToolsToggle = (checked: boolean) => {
-    setDevToolsEnabled(checked);
-    if (checked) {
-      localStorage.setItem('devtools_unlocked', '1');
-    } else {
+  // DevTools toggle — ON = proteção ativa (console bloqueado), OFF = console liberado
+  const [consoleBlocked, setConsoleBlocked] = useState(() => localStorage.getItem('devtools_unlocked') !== '1');
+  const handleSaveDevTools = () => {
+    if (consoleBlocked) {
       localStorage.removeItem('devtools_unlocked');
+    } else {
+      localStorage.setItem('devtools_unlocked', '1');
     }
-    toast.success(checked ? 'DevTools desbloqueado! Recarregue a página.' : 'DevTools bloqueado. Recarregue a página.');
+    toast.success(consoleBlocked ? 'Console bloqueado! Recarregando...' : 'Console liberado! Recarregando...');
+    setTimeout(() => window.location.reload(), 800);
   };
 
   // Domain verification state
