@@ -539,10 +539,17 @@ async function vpsConcatenateFiles(
 
     const url = 'https://api.deploysites.online/concat';
 
-    onProgress?.(10);
+    onProgress?.(15);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+    // Start aggressive progress simulation while waiting for VPS
+    let simProgress = 15;
+    const progressTimer = setInterval(() => {
+      simProgress = Math.min(simProgress + 8, 85);
+      onProgress?.(simProgress);
+    }, 500);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -550,8 +557,9 @@ async function vpsConcatenateFiles(
       signal: controller.signal,
     });
 
+    clearInterval(progressTimer);
     clearTimeout(timeoutId);
-    onProgress?.(60);
+    onProgress?.(90);
 
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
