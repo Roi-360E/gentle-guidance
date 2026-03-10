@@ -321,7 +321,7 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const url = `https://${projectId}.supabase.co/functions/v1/vps-preprocess`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for large files via proxy
 
     const res = await fetch(url, {
       method: 'POST',
@@ -504,12 +504,20 @@ async function preProcessAllInputs(
   const files = Array.from(uniqueFiles);
   console.log(`[VideoProcessor] 🔄 Pre-processing ${files.length} unique files`);
 
-  for (let i = 0; i < files.length; i++) {
-    checkAbort(abortSignal);
-    const file = files[i];
-    onProgress?.(`Normalizando ${i + 1}/${files.length}: ${file.name}`, Math.round((i / files.length) * 100));
-    await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings, abortSignal);
-  }
+  // Use preProcessBatch which tries VPS first (~3-4s) then falls back to WASM
+  await preProcessBatch(
+    files,
+    'AllInputs',
+    settings,
+    (fileIndex, status, pct) => {
+      if (status === 'processing') {
+        onProgress?.(`Normalizando ${fileIndex + 1}/${files.length}`, Math.round((fileIndex / files.length) * 100));
+      } else if (status === 'done') {
+        onProgress?.(`Normalizando ${fileIndex + 1}/${files.length}`, Math.round(((fileIndex + 1) / files.length) * 100));
+      }
+    },
+    abortSignal
+  );
 
   onProgress?.('Pré-processamento concluído', 100);
 }
