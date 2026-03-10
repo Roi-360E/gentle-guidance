@@ -322,12 +322,12 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    // Scale timeout based on file size: 30s base + 5s per 10MB (generous for large files)
+    // Generous timeout: 60s base + 10s per 10MB (handles slow upload speeds)
     const sizeMB = file.size / (1024 * 1024);
-    const timeoutMs = 30000 + Math.ceil(sizeMB / 10) * 5000;
+    const timeoutMs = 60000 + Math.ceil(sizeMB / 10) * 10000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)}MB) timeout=${(timeoutMs/1000).toFixed(0)}s`);
+    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB) timeout=${(timeoutMs/1000).toFixed(0)}s`);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -356,7 +356,7 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
       return null;
     }
 
-    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${(file.size/1024/1024).toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms`);
+    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${sizeMB.toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms`);
     return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
