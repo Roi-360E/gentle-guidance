@@ -1352,20 +1352,23 @@ export default function AdminPlans() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4" /> DevTools / Console
+                  <ShieldCheck className="w-4 h-4" /> Proteção do Console
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">Desbloquear DevTools</p>
-                    <p className="text-xs text-muted-foreground">Permite abrir o console (F12) e inspecionar elementos no site de produção</p>
+                    <p className="text-sm font-medium">Bloquear Console (F12)</p>
+                    <p className="text-xs text-muted-foreground">Quando ativado, bloqueia o acesso ao DevTools e inspeção de elementos</p>
                   </div>
                   <Switch
-                    checked={devToolsEnabled}
-                    onCheckedChange={handleDevToolsToggle}
+                    checked={consoleBlocked}
+                    onCheckedChange={setConsoleBlocked}
                   />
                 </div>
+                <Button onClick={handleSaveDevTools} className="w-full">
+                  <Save className="w-4 h-4 mr-2" /> Salvar e aplicar
+                </Button>
               </CardContent>
             </Card>
 
