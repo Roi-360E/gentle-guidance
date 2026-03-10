@@ -1360,15 +1360,7 @@ export default function AdminPlans() {
                   </div>
                   <Switch
                     checked={devToolsEnabled}
-                    onCheckedChange={(checked) => {
-                      setDevToolsEnabled(checked);
-                      if (checked) {
-                        localStorage.setItem('devtools_unlocked', '1');
-                      } else {
-                        localStorage.removeItem('devtools_unlocked');
-                      }
-                      toast.success(checked ? 'DevTools desbloqueado! Recarregue a página.' : 'DevTools bloqueado. Recarregue a página.');
-                    }}
+                    onCheckedChange={handleDevToolsToggle}
                   />
                 </div>
               </CardContent>
