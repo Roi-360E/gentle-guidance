@@ -156,6 +156,7 @@ export default function AdminPlans() {
           loadPixelConfig();
           loadFunnelData();
           loadDomainFiles();
+          loadRecoveryLeads();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
