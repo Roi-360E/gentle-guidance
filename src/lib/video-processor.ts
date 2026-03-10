@@ -316,16 +316,13 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
       formData.append('crf', '23');
     }
 
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    const url = `https://${projectId}.supabase.co/functions/v1/vps-preprocess`;
+    const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for large files via proxy
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2min for large files direct
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { apikey: anonKey },
       body: formData,
       signal: controller.signal,
     });
@@ -542,18 +539,15 @@ async function vpsConcatenateFiles(
     formData.append('preset', 'ultrafast');
     formData.append('crf', '23');
 
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    const url = `https://${projectId}.supabase.co/functions/v1/vps-concatenate`;
+    const url = 'https://api.deploysites.online/concat';
 
     onProgress?.(10);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { apikey: anonKey },
       body: formData,
       signal: controller.signal,
     });
