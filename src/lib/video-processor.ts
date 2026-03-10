@@ -78,6 +78,7 @@ export async function terminateFFmpeg(): Promise<void> {
     ffmpegLoaded = false;
     processedSinceRestart = 0;
     preProcessCache.clear();
+    vpsFileCache.clear();
     cacheCounter = 0;
     clearFetchFileCache();
     console.log('[VideoProcessor] 🔴 FFmpeg terminated');
@@ -193,6 +194,8 @@ function checkAbort(signal?: AbortSignal): void {
 
 // ─── Pre-processing cache ───────────────────────────────────────────────
 const preProcessCache = new Map<File, string>();
+// Cache of VPS-preprocessed File objects (to avoid sending raw files to VPS concat)
+const vpsFileCache = new Map<File, File>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
@@ -374,7 +377,6 @@ export async function preProcessBatch(
 
   // ─── Try VPS for ALL files in parallel (native FFmpeg = blazing fast) ───
   let vpsAvailable = true;
-  const vpsResults: (File | null)[] = [];
 
   // Test VPS with first file
   onFileProgress?.(0, 'processing', 10);
@@ -382,9 +384,11 @@ export async function preProcessBatch(
   
   if (firstResult) {
     console.log(`[VideoProcessor] ⚡ VPS available! Processing all files via VPS...`);
-    vpsResults[0] = firstResult;
+    
+    // Store VPS file in cache (for VPS concat later — no WASM write needed)
+    vpsFileCache.set(files[0], firstResult);
 
-    // Cache the VPS result
+    // Also cache in WASM for local fallback
     const cacheKey = getCacheKey(files[0]);
     const ff = await getFFmpeg();
     const data = new Uint8Array(await firstResult.arrayBuffer());
@@ -401,6 +405,9 @@ export async function preProcessBatch(
 
         const result = await vpsPreprocessFile(file, settings);
         if (result) {
+          // Store VPS file for fast concat
+          vpsFileCache.set(file, result);
+
           const key = getCacheKey(file);
           const currentFf = await getFFmpeg();
           const fileData = new Uint8Array(await result.arrayBuffer());
@@ -530,13 +537,24 @@ async function vpsConcatenateFiles(
 ): Promise<string | null> {
   try {
     const formData = new FormData();
-    formData.append('hook', combination.hook.file, combination.hook.file.name);
-    formData.append('body', combination.body.file, combination.body.file.name);
-    formData.append('cta', combination.cta.file, combination.cta.file.name);
+    
+    // Use VPS-preprocessed files if available (already normalized), otherwise raw files
+    const hookFile = vpsFileCache.get(combination.hook.file) || combination.hook.file;
+    const bodyFile = vpsFileCache.get(combination.body.file) || combination.body.file;
+    const ctaFile = vpsFileCache.get(combination.cta.file) || combination.cta.file;
+    
+    formData.append('hook', hookFile, hookFile.name);
+    formData.append('body', bodyFile, bodyFile.name);
+    formData.append('cta', ctaFile, ctaFile.name);
 
-    const scale = getScale(settings);
-    if (scale) formData.append('scale', scale);
-    formData.append('preset', 'ultrafast');
+    // Only send scale if files weren't pre-processed (raw files need scaling)
+    const hasPreprocessed = vpsFileCache.has(combination.hook.file);
+    if (!hasPreprocessed) {
+      const scale = getScale(settings);
+      if (scale) formData.append('scale', scale);
+    }
+    // When files are pre-processed, tell VPS to use stream copy (no re-encode)
+    formData.append('preset', hasPreprocessed ? 'copy' : 'ultrafast');
     formData.append('crf', '23');
 
     const url = 'https://api.deploysites.online/concat';
@@ -784,6 +802,7 @@ async function clearCache(): Promise<void> {
     try { await ffmpeg.deleteFile(filename); } catch {}
   }
   preProcessCache.clear();
+  vpsFileCache.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
@@ -839,15 +858,73 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
+    // ─── Try VPS parallel concat first (process multiple combos simultaneously) ───
+    const VPS_PARALLEL_BATCH = settings.batchSize || 3;
+    let useVpsParallel = vpsFileCache.size > 0; // VPS files available = VPS is working
+
+    if (useVpsParallel) {
+      console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${VPS_PARALLEL_BATCH} simultaneous`);
+      
+      for (let batchStart = 0; batchStart < combinations.length; batchStart += VPS_PARALLEL_BATCH) {
+        checkAbort(abortSignal);
+        
+        const batch = combinations.slice(batchStart, batchStart + VPS_PARALLEL_BATCH);
+        
+        for (const combo of batch) {
+          combo.status = 'processing';
+          combo.errorMessage = undefined;
+        }
+        onUpdate([...combinations]);
+
+        const results = await Promise.all(
+          batch.map(async (combo) => {
+            try {
+              console.log(`[VideoProcessor] 🎬 VPS concat combo ${combo.id}: ${combo.outputName}`);
+              const url = await vpsConcatenateFiles(combo, settings);
+              if (url) {
+                combo.status = 'done';
+                combo.outputUrl = url;
+                console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} concluído (VPS)!`, 'color: #22c55e; font-weight: bold;');
+                return true;
+              }
+              return false;
+            } catch {
+              return false;
+            }
+          })
+        );
+
+        onUpdate([...combinations]);
+
+        // If first batch all failed, VPS concat is broken — fall back
+        if (batchStart === 0 && results.every(r => !r)) {
+          console.log(`[VideoProcessor] 📦 VPS parallel concat failed, falling back to sequential`);
+          useVpsParallel = false;
+          // Reset statuses
+          for (const combo of batch) {
+            if (combo.status !== 'done') {
+              combo.status = 'pending';
+            }
+          }
+          onUpdate([...combinations]);
+          break;
+        }
+      }
+    }
+
+    // ─── Sequential fallback for remaining/failed combos ───
+    const remaining = combinations.filter(c => c.status !== 'done');
+    if (remaining.length > 0) {
+      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially`);
+    }
+
     const MAX_RETRIES = 5;
     const retryCount = new Map<number, number>();
 
-    // Process ALL combinations, retrying failures until all succeed or max retries hit
     for (let i = 0; i < combinations.length; i++) {
       checkAbort(abortSignal);
 
       const combo = combinations[i];
-      // Skip already done combos (from previous retry rounds)
       if (combo.status === 'done') continue;
 
       combo.status = 'processing';
@@ -872,11 +949,10 @@ export async function processQueue(
         combo.outputUrl = url;
         console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');
       } catch (err) {
-        // If aborted, mark remaining as pending and exit
         if (abortSignal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
           combo.status = 'pending';
           onUpdate([...combinations]);
-          return; // exit entirely on abort
+          return;
         }
 
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -884,7 +960,6 @@ export async function processQueue(
 
         const retries = retryCount.get(combo.id) || 0;
         if (retries < MAX_RETRIES - 1) {
-          // Retry: recycle FFmpeg and rebuild cache if needed
           console.log(`%c[VideoProcessor] ♻️ Reciclando FFmpeg e retentando combo ${combo.id} (${retries + 2}/${MAX_RETRIES})`, 'color: #f59e0b; font-weight: bold;');
           retryCount.set(combo.id, retries + 1);
           await terminateFFmpeg();
@@ -894,7 +969,7 @@ export async function processQueue(
           }
           combo.status = 'pending';
           combo.errorMessage = undefined;
-          i--; // retry same index
+          i--;
         } else {
           combo.status = 'error';
           combo.errorMessage = errorMsg;
@@ -906,7 +981,7 @@ export async function processQueue(
       onProgressItem(0);
     }
 
-    // Final validation: check all combos are done
+    // Final validation
     const doneCount = combinations.filter(c => c.status === 'done').length;
     const errorCount = combinations.filter(c => c.status === 'error').length;
     console.log(
