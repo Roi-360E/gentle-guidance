@@ -11,7 +11,6 @@ serve(async (req) => {
   }
 
   try {
-    // Derive VPS preprocess URL from the subtitle URL (same server, different endpoint)
     const subtitleUrl = Deno.env.get('VPS_SUBTITLE_URL');
     if (!subtitleUrl) {
       return new Response(JSON.stringify({ error: 'VPS not configured' }), {
@@ -23,11 +22,11 @@ serve(async (req) => {
     const baseUrl = subtitleUrl.replace(/\/[^\/]*$/, '');
     const preprocessUrl = `${baseUrl}/preprocess`;
 
-    // Forward the multipart form data directly to VPS
+    // Forward the multipart form data directly to VPS (includes video + scale/preset/crf)
     const formData = await req.formData();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s for larger files with scaling
 
     const vpsResponse = await fetch(preprocessUrl, {
       method: 'POST',
@@ -53,7 +52,7 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    const msg = error.name === 'AbortError' ? 'VPS timeout (>15s)' : error.message;
+    const msg = error.name === 'AbortError' ? 'VPS timeout (>30s)' : error.message;
     return new Response(JSON.stringify({ error: msg }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
