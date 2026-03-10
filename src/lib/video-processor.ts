@@ -307,54 +307,63 @@ export async function preProcessInputCached(
  * Returns a File with the preprocessed video, or null on failure.
  */
 async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<File | null> {
+  const fileStart = performance.now();
   try {
     const formData = new FormData();
     formData.append('video', file, file.name);
 
-    // Send scale/resolution settings so VPS does native scaling (~3-4s)
+    // Send scale/resolution settings so VPS does native scaling
     if (settings) {
       const scale = getScale(settings);
       if (scale) formData.append('scale', scale);
       formData.append('preset', 'ultrafast');
-      formData.append('crf', '23');
+      formData.append('crf', '28'); // Higher CRF = faster encode, smaller output
     }
 
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2min for large files direct
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
+    const uploadStart = performance.now();
     const res = await fetch(url, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
     });
+    const uploadMs = (performance.now() - uploadStart).toFixed(0);
 
     clearTimeout(timeoutId);
 
     const contentType = res.headers.get('content-type') || '';
 
-    // If JSON response → error
     if (contentType.includes('application/json')) {
       const data = await res.json();
-      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error}`);
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error} (upload: ${uploadMs}ms)`);
       return null;
     }
 
     if (!res.ok) {
-      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: HTTP ${res.status}`);
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: HTTP ${res.status} (upload: ${uploadMs}ms)`);
       return null;
     }
 
+    const downloadStart = performance.now();
     const blob = await res.blob();
+    const downloadMs = (performance.now() - downloadStart).toFixed(0);
+    const totalMs = (performance.now() - fileStart).toFixed(0);
+
     if (blob.size < 1000) {
       console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: response too small (${blob.size}b)`);
       return null;
     }
 
+    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${(file.size/1024/1024).toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB | upload: ${uploadMs}ms, download: ${downloadMs}ms, total: ${totalMs}ms`);
+
     return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
   } catch (err) {
-    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${err instanceof Error ? err.message : err}`);
+    const totalMs = (performance.now() - fileStart).toFixed(0);
+    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${err instanceof Error ? err.message : err} (${totalMs}ms)`);
     return null;
   }
 }
