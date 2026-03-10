@@ -57,6 +57,14 @@ const Auth = () => {
         return;
       }
 
+      // --- Phone validation ---
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+        toast.error('Telefone inválido. Digite DDD + número.');
+        setLoading(false);
+        return;
+      }
+
       // --- CPF validation ---
       if (!validateCPF(cpf)) {
         toast.error('CPF inválido. Verifique os números digitados.');
