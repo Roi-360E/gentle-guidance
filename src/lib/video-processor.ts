@@ -479,15 +479,105 @@ async function preProcessAllInputs(
   onProgress?.('Pré-processamento concluído', 100);
 }
 
+/**
+ * Attempt concatenation via VPS (native FFmpeg = ~2-5s vs ~30-60s WASM).
+ * Sends 3 source files to VPS and returns blob URL, or null on failure.
+ */
+async function vpsConcatenateFiles(
+  combination: Combination,
+  settings: ProcessingSettings,
+  onProgress?: (progress: number) => void,
+): Promise<string | null> {
+  try {
+    const formData = new FormData();
+    formData.append('hook', combination.hook.file, combination.hook.file.name);
+    formData.append('body', combination.body.file, combination.body.file.name);
+    formData.append('cta', combination.cta.file, combination.cta.file.name);
+
+    const scale = getScale(settings);
+    if (scale) formData.append('scale', scale);
+    formData.append('preset', 'ultrafast');
+    formData.append('crf', '23');
+
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const url = `https://${projectId}.supabase.co/functions/v1/vps-concatenate`;
+
+    onProgress?.(10);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { apikey: anonKey },
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    onProgress?.(60);
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${data.error}`);
+      return null;
+    }
+
+    if (!res.ok) {
+      console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: HTTP ${res.status}`);
+      return null;
+    }
+
+    const blob = await res.blob();
+    if (blob.size < 1000) {
+      console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: response too small (${blob.size}b)`);
+      return null;
+    }
+
+    onProgress?.(95);
+    return URL.createObjectURL(blob);
+  } catch (err) {
+    console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+// Track whether VPS concat is available (set once per queue run)
+let vpsConcat: 'unknown' | 'available' | 'unavailable' = 'unknown';
+
+export function resetVpsConcatStatus(): void {
+  vpsConcat = 'unknown';
+}
+
 export async function concatenateVideos(
   combination: Combination,
   settings: ProcessingSettings,
   onProgress?: (progress: number) => void,
   abortSignal?: AbortSignal
 ): Promise<string> {
-  const ff = await getFFmpeg();
   checkAbort(abortSignal);
-  console.log(`[VideoProcessor] Concatenating combo ${combination.id}: ${combination.outputName}`);
+
+  // ─── Try VPS concatenation first (native FFmpeg ~2-5s) ───
+  if (vpsConcat !== 'unavailable') {
+    console.log(`[VideoProcessor] 🌐 Trying VPS concat for combo ${combination.id}...`);
+    const vpsUrl = await vpsConcatenateFiles(combination, settings, onProgress);
+    if (vpsUrl) {
+      vpsConcat = 'available';
+      console.log(`[VideoProcessor] ⚡ VPS concat succeeded for combo ${combination.id}`);
+      onProgress?.(100);
+      return vpsUrl;
+    }
+    if (vpsConcat === 'unknown') {
+      vpsConcat = 'unavailable';
+      console.log(`[VideoProcessor] 📦 VPS concat unavailable, falling back to WASM`);
+    }
+  }
+
+  // ─── Fallback: local WASM concatenation ───
+  const ff = await getFFmpeg();
+  console.log(`[VideoProcessor] Concatenating combo ${combination.id}: ${combination.outputName} (WASM)`);
 
   const progressHandler = ({ progress }: { progress: number }) => {
     const pct = Math.min(Math.round(progress * 100), 100);
@@ -520,7 +610,6 @@ export async function concatenateVideos(
       const scale = getScale(settings);
 
       if (!scale) {
-        // No resolution change → fast concat with stream copy
         const concatList = `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`;
         await ff.writeFile('concat.txt', concatList);
 
@@ -531,7 +620,6 @@ export async function concatenateVideos(
         checkAbort(abortSignal);
 
         if (exitCode !== 0) {
-          // Fallback: filter concat with re-encode
           exitCode = await ff.exec([
             '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
             '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
@@ -557,7 +645,6 @@ export async function concatenateVideos(
 
         if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
       } else {
-        // Resolution change → concat + scale in one pass
         let exitCode = await ff.exec([
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
           '-filter_complex',
@@ -572,7 +659,6 @@ export async function concatenateVideos(
         checkAbort(abortSignal);
 
         if (exitCode !== 0) {
-          // Video-only fallback
           exitCode = await ff.exec([
             '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
             '-filter_complex',
@@ -699,6 +785,9 @@ export async function processQueue(
   onProgressItem: (progress: number) => void,
   abortSignal?: AbortSignal
 ): Promise<void> {
+  // Reset VPS concat detection for this queue run
+  resetVpsConcatStatus();
+
   console.log(
     `%c[VideoProcessor] 🚀 Iniciando fila: ${combinations.length} combinações | Resolução: ${settings.resolution} | Pré-processo: ${settings.preProcess} | Batch: ${settings.batchSize}`,
     'color: #3b82f6; font-weight: bold; font-size: 14px;'
