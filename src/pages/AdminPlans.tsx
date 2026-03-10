@@ -40,11 +40,20 @@ interface UserRow {
   user_id: string;
   name: string | null;
   email: string | null;
+  phone: string | null;
   plan: string;
   token_balance: number;
   month_year: string;
   is_blocked: boolean;
   has_ai_chat: boolean;
+}
+
+interface RecoveryLead {
+  user_id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  created_at: string;
 }
 
 const ICON_OPTIONS = ['Sparkles', 'Zap', 'Crown'];
