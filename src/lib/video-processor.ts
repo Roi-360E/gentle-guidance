@@ -377,7 +377,6 @@ export async function preProcessBatch(
 
   // ─── Try VPS for ALL files in parallel (native FFmpeg = blazing fast) ───
   let vpsAvailable = true;
-  const vpsResults: (File | null)[] = [];
 
   // Test VPS with first file
   onFileProgress?.(0, 'processing', 10);
@@ -385,9 +384,11 @@ export async function preProcessBatch(
   
   if (firstResult) {
     console.log(`[VideoProcessor] ⚡ VPS available! Processing all files via VPS...`);
-    vpsResults[0] = firstResult;
+    
+    // Store VPS file in cache (for VPS concat later — no WASM write needed)
+    vpsFileCache.set(files[0], firstResult);
 
-    // Cache the VPS result
+    // Also cache in WASM for local fallback
     const cacheKey = getCacheKey(files[0]);
     const ff = await getFFmpeg();
     const data = new Uint8Array(await firstResult.arrayBuffer());
@@ -404,6 +405,9 @@ export async function preProcessBatch(
 
         const result = await vpsPreprocessFile(file, settings);
         if (result) {
+          // Store VPS file for fast concat
+          vpsFileCache.set(file, result);
+
           const key = getCacheKey(file);
           const currentFf = await getFFmpeg();
           const fileData = new Uint8Array(await result.arrayBuffer());
