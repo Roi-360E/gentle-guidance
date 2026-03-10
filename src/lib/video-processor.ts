@@ -539,9 +539,7 @@ async function vpsConcatenateFiles(
     formData.append('preset', 'ultrafast');
     formData.append('crf', '23');
 
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    const url = `https://${projectId}.supabase.co/functions/v1/vps-concatenate`;
+    const url = 'https://api.deploysites.online/concat';
 
     onProgress?.(10);
 
