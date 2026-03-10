@@ -83,6 +83,7 @@ export default function AdminPlans() {
   const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [agentPrompt, setAgentPrompt] = useState('');
+  const [agentWhatsApp, setAgentWhatsApp] = useState('');
   const [agentPromptSaving, setAgentPromptSaving] = useState(false);
   const [generatingMessageFor, setGeneratingMessageFor] = useState<string | null>(null);
   const [generatedMessages, setGeneratedMessages] = useState<Record<string, string>>({});
@@ -434,22 +435,27 @@ export default function AdminPlans() {
   const loadAgentPrompt = async () => {
     const { data } = await supabase
       .from('admin_settings' as any)
-      .select('value')
-      .eq('key', 'recovery_agent_prompt')
-      .single();
-    if (data) setAgentPrompt((data as any).value || '');
+      .select('key, value')
+      .in('key', ['recovery_agent_prompt', 'recovery_whatsapp']);
+    if (data) {
+      (data as any[]).forEach((row: any) => {
+        if (row.key === 'recovery_agent_prompt') setAgentPrompt(row.value || '');
+        if (row.key === 'recovery_whatsapp') setAgentWhatsApp(row.value || '');
+      });
+    }
   };
 
   const saveAgentPrompt = async () => {
     setAgentPromptSaving(true);
-    const { error } = await supabase
-      .from('admin_settings' as any)
-      .update({ value: agentPrompt, updated_at: new Date().toISOString() } as any)
-      .eq('key', 'recovery_agent_prompt');
-    if (error) {
-      toast.error('Erro ao salvar prompt: ' + error.message);
+    const now = new Date().toISOString();
+    const [r1, r2] = await Promise.all([
+      supabase.from('admin_settings' as any).update({ value: agentPrompt, updated_at: now } as any).eq('key', 'recovery_agent_prompt'),
+      supabase.from('admin_settings' as any).update({ value: agentWhatsApp.replace(/\D/g, ''), updated_at: now } as any).eq('key', 'recovery_whatsapp'),
+    ]);
+    if (r1.error || r2.error) {
+      toast.error('Erro ao salvar: ' + (r1.error?.message || r2.error?.message));
     } else {
-      toast.success('Prompt do agente atualizado!');
+      toast.success('Configurações do agente atualizadas!');
     }
     setAgentPromptSaving(false);
   };
@@ -1127,14 +1133,33 @@ export default function AdminPlans() {
                   Configure como o agente de IA deve se comportar ao gerar mensagens de recuperação para WhatsApp.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Textarea
-                  value={agentPrompt}
-                  onChange={(e) => setAgentPrompt(e.target.value)}
-                  placeholder="Descreva como o agente deve se comportar..."
-                  rows={5}
-                  className="resize-y"
-                />
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="agent-whatsapp">Seu WhatsApp (remetente)</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="agent-whatsapp"
+                      placeholder="5547992176490"
+                      value={agentWhatsApp}
+                      onChange={(e) => setAgentWhatsApp(e.target.value.replace(/\D/g, ''))}
+                      maxLength={13}
+                      className="pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Código do país + DDD + número (ex: 5547992176490)</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-prompt">Comportamento do Agente</Label>
+                  <Textarea
+                    id="agent-prompt"
+                    value={agentPrompt}
+                    onChange={(e) => setAgentPrompt(e.target.value)}
+                    placeholder="Descreva como o agente deve se comportar..."
+                    rows={5}
+                    className="resize-y"
+                  />
+                </div>
                 <Button
                   onClick={saveAgentPrompt}
                   disabled={agentPromptSaving}
@@ -1142,7 +1167,7 @@ export default function AdminPlans() {
                   className="gap-2"
                 >
                   {agentPromptSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Salvar Prompt
+                  Salvar Configurações
                 </Button>
               </CardContent>
             </Card>
