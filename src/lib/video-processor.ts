@@ -929,6 +929,13 @@ export async function processQueue(
       console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially`);
     }
 
+    // Hydrate all VPS-preprocessed files to WASM cache once before sequential processing
+    if (remaining.length > 0 && vpsFileCache.size > 0 && settings.preProcess) {
+      console.log(`[VideoProcessor] 💾 Hydrating WASM cache from ${vpsFileCache.size} VPS files...`);
+      const allUniqueFiles = Array.from(new Set(remaining.flatMap(c => [c.hook.file, c.body.file, c.cta.file])));
+      await hydrateWasmFromVpsCache(allUniqueFiles);
+    }
+
     const MAX_RETRIES = 5;
     const retryCount = new Map<number, number>();
 
