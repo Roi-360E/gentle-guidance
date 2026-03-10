@@ -83,6 +83,7 @@ export default function AdminPlans() {
   const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [agentPrompt, setAgentPrompt] = useState('');
+  const [agentWhatsApp, setAgentWhatsApp] = useState('');
   const [agentPromptSaving, setAgentPromptSaving] = useState(false);
   const [generatingMessageFor, setGeneratingMessageFor] = useState<string | null>(null);
   const [generatedMessages, setGeneratedMessages] = useState<Record<string, string>>({});
