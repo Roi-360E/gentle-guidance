@@ -319,7 +319,7 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for large files via proxy
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2min for large files direct
 
     const res = await fetch(url, {
       method: 'POST',
