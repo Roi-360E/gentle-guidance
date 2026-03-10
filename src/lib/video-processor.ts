@@ -307,12 +307,6 @@ export async function preProcessInputCached(
  * Returns a File with the preprocessed video, or null on failure.
  */
 async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<File | null> {
-  // Skip VPS for files > 10MB — upload latency makes it slower than local
-  if (file.size > 10 * 1024 * 1024) {
-    console.log(`[VPS-Preprocess] ⏭️ Skipping ${file.name} (${(file.size/1024/1024).toFixed(1)}MB > 10MB limit) — will use local`);
-    return null;
-  }
-
   const fileStart = performance.now();
   try {
     const formData = new FormData();
@@ -328,8 +322,11 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    // Aggressive 8s timeout — if VPS can't finish in 8s, local WASM is faster
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    // Scale timeout based on file size: 15s base + 5s per 10MB
+    const timeoutMs = 15000 + Math.ceil(file.size / (10 * 1024 * 1024)) * 5000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)}MB) timeout=${(timeoutMs/1000).toFixed(0)}s`);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -362,7 +359,7 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
-    const reason = err instanceof DOMException && err.name === 'AbortError' ? 'TIMEOUT (>8s)' : (err instanceof Error ? err.message : String(err));
+    const reason = err instanceof DOMException && err.name === 'AbortError' ? `TIMEOUT` : (err instanceof Error ? err.message : String(err));
     console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${reason} (${totalMs}ms) — falling back to local`);
     return null;
   }
@@ -398,53 +395,37 @@ export async function preProcessBatch(
   }
 
   const totalStart = performance.now();
-  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (ALL-AT-ONCE VPS)`);
+  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (SEQUENTIAL)`);
 
-  // ─── FIRE ALL VPS REQUESTS AT ONCE — no chunking, no waiting ───
-  let vpsAvailable = true;
+  // ─── PROCESS SEQUENTIALLY: 1, 2, 3... ───
+  const failedIndices: number[] = [];
 
-  // Mark all as processing immediately
-  uncachedIndices.forEach(idx => onFileProgress?.(idx, 'processing', 10));
-
-  const allPromises = uncachedIndices.map(async (idx) => {
+  for (let i = 0; i < uncachedIndices.length; i++) {
+    const idx = uncachedIndices[i];
     const file = files[idx];
-    console.log(`[VideoProcessor] 📄 [PARALLEL] VPS preprocess ${idx + 1}/${files.length}: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+
+    if (abortSignal?.aborted) break;
+
+    onFileProgress?.(idx, 'processing', 10);
+    console.log(`[VideoProcessor] 📄 [${i + 1}/${uncachedIndices.length}] VPS preprocess: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+
     const result = await vpsPreprocessFile(file, settings);
     if (result) {
       vpsFileCache.set(file, result);
       onFileProgress?.(idx, 'done', 100);
-    }
-    return { idx, ok: !!result };
-  });
-
-  const results = await Promise.all(allPromises);
-
-  const vpsSuccessCount = results.filter(r => r.ok).length;
-  const failedResults = results.filter(r => !r.ok);
-
-  if (vpsSuccessCount > 0) {
-    console.log(`[VideoProcessor] ⚡ VPS processed ${vpsSuccessCount}/${uncachedIndices.length} files in parallel`);
-  }
-
-  // If ALL failed, VPS is down
-  if (vpsSuccessCount === 0 && uncachedIndices.length > 0) {
-    console.log(`[VideoProcessor] ⚠️ All VPS requests failed, switching to WASM`);
-    vpsAvailable = false;
-  }
-
-  if (failedResults.length > 0) {
-    if (!vpsAvailable) {
-      console.log(`[VideoProcessor] 📦 VPS unavailable, using local WASM for all ${failedResults.length} files...`);
     } else {
-      console.log(`[VideoProcessor] ⚠️ ${failedResults.length} files failed VPS, falling back to local WASM`);
+      failedIndices.push(idx);
     }
-    const failedIndices = failedResults.map(r => r.idx);
+  }
+
+  if (failedIndices.length > 0) {
+    console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
     const failedFiles = failedIndices.map(i => files[i]);
     await localPreprocessFiles(failedFiles, failedIndices, sectionLabel, settings, onFileProgress, abortSignal);
   }
 
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
-  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s ${vpsAvailable ? '(VPS-ALL-AT-ONCE)' : '(WASM)'}`);
+  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s (SEQUENTIAL)`);
 }
 
 /** Fallback: local WASM pre-processing */
