@@ -95,6 +95,15 @@ export default function AdminPlans() {
 
   // DevTools toggle
   const [devToolsEnabled, setDevToolsEnabled] = useState(() => localStorage.getItem('devtools_unlocked') === '1');
+  const handleDevToolsToggle = (checked: boolean) => {
+    setDevToolsEnabled(checked);
+    if (checked) {
+      localStorage.setItem('devtools_unlocked', '1');
+    } else {
+      localStorage.removeItem('devtools_unlocked');
+    }
+    toast.success(checked ? 'DevTools desbloqueado! Recarregue a página.' : 'DevTools bloqueado. Recarregue a página.');
+  };
 
   // Domain verification state
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
