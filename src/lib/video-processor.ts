@@ -396,39 +396,31 @@ export async function preProcessBatch(
   }
 
   const totalStart = performance.now();
-  const CONCURRENCY = 3;
-  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (PARALLEL x${CONCURRENCY})`);
+  // ALL files in parallel — the VPS handles concurrency, no artificial limit
+  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (FULL PARALLEL)`);
 
-  // ─── PARALLEL with concurrency limit ───
+  // ─── ALL AT ONCE — fire all VPS requests simultaneously ───
   const failedIndices: number[] = [];
-  let cursor = 0;
 
-  // Mark all as queued
-  uncachedIndices.forEach(idx => onFileProgress?.(idx, 'loading', 5));
+  // Mark all as processing immediately
+  uncachedIndices.forEach(idx => onFileProgress?.(idx, 'processing', 10));
 
-  const worker = async () => {
-    while (true) {
-      const pos = cursor++;
-      if (pos >= uncachedIndices.length || abortSignal?.aborted) return;
+  const promises = uncachedIndices.map(async (idx, pos) => {
+    if (abortSignal?.aborted) return;
+    const file = files[idx];
 
-      const idx = uncachedIndices[pos];
-      const file = files[idx];
+    console.log(`[VideoProcessor] 📄 [${pos + 1}/${uncachedIndices.length}] VPS preprocess: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
 
-      onFileProgress?.(idx, 'processing', 10);
-      console.log(`[VideoProcessor] 📄 [${pos + 1}/${uncachedIndices.length}] VPS preprocess: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
-
-      const result = await vpsPreprocessFile(file, settings);
-      if (result) {
-        vpsFileCache.set(file, result);
-        onFileProgress?.(idx, 'done', 100);
-      } else {
-        failedIndices.push(idx);
-      }
+    const result = await vpsPreprocessFile(file, settings);
+    if (result) {
+      vpsFileCache.set(file, result);
+      onFileProgress?.(idx, 'done', 100);
+    } else {
+      failedIndices.push(idx);
     }
-  };
+  });
 
-  // Launch CONCURRENCY workers
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, uncachedIndices.length) }, () => worker()));
+  await Promise.all(promises);
 
   if (failedIndices.length > 0) {
     console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
