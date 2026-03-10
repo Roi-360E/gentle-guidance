@@ -78,6 +78,7 @@ export async function terminateFFmpeg(): Promise<void> {
     ffmpegLoaded = false;
     processedSinceRestart = 0;
     preProcessCache.clear();
+    vpsFileCache.clear();
     cacheCounter = 0;
     clearFetchFileCache();
     console.log('[VideoProcessor] 🔴 FFmpeg terminated');
