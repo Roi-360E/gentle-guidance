@@ -429,7 +429,7 @@ export async function preProcessBatch(
   }
 
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
-  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s (PARALLEL x${CONCURRENCY})`);
+  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s (FULL PARALLEL)`);
 }
 
 /** Fallback: local WASM pre-processing */
