@@ -785,6 +785,9 @@ export async function processQueue(
   onProgressItem: (progress: number) => void,
   abortSignal?: AbortSignal
 ): Promise<void> {
+  // Reset VPS concat detection for this queue run
+  resetVpsConcatStatus();
+
   console.log(
     `%c[VideoProcessor] 🚀 Iniciando fila: ${combinations.length} combinações | Resolução: ${settings.resolution} | Pré-processo: ${settings.preProcess} | Batch: ${settings.batchSize}`,
     'color: #3b82f6; font-weight: bold; font-size: 14px;'
