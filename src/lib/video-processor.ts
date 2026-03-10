@@ -402,7 +402,7 @@ export async function preProcessBatch(
         checkAbort(abortSignal);
         onFileProgress?.(i, 'processing', 10);
 
-        const result = await vpsPreprocessFile(file);
+        const result = await vpsPreprocessFile(file, settings);
         if (result) {
           const key = getCacheKey(file);
           const currentFf = await getFFmpeg();
