@@ -840,7 +840,8 @@ export async function processQueue(
     );
 
     // ─── Try VPS parallel concat first (process multiple combos simultaneously) ───
-    const VPS_PARALLEL_BATCH = settings.batchSize || 3;
+    // Use higher parallelism for VPS (server handles it well)
+    const VPS_PARALLEL_BATCH = Math.max(settings.batchSize || 3, 5);
     let useVpsParallel = vpsFileCache.size > 0; // VPS files available = VPS is working
 
     if (useVpsParallel) {
