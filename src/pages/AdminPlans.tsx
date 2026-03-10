@@ -362,9 +362,8 @@ export default function AdminPlans() {
     setUsersLoading(true);
     const monthYear = new Date().toISOString().substring(0, 7);
 
-    // Load profiles and usage data
     const [profilesRes, usageRes] = await Promise.all([
-      supabase.from('profiles').select('user_id, name, email, is_blocked, has_ai_chat'),
+      supabase.from('profiles').select('user_id, name, email, is_blocked, has_ai_chat, phone'),
       supabase.from('video_usage').select('user_id, plan, token_balance, month_year').eq('month_year', monthYear),
     ]);
 
@@ -379,6 +378,7 @@ export default function AdminPlans() {
         user_id: p.user_id,
         name: p.name,
         email: p.email,
+        phone: p.phone || null,
         plan: usage?.plan || 'free',
         token_balance: usage?.token_balance ?? 0,
         month_year: monthYear,
