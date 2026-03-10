@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.mercadopago-public-key]
 verify_jwt = false
+
+[functions.vps-preprocess]
+verify_jwt = false
