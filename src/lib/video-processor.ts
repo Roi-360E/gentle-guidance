@@ -504,12 +504,20 @@ async function preProcessAllInputs(
   const files = Array.from(uniqueFiles);
   console.log(`[VideoProcessor] 🔄 Pre-processing ${files.length} unique files`);
 
-  for (let i = 0; i < files.length; i++) {
-    checkAbort(abortSignal);
-    const file = files[i];
-    onProgress?.(`Normalizando ${i + 1}/${files.length}: ${file.name}`, Math.round((i / files.length) * 100));
-    await preProcessInputCached(ff, file, `raw_input_${i}.mp4`, settings, abortSignal);
-  }
+  // Use preProcessBatch which tries VPS first (~3-4s) then falls back to WASM
+  await preProcessBatch(
+    files,
+    'AllInputs',
+    settings,
+    (fileIndex, status, pct) => {
+      if (status === 'processing') {
+        onProgress?.(`Normalizando ${fileIndex + 1}/${files.length}`, Math.round((fileIndex / files.length) * 100));
+      } else if (status === 'done') {
+        onProgress?.(`Normalizando ${fileIndex + 1}/${files.length}`, Math.round(((fileIndex + 1) / files.length) * 100));
+      }
+    },
+    abortSignal
+  );
 
   onProgress?.('Pré-processamento concluído', 100);
 }
