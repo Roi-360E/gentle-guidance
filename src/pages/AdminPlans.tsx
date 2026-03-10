@@ -435,22 +435,27 @@ export default function AdminPlans() {
   const loadAgentPrompt = async () => {
     const { data } = await supabase
       .from('admin_settings' as any)
-      .select('value')
-      .eq('key', 'recovery_agent_prompt')
-      .single();
-    if (data) setAgentPrompt((data as any).value || '');
+      .select('key, value')
+      .in('key', ['recovery_agent_prompt', 'recovery_whatsapp']);
+    if (data) {
+      (data as any[]).forEach((row: any) => {
+        if (row.key === 'recovery_agent_prompt') setAgentPrompt(row.value || '');
+        if (row.key === 'recovery_whatsapp') setAgentWhatsApp(row.value || '');
+      });
+    }
   };
 
   const saveAgentPrompt = async () => {
     setAgentPromptSaving(true);
-    const { error } = await supabase
-      .from('admin_settings' as any)
-      .update({ value: agentPrompt, updated_at: new Date().toISOString() } as any)
-      .eq('key', 'recovery_agent_prompt');
-    if (error) {
-      toast.error('Erro ao salvar prompt: ' + error.message);
+    const now = new Date().toISOString();
+    const [r1, r2] = await Promise.all([
+      supabase.from('admin_settings' as any).update({ value: agentPrompt, updated_at: now } as any).eq('key', 'recovery_agent_prompt'),
+      supabase.from('admin_settings' as any).update({ value: agentWhatsApp.replace(/\D/g, ''), updated_at: now } as any).eq('key', 'recovery_whatsapp'),
+    ]);
+    if (r1.error || r2.error) {
+      toast.error('Erro ao salvar: ' + (r1.error?.message || r2.error?.message));
     } else {
-      toast.success('Prompt do agente atualizado!');
+      toast.success('Configurações do agente atualizadas!');
     }
     setAgentPromptSaving(false);
   };
