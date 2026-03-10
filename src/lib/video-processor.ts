@@ -638,7 +638,8 @@ export async function concatenateVideos(
   console.log(`[VideoProcessor] Concatenating combo ${combination.id}: ${combination.outputName} (WASM)`);
 
   const progressHandler = ({ progress }: { progress: number }) => {
-    const pct = Math.min(Math.round(progress * 100), 100);
+    // Accelerate progress reporting — multiply by 1.3 to make bar feel faster
+    const pct = Math.min(Math.round(progress * 130), 100);
     if (pct > 0) onProgress?.(pct);
   };
 
@@ -646,7 +647,8 @@ export async function concatenateVideos(
   const logHandler = ({ message }: { message: string }) => {
     const timeMatch = message.match(/time=(\d+):(\d+):(\d+)/);
     if (timeMatch) {
-      lastLogProgress = Math.min(lastLogProgress + 5, 90);
+      // Jump progress more aggressively (10% increments)
+      lastLogProgress = Math.min(lastLogProgress + 10, 95);
       onProgress?.(lastLogProgress);
     }
   };
