@@ -303,10 +303,18 @@ export async function preProcessInputCached(
  * Attempt to pre-process a single file via VPS (native FFmpeg = ~1-2s).
  * Returns a File with the preprocessed video, or null on failure.
  */
-async function vpsPreprocessFile(file: File): Promise<File | null> {
+async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<File | null> {
   try {
     const formData = new FormData();
     formData.append('video', file, file.name);
+
+    // Send scale/resolution settings so VPS does native scaling (~3-4s)
+    if (settings) {
+      const scale = getScale(settings);
+      if (scale) formData.append('scale', scale);
+      formData.append('preset', 'ultrafast');
+      formData.append('crf', '23');
+    }
 
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
     const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -373,7 +381,7 @@ export async function preProcessBatch(
 
   // Test VPS with first file
   onFileProgress?.(0, 'processing', 10);
-  const firstResult = await vpsPreprocessFile(files[0]);
+  const firstResult = await vpsPreprocessFile(files[0], settings);
   
   if (firstResult) {
     console.log(`[VideoProcessor] ⚡ VPS available! Processing all files via VPS...`);
@@ -394,7 +402,7 @@ export async function preProcessBatch(
         checkAbort(abortSignal);
         onFileProgress?.(i, 'processing', 10);
 
-        const result = await vpsPreprocessFile(file);
+        const result = await vpsPreprocessFile(file, settings);
         if (result) {
           const key = getCacheKey(file);
           const currentFf = await getFFmpeg();
