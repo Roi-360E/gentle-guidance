@@ -93,16 +93,16 @@ export default function AdminPlans() {
   const [funnelData, setFunnelData] = useState<{ event_name: string; count: number }[]>([]);
   const [funnelLoading, setFunnelLoading] = useState(false);
 
-  // DevTools toggle
-  const [devToolsEnabled, setDevToolsEnabled] = useState(() => localStorage.getItem('devtools_unlocked') === '1');
-  const handleDevToolsToggle = (checked: boolean) => {
-    setDevToolsEnabled(checked);
-    if (checked) {
-      localStorage.setItem('devtools_unlocked', '1');
-    } else {
+  // DevTools toggle — ON = proteção ativa (console bloqueado), OFF = console liberado
+  const [consoleBlocked, setConsoleBlocked] = useState(() => localStorage.getItem('devtools_unlocked') !== '1');
+  const handleSaveDevTools = () => {
+    if (consoleBlocked) {
       localStorage.removeItem('devtools_unlocked');
+    } else {
+      localStorage.setItem('devtools_unlocked', '1');
     }
-    toast.success(checked ? 'DevTools desbloqueado! Recarregue a página.' : 'DevTools bloqueado. Recarregue a página.');
+    toast.success(consoleBlocked ? 'Console bloqueado! Recarregando...' : 'Console liberado! Recarregando...');
+    setTimeout(() => window.location.reload(), 800);
   };
 
   // Domain verification state
@@ -640,12 +640,15 @@ export default function AdminPlans() {
           </div>
 
           <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 shrink-0">
-            <Label htmlFor="admin-devtools-toggle" className="text-xs sm:text-sm">DevTools</Label>
+            <Label htmlFor="admin-devtools-toggle" className="text-xs sm:text-sm">Bloquear Console</Label>
             <Switch
               id="admin-devtools-toggle"
-              checked={devToolsEnabled}
-              onCheckedChange={handleDevToolsToggle}
+              checked={consoleBlocked}
+              onCheckedChange={setConsoleBlocked}
             />
+            <Button size="sm" variant="outline" onClick={handleSaveDevTools} className="h-7 px-2 text-xs">
+              <Save className="w-3 h-3 mr-1" /> Salvar
+            </Button>
           </div>
         </div>
       </header>
@@ -1349,20 +1352,23 @@ export default function AdminPlans() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4" /> DevTools / Console
+                  <ShieldCheck className="w-4 h-4" /> Proteção do Console
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">Desbloquear DevTools</p>
-                    <p className="text-xs text-muted-foreground">Permite abrir o console (F12) e inspecionar elementos no site de produção</p>
+                    <p className="text-sm font-medium">Bloquear Console (F12)</p>
+                    <p className="text-xs text-muted-foreground">Quando ativado, bloqueia o acesso ao DevTools e inspeção de elementos</p>
                   </div>
                   <Switch
-                    checked={devToolsEnabled}
-                    onCheckedChange={handleDevToolsToggle}
+                    checked={consoleBlocked}
+                    onCheckedChange={setConsoleBlocked}
                   />
                 </div>
+                <Button onClick={handleSaveDevTools} className="w-full">
+                  <Save className="w-4 h-4 mr-2" /> Salvar e aplicar
+                </Button>
               </CardContent>
             </Card>
 
