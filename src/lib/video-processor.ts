@@ -322,12 +322,12 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    // Scale timeout based on file size: 30s base + 5s per 10MB (generous for large files)
+    // Generous timeout: 60s base + 10s per 10MB (handles slow upload speeds)
     const sizeMB = file.size / (1024 * 1024);
-    const timeoutMs = 30000 + Math.ceil(sizeMB / 10) * 5000;
+    const timeoutMs = 60000 + Math.ceil(sizeMB / 10) * 10000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)}MB) timeout=${(timeoutMs/1000).toFixed(0)}s`);
+    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB) timeout=${(timeoutMs/1000).toFixed(0)}s`);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -356,7 +356,7 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
       return null;
     }
 
-    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${(file.size/1024/1024).toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms`);
+    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${sizeMB.toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms`);
     return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
@@ -396,39 +396,31 @@ export async function preProcessBatch(
   }
 
   const totalStart = performance.now();
-  const CONCURRENCY = 3;
-  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (PARALLEL x${CONCURRENCY})`);
+  // ALL files in parallel — the VPS handles concurrency, no artificial limit
+  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (FULL PARALLEL)`);
 
-  // ─── PARALLEL with concurrency limit ───
+  // ─── ALL AT ONCE — fire all VPS requests simultaneously ───
   const failedIndices: number[] = [];
-  let cursor = 0;
 
-  // Mark all as queued
-  uncachedIndices.forEach(idx => onFileProgress?.(idx, 'loading', 5));
+  // Mark all as processing immediately
+  uncachedIndices.forEach(idx => onFileProgress?.(idx, 'processing', 10));
 
-  const worker = async () => {
-    while (true) {
-      const pos = cursor++;
-      if (pos >= uncachedIndices.length || abortSignal?.aborted) return;
+  const promises = uncachedIndices.map(async (idx, pos) => {
+    if (abortSignal?.aborted) return;
+    const file = files[idx];
 
-      const idx = uncachedIndices[pos];
-      const file = files[idx];
+    console.log(`[VideoProcessor] 📄 [${pos + 1}/${uncachedIndices.length}] VPS preprocess: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
 
-      onFileProgress?.(idx, 'processing', 10);
-      console.log(`[VideoProcessor] 📄 [${pos + 1}/${uncachedIndices.length}] VPS preprocess: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
-
-      const result = await vpsPreprocessFile(file, settings);
-      if (result) {
-        vpsFileCache.set(file, result);
-        onFileProgress?.(idx, 'done', 100);
-      } else {
-        failedIndices.push(idx);
-      }
+    const result = await vpsPreprocessFile(file, settings);
+    if (result) {
+      vpsFileCache.set(file, result);
+      onFileProgress?.(idx, 'done', 100);
+    } else {
+      failedIndices.push(idx);
     }
-  };
+  });
 
-  // Launch CONCURRENCY workers
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, uncachedIndices.length) }, () => worker()));
+  await Promise.all(promises);
 
   if (failedIndices.length > 0) {
     console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
@@ -437,7 +429,7 @@ export async function preProcessBatch(
   }
 
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
-  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s (PARALLEL x${CONCURRENCY})`);
+  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s (FULL PARALLEL)`);
 }
 
 /** Fallback: local WASM pre-processing */
