@@ -537,13 +537,24 @@ async function vpsConcatenateFiles(
 ): Promise<string | null> {
   try {
     const formData = new FormData();
-    formData.append('hook', combination.hook.file, combination.hook.file.name);
-    formData.append('body', combination.body.file, combination.body.file.name);
-    formData.append('cta', combination.cta.file, combination.cta.file.name);
+    
+    // Use VPS-preprocessed files if available (already normalized), otherwise raw files
+    const hookFile = vpsFileCache.get(combination.hook.file) || combination.hook.file;
+    const bodyFile = vpsFileCache.get(combination.body.file) || combination.body.file;
+    const ctaFile = vpsFileCache.get(combination.cta.file) || combination.cta.file;
+    
+    formData.append('hook', hookFile, hookFile.name);
+    formData.append('body', bodyFile, bodyFile.name);
+    formData.append('cta', ctaFile, ctaFile.name);
 
-    const scale = getScale(settings);
-    if (scale) formData.append('scale', scale);
-    formData.append('preset', 'ultrafast');
+    // Only send scale if files weren't pre-processed (raw files need scaling)
+    const hasPreprocessed = vpsFileCache.has(combination.hook.file);
+    if (!hasPreprocessed) {
+      const scale = getScale(settings);
+      if (scale) formData.append('scale', scale);
+    }
+    // When files are pre-processed, tell VPS to use stream copy (no re-encode)
+    formData.append('preset', hasPreprocessed ? 'copy' : 'ultrafast');
     formData.append('crf', '23');
 
     const url = 'https://api.deploysites.online/concat';
