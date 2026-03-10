@@ -657,12 +657,26 @@ export async function concatenateVideos(
         await hydrateWasmFromVpsCache(comboFiles);
       }
 
+      // Auto-preprocess any missing files on-demand (fallback when VPS preprocess also failed)
+      const filesToCheck = [
+        { file: combination.hook.file, label: 'hook' },
+        { file: combination.body.file, label: 'body' },
+        { file: combination.cta.file, label: 'cta' },
+      ];
+      for (const { file, label } of filesToCheck) {
+        if (!preProcessCache.has(file)) {
+          console.log(`[VideoProcessor] 🔧 On-demand preprocess for ${label}: ${file.name}`);
+          const rawName = `raw_${label}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+          await preProcessInputCached(ff, file, rawName, settings, abortSignal);
+        }
+      }
+
       const hookNorm = preProcessCache.get(combination.hook.file);
       const bodyNorm = preProcessCache.get(combination.body.file);
       const ctaNorm = preProcessCache.get(combination.cta.file);
 
       if (!hookNorm || !bodyNorm || !ctaNorm) {
-        throw new Error(`Cache miss for combo ${combination.id}`);
+        throw new Error(`Cache miss for combo ${combination.id} after on-demand preprocess`);
       }
 
       const outputFile = `out_${combination.id}.mp4`;
