@@ -82,6 +82,10 @@ export default function AdminPlans() {
   // Sales recovery state
   const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [agentPrompt, setAgentPrompt] = useState('');
+  const [agentPromptSaving, setAgentPromptSaving] = useState(false);
+  const [generatingMessageFor, setGeneratingMessageFor] = useState<string | null>(null);
+  const [generatedMessages, setGeneratedMessages] = useState<Record<string, string>>({});
 
   // Pixel state
   const [pixelName, setPixelName] = useState('');
@@ -157,6 +161,7 @@ export default function AdminPlans() {
           loadFunnelData();
           loadDomainFiles();
           loadRecoveryLeads();
+          loadAgentPrompt();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
@@ -424,6 +429,51 @@ export default function AdminPlans() {
     
     setRecoveryLeads(leads);
     setRecoveryLoading(false);
+  };
+
+  const loadAgentPrompt = async () => {
+    const { data } = await supabase
+      .from('admin_settings' as any)
+      .select('value')
+      .eq('key', 'recovery_agent_prompt')
+      .single();
+    if (data) setAgentPrompt((data as any).value || '');
+  };
+
+  const saveAgentPrompt = async () => {
+    setAgentPromptSaving(true);
+    const { error } = await supabase
+      .from('admin_settings' as any)
+      .update({ value: agentPrompt, updated_at: new Date().toISOString() } as any)
+      .eq('key', 'recovery_agent_prompt');
+    if (error) {
+      toast.error('Erro ao salvar prompt: ' + error.message);
+    } else {
+      toast.success('Prompt do agente atualizado!');
+    }
+    setAgentPromptSaving(false);
+  };
+
+  const generateRecoveryMessage = async (lead: RecoveryLead) => {
+    setGeneratingMessageFor(lead.user_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('recovery-message', {
+        body: {
+          leadName: lead.name,
+          leadEmail: lead.email,
+          agentPrompt,
+        },
+      });
+      if (error) {
+        toast.error('Erro ao gerar mensagem: ' + error.message);
+      } else if (data?.message) {
+        setGeneratedMessages(prev => ({ ...prev, [lead.user_id]: data.message }));
+        toast.success('Mensagem gerada! Clique em "Enviar" para abrir o WhatsApp.');
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setGeneratingMessageFor(null);
   };
 
   const toggleUserAiChat = async (userId: string, currentValue: boolean) => {
@@ -1066,14 +1116,46 @@ export default function AdminPlans() {
 
           {/* ===== RECOVERY TAB ===== */}
           <TabsContent value="recovery" className="space-y-6">
+            {/* Agent Prompt Editor */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <MessageSquare className="w-5 h-5 text-primary" />
+                  Agente de Recuperação (IA)
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Configure como o agente de IA deve se comportar ao gerar mensagens de recuperação para WhatsApp.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea
+                  value={agentPrompt}
+                  onChange={(e) => setAgentPrompt(e.target.value)}
+                  placeholder="Descreva como o agente deve se comportar..."
+                  rows={5}
+                  className="resize-y"
+                />
+                <Button
+                  onClick={saveAgentPrompt}
+                  disabled={agentPromptSaving}
+                  size="sm"
+                  className="gap-2"
+                >
+                  {agentPromptSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Salvar Prompt
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Leads Table */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Phone className="w-5 h-5 text-primary" />
-                  Recuperação de Vendas
+                  Leads sem Recarga
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Usuários que se cadastraram mas ainda não fizeram a primeira recarga. Clique para abrir o WhatsApp.
+                  Clique em "Gerar Mensagem" para a IA criar uma mensagem personalizada, depois envie pelo WhatsApp.
                 </p>
               </CardHeader>
               <CardContent>
@@ -1084,51 +1166,73 @@ export default function AdminPlans() {
                 ) : recoveryLeads.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">Nenhum lead de recuperação encontrado.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Telefone</TableHead>
-                          <TableHead>Cadastro</TableHead>
-                          <TableHead>Ação</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {recoveryLeads.map((lead) => {
-                          const phoneDigits = lead.phone?.replace(/\D/g, '') || '';
-                          const whatsappUrl = `https://wa.me/55${phoneDigits}?text=${encodeURIComponent(
-                            `Olá ${lead.name || ''}! Vi que você criou uma conta no EscalaXPro mas ainda não fez sua primeira recarga. Posso te ajudar com algo?`
-                          )}`;
-                          const formattedPhone = phoneDigits.length >= 10
-                            ? `(${phoneDigits.slice(0, 2)})${phoneDigits.slice(2, 7)}-${phoneDigits.slice(7)}`
-                            : phoneDigits;
-                          return (
-                            <TableRow key={lead.user_id}>
-                              <TableCell className="font-medium">{lead.name || '—'}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{lead.email || '—'}</TableCell>
-                              <TableCell className="text-sm">{formattedPhone}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
-                                {new Date(lead.created_at).toLocaleDateString('pt-BR')}
-                              </TableCell>
-                              <TableCell>
+                  <div className="space-y-4">
+                    {recoveryLeads.map((lead) => {
+                      const phoneDigits = lead.phone?.replace(/\D/g, '') || '';
+                      const formattedPhone = phoneDigits.length >= 10
+                        ? `(${phoneDigits.slice(0, 2)})${phoneDigits.slice(2, 7)}-${phoneDigits.slice(7)}`
+                        : phoneDigits;
+                      const generatedMsg = generatedMessages[lead.user_id];
+                      const isGenerating = generatingMessageFor === lead.user_id;
+
+                      return (
+                        <div key={lead.user_id} className="border border-border rounded-lg p-4 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="space-y-0.5">
+                              <p className="font-medium text-sm">{lead.name || '—'}</p>
+                              <p className="text-xs text-muted-foreground">{lead.email} • {formattedPhone}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Cadastro: {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 text-xs shrink-0"
+                              disabled={isGenerating}
+                              onClick={() => generateRecoveryMessage(lead)}
+                            >
+                              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                              {generatedMsg ? 'Regerar' : 'Gerar Mensagem'}
+                            </Button>
+                          </div>
+
+                          {generatedMsg && (
+                            <div className="space-y-2">
+                              <div className="bg-muted/50 rounded-md p-3 text-sm whitespace-pre-wrap">
+                                {generatedMsg}
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  className="gap-1 text-xs"
+                                  onClick={() => {
+                                    const url = `https://wa.me/55${phoneDigits}?text=${encodeURIComponent(generatedMsg)}`;
+                                    window.open(url, '_blank');
+                                  }}
+                                >
+                                  <Phone className="w-3.5 h-3.5" />
+                                  Enviar via WhatsApp
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   className="gap-1 text-xs"
-                                  onClick={() => window.open(whatsappUrl, '_blank')}
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(generatedMsg);
+                                    toast.success('Mensagem copiada!');
+                                  }}
                                 >
-                                  <MessageSquare className="w-3.5 h-3.5" />
-                                  WhatsApp
+                                  <Copy className="w-3.5 h-3.5" />
+                                  Copiar
                                 </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                    <p className="text-xs text-muted-foreground mt-3">
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-muted-foreground">
                       Total: {recoveryLeads.length} leads com telefone que não fizeram recarga
                     </p>
                   </div>
