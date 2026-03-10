@@ -323,7 +323,6 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { apikey: anonKey },
       body: formData,
       signal: controller.signal,
     });
