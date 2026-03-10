@@ -217,45 +217,29 @@ export async function preProcessInputCached(
   const data = await fetchFileCached(file);
   await ff.writeFile(rawName, data);
 
-  const scale = getScale(settings);
   const startTime = performance.now();
-  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (resolution: ${settings.resolution}, format: ${settings.videoFormat})`);
+  console.log(`[VideoProcessor] Pre-processing ${file.name} → ${outputName} (fast remux)`);
 
   let exitCode: number;
 
-  if (!scale) {
-    // ─── FAST PATH: No scaling needed → remux only (stream copy) ───
-    // Just normalize container + audio codec for concat compatibility (~1-2s)
-    exitCode = await ff.exec([
-      '-i', rawName,
-      '-c:v', 'copy',
-      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-      '-movflags', '+faststart',
-      '-y', outputName,
-    ]);
-    checkAbort(abortSignal);
+  // ─── ALWAYS FAST PATH: stream copy (remux only) ───
+  // Resolution scaling is deferred to concatenation phase for speed
+  exitCode = await ff.exec([
+    '-i', rawName,
+    '-c:v', 'copy',
+    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+    '-movflags', '+faststart',
+    '-y', outputName,
+  ]);
+  checkAbort(abortSignal);
 
-    // If copy fails (rare codec issues), fall back to lightweight re-encode
-    if (exitCode !== 0) {
-      console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, falling back to fast re-encode`);
-      exitCode = await ff.exec([
-        '-i', rawName,
-        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-        '-pix_fmt', 'yuv420p', '-r', '30',
-        '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-        '-movflags', '+faststart', '-threads', '0',
-        '-y', outputName,
-      ]);
-      checkAbort(abortSignal);
-    }
-  } else {
-    // ─── SCALE PATH: Re-encode with target resolution ───
+  // If stream copy fails (rare codec issues), lightweight re-encode
+  if (exitCode !== 0) {
+    console.warn(`[VideoProcessor] Stream copy failed for ${file.name}, fast re-encode fallback`);
     exitCode = await ff.exec([
       '-i', rawName,
-      '-vf', `scale=${scale},setsar=1`,
-      '-c:v', 'libx264', '-preset', 'ultrafast',
-      '-profile:v', 'main', '-level', '3.1', '-pix_fmt', 'yuv420p',
-      '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k', '-r', '30',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+      '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
       '-movflags', '+faststart', '-threads', '0',
       '-y', outputName,
@@ -266,16 +250,10 @@ export async function preProcessInputCached(
   // Final fallback: no audio
   if (exitCode !== 0) {
     console.warn(`[VideoProcessor] Retrying ${file.name} without audio...`);
-    const args2: string[] = ['-i', rawName];
-    if (scale) {
-      args2.push('-vf', `scale=${scale},setsar=1`);
-    }
-    args2.push(
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
-      '-crf', '23', '-r', '30',
-      '-an', '-movflags', '+faststart', '-threads', '0', '-y', outputName
-    );
-    exitCode = await ff.exec(args2);
+    exitCode = await ff.exec([
+      '-i', rawName,
+      '-c:v', 'copy', '-an', '-movflags', '+faststart', '-y', outputName,
+    ]);
     checkAbort(abortSignal);
     if (exitCode !== 0) throw new Error(`Failed to pre-process ${file.name}`);
   }
