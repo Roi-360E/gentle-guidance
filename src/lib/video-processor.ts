@@ -917,7 +917,9 @@ export async function processQueue(
       const attemptLabel = attempt > 1 ? ` (tentativa ${attempt}/${MAX_RETRIES})` : '';
 
       try {
-        if (!settings.preProcess) {
+        if (!ff) {
+          ff = await getFFmpeg();
+        } else if (!settings.preProcess) {
           ff = await maybeRecycleFFmpeg();
         }
 
