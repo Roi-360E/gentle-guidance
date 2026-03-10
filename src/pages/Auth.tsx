@@ -171,6 +171,21 @@ const Auth = () => {
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefone (WhatsApp)</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      placeholder="(00)00000-0000"
+                      value={phone}
+                      onChange={(e) => setPhone(formatPhone(e.target.value))}
+                      required
+                      maxLength={14}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
               </>
             )}
             <div className="space-y-2">
