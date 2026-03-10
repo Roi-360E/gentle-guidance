@@ -378,66 +378,41 @@ export async function preProcessBatch(
   // ─── Try VPS for ALL files in parallel (native FFmpeg = blazing fast) ───
   let vpsAvailable = true;
 
-  // Test VPS with first file
-  onFileProgress?.(0, 'processing', 10);
-  const firstResult = await vpsPreprocessFile(files[0], settings);
+  // Process ALL files via VPS in parallel (no sequential first-file test)
+  console.log(`[VideoProcessor] ⚡ Attempting VPS for all ${files.length} files in parallel...`);
   
-  if (firstResult) {
-    console.log(`[VideoProcessor] ⚡ VPS available! Processing all files via VPS...`);
-    
-    // Store VPS file in cache (for VPS concat later — no WASM write needed)
-    vpsFileCache.set(files[0], firstResult);
-
-    // Also cache in WASM for local fallback
-    const cacheKey = getCacheKey(files[0]);
-    const ff = await getFFmpeg();
-    const data = new Uint8Array(await firstResult.arrayBuffer());
-    await ff.writeFile(cacheKey, data);
-    preProcessCache.set(files[0], cacheKey);
-    onFileProgress?.(0, 'done', 100);
-
-    // Process remaining files in parallel via VPS
-    if (files.length > 1) {
-      const remaining = files.slice(1).map(async (file, idx) => {
-        const i = idx + 1;
-        checkAbort(abortSignal);
-        onFileProgress?.(i, 'processing', 10);
-
-        const result = await vpsPreprocessFile(file, settings);
-        if (result) {
-          // Store VPS file for fast concat
-          vpsFileCache.set(file, result);
-
-          const key = getCacheKey(file);
-          const currentFf = await getFFmpeg();
-          const fileData = new Uint8Array(await result.arrayBuffer());
-          await currentFf.writeFile(key, fileData);
-          preProcessCache.set(file, key);
-          onFileProgress?.(i, 'done', 100);
-          return result;
-        }
-        return null;
-      });
-
-      const results = await Promise.all(remaining);
-      
-      // Check if any failed — those will be processed locally
-      const failedIndices: number[] = [];
-      results.forEach((r, idx) => {
-        if (!r) failedIndices.push(idx + 1);
-      });
-
-      if (failedIndices.length > 0) {
-        console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
-        await localPreprocessFiles(failedIndices.map(i => files[i]), failedIndices, sectionLabel, settings, onFileProgress, abortSignal);
+  const vpsResults = await Promise.all(
+    files.map(async (file, idx) => {
+      checkAbort(abortSignal);
+      onFileProgress?.(idx, 'processing', 10);
+      const result = await vpsPreprocessFile(file, settings);
+      if (result) {
+        // Store VPS file for fast concat — NO WASM write needed (saves ~1-2s per file)
+        vpsFileCache.set(file, result);
+        onFileProgress?.(idx, 'done', 100);
+        return true;
       }
+      return false;
+    })
+  );
+
+  const failedIndices = vpsResults.map((ok, i) => ok ? -1 : i).filter(i => i >= 0);
+  const vpsSuccessCount = vpsResults.filter(Boolean).length;
+
+  if (vpsSuccessCount > 0) {
+    console.log(`[VideoProcessor] ⚡ VPS processed ${vpsSuccessCount}/${files.length} files`);
+  }
+
+  if (failedIndices.length > 0) {
+    if (vpsSuccessCount === 0) {
+      console.log(`[VideoProcessor] 📦 VPS unavailable, using local WASM for all...`);
+      vpsAvailable = false;
+    } else {
+      console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
     }
-  } else {
-    // VPS unavailable → fall back to local WASM for all
-    console.log(`[VideoProcessor] 📦 VPS unavailable, using local WASM...`);
-    vpsAvailable = false;
-    const allIndices = files.map((_, i) => i);
-    await localPreprocessFiles(files, allIndices, sectionLabel, settings, onFileProgress, abortSignal);
+    // WASM fallback only writes files that failed VPS
+    const failedFiles = failedIndices.map(i => files[i]);
+    await localPreprocessFiles(failedFiles, failedIndices, sectionLabel, settings, onFileProgress, abortSignal);
   }
 
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
@@ -840,11 +815,17 @@ export async function processQueue(
     await Promise.all(Array.from(uniqueFiles).map(f => fetchFileCached(f)));
     console.log('[VideoProcessor] ✅ All files pre-loaded');
 
-    let ff = await getFFmpeg();
+    // Only init WASM if VPS files aren't cached (i.e., VPS preprocess didn't run)
+    let ff: FFmpeg | null = null;
+    const needsWasm = vpsFileCache.size === 0;
+
+    if (needsWasm) {
+      ff = await getFFmpeg();
+    }
 
     if (settings.preProcess) {
       console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
-      await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
+      await preProcessAllInputs(ff!, combinations, settings, (msg, pct) => {
         console.log(`[VideoProcessor] ${msg} (${pct}%)`);
       }, abortSignal);
     }
@@ -859,7 +840,8 @@ export async function processQueue(
     );
 
     // ─── Try VPS parallel concat first (process multiple combos simultaneously) ───
-    const VPS_PARALLEL_BATCH = settings.batchSize || 3;
+    // Use higher parallelism for VPS (server handles it well)
+    const VPS_PARALLEL_BATCH = Math.max(settings.batchSize || 3, 5);
     let useVpsParallel = vpsFileCache.size > 0; // VPS files available = VPS is working
 
     if (useVpsParallel) {
@@ -935,7 +917,9 @@ export async function processQueue(
       const attemptLabel = attempt > 1 ? ` (tentativa ${attempt}/${MAX_RETRIES})` : '';
 
       try {
-        if (!settings.preProcess) {
+        if (!ff) {
+          ff = await getFFmpeg();
+        } else if (!settings.preProcess) {
           ff = await maybeRecycleFFmpeg();
         }
 
