@@ -473,10 +473,6 @@ export async function concatenateVideos(
 
         if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
       }
-        checkAbort(abortSignal);
-      }
-
-      if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
 
       const data = await ff.readFile(outputFile);
       const blob = new Blob([new Uint8Array(data as Uint8Array)], { type: 'video/mp4' });
