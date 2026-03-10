@@ -104,12 +104,12 @@ const Auth = () => {
       if (error) {
         toast.error(error.message);
       } else {
-        // Save CPF hash to profile
+        // Save CPF hash and phone to profile
         const { data: { user: newUser } } = await supabase.auth.getUser();
         if (newUser) {
           await supabase
             .from('profiles')
-            .update({ cpf_hash: cpfHashed } as any)
+            .update({ cpf_hash: cpfHashed, phone: phoneDigits } as any)
             .eq('user_id', newUser.id);
         }
         toast.success('Conta criada! Verifique seu email para confirmar.');
