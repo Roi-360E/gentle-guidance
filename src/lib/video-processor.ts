@@ -875,30 +875,34 @@ export async function processQueue(
   abortSignal?.addEventListener('abort', onAbort, { once: true });
 
   try {
-    // Phase 0: Pre-load all unique source files into memory cache
+    // Phase 0: Skip pre-loading if files already in cache (from preProcessBatch)
     const uniqueFiles = new Set<File>();
     for (const c of combinations) {
       uniqueFiles.add(c.hook.file);
       uniqueFiles.add(c.body.file);
       uniqueFiles.add(c.cta.file);
     }
-    console.log(`[VideoProcessor] 📦 Pre-loading ${uniqueFiles.size} unique files into memory...`);
-    await Promise.all(Array.from(uniqueFiles).map(f => fetchFileCached(f)));
-    console.log('[VideoProcessor] ✅ All files pre-loaded');
-
-    // Only init WASM if VPS files aren't cached (i.e., VPS preprocess didn't run)
-    let ff: FFmpeg | null = null;
-    const needsWasm = vpsFileCache.size === 0;
-
-    if (needsWasm) {
-      ff = await getFFmpeg();
+    const uncachedFiles = Array.from(uniqueFiles).filter(f => !fetchFileCache.has(f));
+    if (uncachedFiles.length > 0) {
+      console.log(`[VideoProcessor] 📦 Pre-loading ${uncachedFiles.length} uncached files...`);
+      await Promise.all(uncachedFiles.map(f => fetchFileCached(f)));
+    } else {
+      console.log(`[VideoProcessor] ⚡ All ${uniqueFiles.size} files already in memory cache — skipping Phase 0`);
     }
 
-    if (settings.preProcess) {
+    // Phase 1: Skip if VPS already pre-processed all unique files
+    let ff: FFmpeg | null = null;
+    const allVpsCached = Array.from(uniqueFiles).every(f => vpsFileCache.has(f));
+    const allLocalCached = Array.from(uniqueFiles).every(f => preProcessCache.has(f));
+
+    if (settings.preProcess && !allVpsCached && !allLocalCached) {
       console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
-      await preProcessAllInputs(ff!, combinations, settings, (msg, pct) => {
+      ff = await getFFmpeg();
+      await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
         console.log(`[VideoProcessor] ${msg} (${pct}%)`);
       }, abortSignal);
+    } else if (settings.preProcess) {
+      console.log(`[VideoProcessor] ⚡ All files already pre-processed — skipping Phase 1 (VPS: ${allVpsCached}, WASM: ${allLocalCached})`);
     }
 
     checkAbort(abortSignal);
@@ -910,9 +914,8 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
-    // ─── Try VPS parallel concat first (process multiple combos simultaneously) ───
-    // Use higher parallelism for VPS (server handles it well)
-    const VPS_PARALLEL_BATCH = Math.max(settings.batchSize || 3, 5);
+    // ─── Try VPS parallel concat first — fire ALL at once for max speed ───
+    const VPS_PARALLEL_BATCH = 10; // aggressive parallelism for ~3s total
     let useVpsParallel = vpsFileCache.size > 0; // VPS files available = VPS is working
 
     if (useVpsParallel) {
