@@ -1064,6 +1064,79 @@ export default function AdminPlans() {
             </p>
           </TabsContent>
 
+          {/* ===== RECOVERY TAB ===== */}
+          <TabsContent value="recovery" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-primary" />
+                  Recuperação de Vendas
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Usuários que se cadastraram mas ainda não fizeram a primeira recarga. Clique para abrir o WhatsApp.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {recoveryLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : recoveryLeads.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">Nenhum lead de recuperação encontrado.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Telefone</TableHead>
+                          <TableHead>Cadastro</TableHead>
+                          <TableHead>Ação</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recoveryLeads.map((lead) => {
+                          const phoneDigits = lead.phone?.replace(/\D/g, '') || '';
+                          const whatsappUrl = `https://wa.me/55${phoneDigits}?text=${encodeURIComponent(
+                            `Olá ${lead.name || ''}! Vi que você criou uma conta no EscalaXPro mas ainda não fez sua primeira recarga. Posso te ajudar com algo?`
+                          )}`;
+                          const formattedPhone = phoneDigits.length >= 10
+                            ? `(${phoneDigits.slice(0, 2)})${phoneDigits.slice(2, 7)}-${phoneDigits.slice(7)}`
+                            : phoneDigits;
+                          return (
+                            <TableRow key={lead.user_id}>
+                              <TableCell className="font-medium">{lead.name || '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{lead.email || '—'}</TableCell>
+                              <TableCell className="text-sm">{formattedPhone}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-xs"
+                                  onClick={() => window.open(whatsappUrl, '_blank')}
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  WhatsApp
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Total: {recoveryLeads.length} leads com telefone que não fizeram recarga
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* ===== PIXEL TAB ===== */}
           <TabsContent value="pixel" className="space-y-6">
             <Card>
