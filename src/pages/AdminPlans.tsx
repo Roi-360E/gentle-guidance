@@ -426,6 +426,7 @@ export default function AdminPlans() {
     setRecoveryLoading(false);
   };
 
+  const toggleUserAiChat = async (userId: string, currentValue: boolean) => {
     setUpdatingUser(userId);
     const newValue = !currentValue;
     const { error } = await supabase
