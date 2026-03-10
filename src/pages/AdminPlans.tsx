@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair, Copy, BarChart3, Globe, CheckCircle2, AlertCircle, Pencil } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair, Copy, BarChart3, Globe, CheckCircle2, AlertCircle, Pencil, Phone } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
@@ -40,11 +40,20 @@ interface UserRow {
   user_id: string;
   name: string | null;
   email: string | null;
+  phone: string | null;
   plan: string;
   token_balance: number;
   month_year: string;
   is_blocked: boolean;
   has_ai_chat: boolean;
+}
+
+interface RecoveryLead {
+  user_id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  created_at: string;
 }
 
 const ICON_OPTIONS = ['Sparkles', 'Zap', 'Crown'];
@@ -69,6 +78,10 @@ export default function AdminPlans() {
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
   const [tokenEditUser, setTokenEditUser] = useState<string | null>(null);
   const [tokenEditValue, setTokenEditValue] = useState('');
+
+  // Sales recovery state
+  const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   // Pixel state
   const [pixelName, setPixelName] = useState('');
@@ -143,6 +156,7 @@ export default function AdminPlans() {
           loadPixelConfig();
           loadFunnelData();
           loadDomainFiles();
+          loadRecoveryLeads();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
@@ -353,9 +367,8 @@ export default function AdminPlans() {
     setUsersLoading(true);
     const monthYear = new Date().toISOString().substring(0, 7);
 
-    // Load profiles and usage data
     const [profilesRes, usageRes] = await Promise.all([
-      supabase.from('profiles').select('user_id, name, email, is_blocked, has_ai_chat'),
+      supabase.from('profiles').select('user_id, name, email, is_blocked, has_ai_chat, phone'),
       supabase.from('video_usage').select('user_id, plan, token_balance, month_year').eq('month_year', monthYear),
     ]);
 
@@ -370,6 +383,7 @@ export default function AdminPlans() {
         user_id: p.user_id,
         name: p.name,
         email: p.email,
+        phone: p.phone || null,
         plan: usage?.plan || 'free',
         token_balance: usage?.token_balance ?? 0,
         month_year: monthYear,
@@ -380,6 +394,36 @@ export default function AdminPlans() {
 
     setUsers(merged);
     setUsersLoading(false);
+  };
+
+  const loadRecoveryLeads = async () => {
+    setRecoveryLoading(true);
+    // Get all profiles
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, name, email, phone, created_at');
+    
+    // Get all users who have at least one confirmed payment
+    const { data: paidUsers } = await supabase
+      .from('payments')
+      .select('user_id')
+      .eq('status', 'approved');
+    
+    const paidSet = new Set((paidUsers || []).map((p: any) => p.user_id));
+    
+    const leads: RecoveryLead[] = ((profiles || []) as any[])
+      .filter((p: any) => !paidSet.has(p.user_id) && p.phone)
+      .map((p: any) => ({
+        user_id: p.user_id,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        created_at: p.created_at,
+      }))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    setRecoveryLeads(leads);
+    setRecoveryLoading(false);
   };
 
   const toggleUserAiChat = async (userId: string, currentValue: boolean) => {
@@ -655,21 +699,24 @@ export default function AdminPlans() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs defaultValue="plans" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="plans" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Planos
+              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Planos</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Usuários
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Usuários</span>
+            </TabsTrigger>
+            <TabsTrigger value="recovery" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Recuperação</span>
             </TabsTrigger>
             <TabsTrigger value="pixel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <Crosshair className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Pixel
+              <Crosshair className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Pixel</span>
             </TabsTrigger>
             <TabsTrigger value="funnel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Funil
+              <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Funil</span>
             </TabsTrigger>
             <TabsTrigger value="domain" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Domínio
+              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Domínio</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1015,6 +1062,79 @@ export default function AdminPlans() {
             <p className="text-xs text-muted-foreground text-center">
               {filteredUsers.length} usuário(s) • Altere o plano para liberar ou revogar acessos instantaneamente.
             </p>
+          </TabsContent>
+
+          {/* ===== RECOVERY TAB ===== */}
+          <TabsContent value="recovery" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-primary" />
+                  Recuperação de Vendas
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Usuários que se cadastraram mas ainda não fizeram a primeira recarga. Clique para abrir o WhatsApp.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {recoveryLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : recoveryLeads.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">Nenhum lead de recuperação encontrado.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Telefone</TableHead>
+                          <TableHead>Cadastro</TableHead>
+                          <TableHead>Ação</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recoveryLeads.map((lead) => {
+                          const phoneDigits = lead.phone?.replace(/\D/g, '') || '';
+                          const whatsappUrl = `https://wa.me/55${phoneDigits}?text=${encodeURIComponent(
+                            `Olá ${lead.name || ''}! Vi que você criou uma conta no EscalaXPro mas ainda não fez sua primeira recarga. Posso te ajudar com algo?`
+                          )}`;
+                          const formattedPhone = phoneDigits.length >= 10
+                            ? `(${phoneDigits.slice(0, 2)})${phoneDigits.slice(2, 7)}-${phoneDigits.slice(7)}`
+                            : phoneDigits;
+                          return (
+                            <TableRow key={lead.user_id}>
+                              <TableCell className="font-medium">{lead.name || '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{lead.email || '—'}</TableCell>
+                              <TableCell className="text-sm">{formattedPhone}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-xs"
+                                  onClick={() => window.open(whatsappUrl, '_blank')}
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  WhatsApp
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Total: {recoveryLeads.length} leads com telefone que não fizeram recarga
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ===== PIXEL TAB ===== */}

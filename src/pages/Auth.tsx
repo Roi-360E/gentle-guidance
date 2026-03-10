@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Rocket, Mail, Lock, User, Shield, CreditCard } from 'lucide-react';
+import { Rocket, Mail, Lock, User, Shield, CreditCard, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { validateEmailDomain } from '@/lib/email-validator';
 import { generateFingerprint } from '@/lib/device-fingerprint';
@@ -13,12 +13,20 @@ import { validateCPF, formatCPF, hashCPF } from '@/lib/cpf-validator';
 import { supabase } from '@/integrations/supabase/client';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 
+const formatPhone = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)})${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)})${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [cpf, setCpf] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
@@ -45,6 +53,14 @@ const Auth = () => {
       const emailCheck = validateEmailDomain(email);
       if (!emailCheck.valid) {
         toast.error(emailCheck.reason);
+        setLoading(false);
+        return;
+      }
+
+      // --- Phone validation ---
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+        toast.error('Telefone inválido. Digite DDD + número.');
         setLoading(false);
         return;
       }
@@ -88,12 +104,12 @@ const Auth = () => {
       if (error) {
         toast.error(error.message);
       } else {
-        // Save CPF hash to profile
+        // Save CPF hash and phone to profile
         const { data: { user: newUser } } = await supabase.auth.getUser();
         if (newUser) {
           await supabase
             .from('profiles')
-            .update({ cpf_hash: cpfHashed } as any)
+            .update({ cpf_hash: cpfHashed, phone: phoneDigits } as any)
             .eq('user_id', newUser.id);
         }
         toast.success('Conta criada! Verifique seu email para confirmar.');
@@ -149,6 +165,21 @@ const Auth = () => {
                       placeholder="000.000.000-00"
                       value={cpf}
                       onChange={(e) => setCpf(formatCPF(e.target.value))}
+                      required
+                      maxLength={14}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefone (WhatsApp)</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      placeholder="(00)00000-0000"
+                      value={phone}
+                      onChange={(e) => setPhone(formatPhone(e.target.value))}
                       required
                       maxLength={14}
                       className="pl-10"
