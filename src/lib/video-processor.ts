@@ -272,6 +272,62 @@ export async function preProcessInputCached(
  * Files are read into memory concurrently, then processed sequentially on FFmpeg
  * (since wasm is single-threaded) but with pre-fetched data to eliminate I/O waits.
  */
+/**
+ * Attempt to pre-process a single file via VPS (native FFmpeg = ~1-2s).
+ * Returns a File with the preprocessed video, or null on failure.
+ */
+async function vpsPreprocessFile(file: File): Promise<File | null> {
+  try {
+    const formData = new FormData();
+    formData.append('video', file, file.name);
+
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const url = `https://${projectId}.supabase.co/functions/v1/vps-preprocess`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { apikey: anonKey },
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    const contentType = res.headers.get('content-type') || '';
+
+    // If JSON response → error
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error}`);
+      return null;
+    }
+
+    if (!res.ok) {
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: HTTP ${res.status}`);
+      return null;
+    }
+
+    const blob = await res.blob();
+    if (blob.size < 1000) {
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: response too small (${blob.size}b)`);
+      return null;
+    }
+
+    return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
+  } catch (err) {
+    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+/**
+ * Pre-process multiple files. Strategy: VPS-first (native FFmpeg ~1-2s per file),
+ * falls back to local WASM if VPS unavailable.
+ */
 export async function preProcessBatch(
   files: File[],
   sectionLabel: string,
@@ -282,50 +338,111 @@ export async function preProcessBatch(
   if (files.length === 0) return;
 
   const totalStart = performance.now();
-  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${files.length} files for "${sectionLabel}"`);
+  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${files.length} files for "${sectionLabel}" (VPS-first)`);
 
-  // Pre-fetch ALL files into memory in parallel (eliminates sequential I/O)
-  const fetchPromises = files.map((file, i) => {
-    onFileProgress?.(i, 'loading', 0);
-    return fetchFileCached(file);
-  });
-  await Promise.all(fetchPromises);
-  console.log(`[VideoProcessor] 📦 All ${files.length} files loaded into memory in ${((performance.now() - totalStart) / 1000).toFixed(2)}s`);
+  // ─── Try VPS for ALL files in parallel (native FFmpeg = blazing fast) ───
+  let vpsAvailable = true;
+  const vpsResults: (File | null)[] = [];
 
-  // Process sequentially with memory recycling every 5 files to prevent OOM
-  const RECYCLE_EVERY = 20; // Stream copy uses minimal memory, recycle less often
-  for (let i = 0; i < files.length; i++) {
+  // Test VPS with first file
+  onFileProgress?.(0, 'processing', 10);
+  const firstResult = await vpsPreprocessFile(files[0]);
+  
+  if (firstResult) {
+    console.log(`[VideoProcessor] ⚡ VPS available! Processing all files via VPS...`);
+    vpsResults[0] = firstResult;
+
+    // Cache the VPS result
+    const cacheKey = getCacheKey(files[0]);
+    const ff = await getFFmpeg();
+    const data = new Uint8Array(await firstResult.arrayBuffer());
+    await ff.writeFile(cacheKey, data);
+    preProcessCache.set(files[0], cacheKey);
+    onFileProgress?.(0, 'done', 100);
+
+    // Process remaining files in parallel via VPS
+    if (files.length > 1) {
+      const remaining = files.slice(1).map(async (file, idx) => {
+        const i = idx + 1;
+        checkAbort(abortSignal);
+        onFileProgress?.(i, 'processing', 10);
+
+        const result = await vpsPreprocessFile(file);
+        if (result) {
+          const key = getCacheKey(file);
+          const currentFf = await getFFmpeg();
+          const fileData = new Uint8Array(await result.arrayBuffer());
+          await currentFf.writeFile(key, fileData);
+          preProcessCache.set(file, key);
+          onFileProgress?.(i, 'done', 100);
+          return result;
+        }
+        return null;
+      });
+
+      const results = await Promise.all(remaining);
+      
+      // Check if any failed — those will be processed locally
+      const failedIndices: number[] = [];
+      results.forEach((r, idx) => {
+        if (!r) failedIndices.push(idx + 1);
+      });
+
+      if (failedIndices.length > 0) {
+        console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
+        await localPreprocessFiles(failedIndices.map(i => files[i]), failedIndices, sectionLabel, settings, onFileProgress, abortSignal);
+      }
+    }
+  } else {
+    // VPS unavailable → fall back to local WASM for all
+    console.log(`[VideoProcessor] 📦 VPS unavailable, using local WASM...`);
+    vpsAvailable = false;
+    const allIndices = files.map((_, i) => i);
+    await localPreprocessFiles(files, allIndices, sectionLabel, settings, onFileProgress, abortSignal);
+  }
+
+  const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
+  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s ${vpsAvailable ? '(VPS)' : '(WASM)'}`);
+}
+
+/** Fallback: local WASM pre-processing */
+async function localPreprocessFiles(
+  files: File[],
+  originalIndices: number[],
+  sectionLabel: string,
+  settings: ProcessingSettings,
+  onFileProgress?: (fileIndex: number, status: 'loading' | 'processing' | 'done', pct: number) => void,
+  abortSignal?: AbortSignal
+): Promise<void> {
+  // Pre-fetch all into memory
+  await Promise.all(files.map(f => fetchFileCached(f)));
+
+  const RECYCLE_EVERY = 20;
+  for (let j = 0; j < files.length; j++) {
+    const i = originalIndices[j];
     checkAbort(abortSignal);
     onFileProgress?.(i, 'processing', 30);
 
-    // Recycle FFmpeg periodically to free wasm memory
-    if (i > 0 && i % RECYCLE_EVERY === 0) {
-      console.log(`[VideoProcessor] ♻️ Recycling FFmpeg at file ${i} to free memory`);
+    if (j > 0 && j % RECYCLE_EVERY === 0) {
       await terminateFFmpeg();
     }
 
-    const ff = await getFFmpeg();
-    const rawName = `raw_batch_${sectionLabel.toLowerCase()}_${i}.mp4`;
-
-    // Retry with FFmpeg restart on OOM
     const MAX_RETRIES = 3;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         const currentFf = await getFFmpeg();
-        await preProcessInputCached(currentFf, files[i], rawName, settings, abortSignal);
+        const rawName = `raw_batch_${sectionLabel.toLowerCase()}_${i}.mp4`;
+        await preProcessInputCached(currentFf, files[j], rawName, settings, abortSignal);
         break;
       } catch (err) {
-        const isOOM = err instanceof Error && (
-          err.message.includes('memory') || err.message.includes('RuntimeError')
-        );
+        const isOOM = err instanceof Error && (err.message.includes('memory') || err.message.includes('RuntimeError'));
         if (isOOM && attempt < MAX_RETRIES) {
-          console.warn(`[VideoProcessor] ⚠️ OOM on file ${i}, recycling FFmpeg (attempt ${attempt}/${MAX_RETRIES})`);
           await terminateFFmpeg();
           continue;
         }
         if (attempt === MAX_RETRIES) {
-          console.error(`[VideoProcessor] ❌ Failed to process file ${i} after ${MAX_RETRIES} attempts, skipping`);
-          break; // Skip this file instead of crashing the whole batch
+          console.error(`[VideoProcessor] ❌ Failed file ${i} after ${MAX_RETRIES} attempts, skipping`);
+          break;
         }
         throw err;
       }
@@ -333,9 +450,6 @@ export async function preProcessBatch(
 
     onFileProgress?.(i, 'done', 100);
   }
-
-  const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
-  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s`);
 }
 
 async function preProcessAllInputs(
