@@ -13,6 +13,12 @@ export function enableSourceProtection() {
     if (window.location.hostname.includes('lovable.app')) return;
   } catch { return; }
 
+  // Allow temporary unlock via URL param: ?debug=1
+  if (new URLSearchParams(window.location.search).get('debug') === '1') {
+    console.log('[SourceProtection] Debug mode — protection disabled');
+    return;
+  }
+
   // 1. Block right-click on ALL targets with capture phase (highest priority)
   const blockContextMenu = (e: Event) => {
     e.preventDefault();
