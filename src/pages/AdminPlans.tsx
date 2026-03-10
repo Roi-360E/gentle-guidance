@@ -475,7 +475,7 @@ export default function AdminPlans() {
     setGeneratingMessageFor(null);
   };
 
-
+  const toggleUserAiChat = async (userId: string, currentValue: boolean) => {
     setUpdatingUser(userId);
     const newValue = !currentValue;
     const { error } = await supabase
