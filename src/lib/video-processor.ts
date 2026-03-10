@@ -292,7 +292,7 @@ export async function preProcessBatch(
   console.log(`[VideoProcessor] 📦 All ${files.length} files loaded into memory in ${((performance.now() - totalStart) / 1000).toFixed(2)}s`);
 
   // Process sequentially with memory recycling every 5 files to prevent OOM
-  const RECYCLE_EVERY = 5;
+  const RECYCLE_EVERY = 20; // Stream copy uses minimal memory, recycle less often
   for (let i = 0; i < files.length; i++) {
     checkAbort(abortSignal);
     onFileProgress?.(i, 'processing', 30);
