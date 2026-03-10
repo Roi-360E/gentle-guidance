@@ -34,24 +34,16 @@ async function tryVpsRemoval(
     formData.append('y', String(regionY));
     formData.append('h', String(regionH));
 
-    // Call edge function which proxies to VPS
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-    // Abort controller with 15s timeout for speed
+    // Call VPS directly via Cloudflare tunnel
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     
     onProgress?.(25, 'Processando no servidor...');
 
     const response = await fetch(
-      `https://${projectId}.supabase.co/functions/v1/vps-subtitle-remover`,
+      'https://api.deploysites.online/remove-subtitles',
       {
         method: 'POST',
-        headers: {
-          'apikey': anonKey,
-          'Authorization': `Bearer ${anonKey}`,
-        },
         body: formData,
         signal: controller.signal,
       }
