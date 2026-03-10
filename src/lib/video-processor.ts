@@ -581,6 +581,24 @@ export function resetVpsConcatStatus(): void {
   vpsConcat = 'unknown';
 }
 
+/**
+ * Ensure VPS-preprocessed files are available in WASM preProcessCache.
+ * Called once when VPS concat fails but vpsFileCache has data.
+ */
+async function hydrateWasmFromVpsCache(files: File[]): Promise<void> {
+  const ff = await getFFmpeg();
+  for (const file of files) {
+    if (preProcessCache.has(file)) continue;
+    const vpsFile = vpsFileCache.get(file);
+    if (!vpsFile) continue;
+    const outputName = getCacheKey(file);
+    const data = await fetchFile(vpsFile);
+    await ff.writeFile(outputName, new Uint8Array(data));
+    preProcessCache.set(file, outputName);
+    console.log(`[VideoProcessor] 💾 Hydrated WASM cache: ${file.name} → ${outputName}`);
+  }
+}
+
 export async function concatenateVideos(
   combination: Combination,
   settings: ProcessingSettings,
@@ -602,6 +620,11 @@ export async function concatenateVideos(
     if (vpsConcat === 'unknown') {
       vpsConcat = 'unavailable';
       console.log(`[VideoProcessor] 📦 VPS concat unavailable, falling back to WASM`);
+      // Hydrate WASM cache from VPS preprocessed files (avoids full re-preprocessing)
+      if (vpsFileCache.size > 0) {
+        const allFiles = [combination.hook.file, combination.body.file, combination.cta.file];
+        await hydrateWasmFromVpsCache(allFiles);
+      }
     }
   }
 
@@ -628,6 +651,12 @@ export async function concatenateVideos(
 
   try {
     if (settings.preProcess) {
+      // Hydrate WASM cache from VPS files if needed
+      const comboFiles = [combination.hook.file, combination.body.file, combination.cta.file];
+      if (vpsFileCache.size > 0 && comboFiles.some(f => !preProcessCache.has(f) && vpsFileCache.has(f))) {
+        await hydrateWasmFromVpsCache(comboFiles);
+      }
+
       const hookNorm = preProcessCache.get(combination.hook.file);
       const bodyNorm = preProcessCache.get(combination.body.file);
       const ctaNorm = preProcessCache.get(combination.cta.file);
@@ -898,6 +927,13 @@ export async function processQueue(
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
       console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially`);
+    }
+
+    // Hydrate all VPS-preprocessed files to WASM cache once before sequential processing
+    if (remaining.length > 0 && vpsFileCache.size > 0 && settings.preProcess) {
+      console.log(`[VideoProcessor] 💾 Hydrating WASM cache from ${vpsFileCache.size} VPS files...`);
+      const allUniqueFiles = Array.from(new Set(remaining.flatMap(c => [c.hook.file, c.body.file, c.cta.file])));
+      await hydrateWasmFromVpsCache(allUniqueFiles);
     }
 
     const MAX_RETRIES = 5;
