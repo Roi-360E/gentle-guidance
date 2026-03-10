@@ -915,57 +915,49 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
-    // ─── Try VPS parallel concat first — fire ALL at once for max speed ───
-    const VPS_PARALLEL_BATCH = 10; // aggressive parallelism for ~3s total
-    let useVpsParallel = vpsFileCache.size > 0; // VPS files available = VPS is working
+    // ─── Try VPS concat SEQUENTIALLY (1, 2, 3...) for predictable ordering ───
+    let useVpsSequential = vpsFileCache.size > 0; // VPS files available = VPS is working
 
-    if (useVpsParallel) {
-      console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${VPS_PARALLEL_BATCH} simultaneous`);
+    if (useVpsSequential) {
+      console.log(`[VideoProcessor] ⚡ VPS sequential concat: processing ${combinations.length} combos one by one`);
       
-      for (let batchStart = 0; batchStart < combinations.length; batchStart += VPS_PARALLEL_BATCH) {
+      for (let i = 0; i < combinations.length; i++) {
         checkAbort(abortSignal);
         
-        const batch = combinations.slice(batchStart, batchStart + VPS_PARALLEL_BATCH);
-        
-        for (const combo of batch) {
-          combo.status = 'processing';
-          combo.errorMessage = undefined;
-        }
+        const combo = combinations[i];
+        if (combo.status === 'done') continue;
+
+        combo.status = 'processing';
+        combo.errorMessage = undefined;
         onUpdate([...combinations]);
 
-        const results = await Promise.all(
-          batch.map(async (combo) => {
-            try {
-              console.log(`[VideoProcessor] 🎬 VPS concat combo ${combo.id}: ${combo.outputName}`);
-              const url = await vpsConcatenateFiles(combo, settings);
-              if (url) {
-                combo.status = 'done';
-                combo.outputUrl = url;
-                console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} concluído (VPS)!`, 'color: #22c55e; font-weight: bold;');
-                return true;
-              }
-              return false;
-            } catch {
-              return false;
-            }
-          })
-        );
-
-        onUpdate([...combinations]);
-
-        // If first batch all failed, VPS concat is broken — fall back
-        if (batchStart === 0 && results.every(r => !r)) {
-          console.log(`[VideoProcessor] 📦 VPS parallel concat failed, falling back to sequential`);
-          useVpsParallel = false;
-          // Reset statuses
-          for (const combo of batch) {
-            if (combo.status !== 'done') {
-              combo.status = 'pending';
-            }
+        try {
+          console.log(`[VideoProcessor] 🎬 [${i + 1}/${combinations.length}] VPS concat: ${combo.outputName}`);
+          const url = await vpsConcatenateFiles(combo, settings);
+          if (url) {
+            combo.status = 'done';
+            combo.outputUrl = url;
+            console.log(`%c[VideoProcessor] ✅ [${i + 1}/${combinations.length}] ${combo.outputName} concluído (VPS)!`, 'color: #22c55e; font-weight: bold;');
+            onUpdate([...combinations]);
+            onProgressItem(Math.round(((i + 1) / combinations.length) * 100));
+            continue;
           }
+        } catch {
+          // VPS failed for this combo
+        }
+
+        // If first combo failed via VPS, fall back entirely
+        if (i === 0) {
+          console.log(`[VideoProcessor] 📦 VPS sequential concat failed on first combo, falling back to WASM`);
+          combo.status = 'pending';
+          useVpsSequential = false;
           onUpdate([...combinations]);
           break;
         }
+
+        // Mark individual failure, continue with next
+        combo.status = 'pending'; // will be retried in WASM fallback below
+        onUpdate([...combinations]);
       }
     }
 
