@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.vps-preprocess]
 verify_jwt = false
+
+[functions.vps-concatenate]
+verify_jwt = false
