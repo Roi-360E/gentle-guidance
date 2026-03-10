@@ -373,31 +373,45 @@ export async function preProcessBatch(
   if (files.length === 0) return;
 
   const totalStart = performance.now();
-  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${files.length} files for "${sectionLabel}" (VPS-first)`);
+  console.log(`[VideoProcessor] 🚀 Batch pre-processing ${files.length} files for "${sectionLabel}" (PARALLEL VPS-first)`);
 
-  // ─── Process files sequentially in order (1, 2, 3, ...) for deterministic progress ───
+  // ─── PARALLEL: fire all VPS requests simultaneously for ~2s total ───
+  const VPS_CONCURRENCY = 6; // max parallel requests to VPS
+
+  const vpsResults: (boolean)[] = new Array(files.length).fill(false);
   let vpsAvailable = true;
 
-  console.log(`[VideoProcessor] 🔢 Processing ${files.length} files in order (1→${files.length})...`);
-  
-  const vpsResults: boolean[] = [];
-  for (let idx = 0; idx < files.length; idx++) {
+  // Process in chunks of VPS_CONCURRENCY for controlled parallelism
+  const chunks: number[][] = [];
+  for (let i = 0; i < files.length; i += VPS_CONCURRENCY) {
+    chunks.push(Array.from({ length: Math.min(VPS_CONCURRENCY, files.length - i) }, (_, j) => i + j));
+  }
+
+  for (const chunk of chunks) {
     checkAbort(abortSignal);
-    const file = files[idx];
-    onFileProgress?.(idx, 'processing', 10);
-    console.log(`[VideoProcessor] 📄 Pre-processing file ${idx + 1}/${files.length}: ${file.name}`);
-    const result = await vpsPreprocessFile(file, settings);
-    if (result) {
-      vpsFileCache.set(file, result);
-      onFileProgress?.(idx, 'done', 100);
-      vpsResults.push(true);
-    } else {
-      vpsResults.push(false);
-      // If first file fails, VPS is likely down — skip rest for VPS
-      if (idx === 0) {
-        console.log(`[VideoProcessor] ⚠️ First VPS file failed, switching to WASM for all`);
-        break;
+
+    // Mark all in chunk as processing
+    chunk.forEach(idx => onFileProgress?.(idx, 'processing', 10));
+
+    const chunkPromises = chunk.map(async (idx) => {
+      const file = files[idx];
+      console.log(`[VideoProcessor] 📄 [PARALLEL] Pre-processing file ${idx + 1}/${files.length}: ${file.name}`);
+      const result = await vpsPreprocessFile(file, settings);
+      if (result) {
+        vpsFileCache.set(file, result);
+        vpsResults[idx] = true;
+        onFileProgress?.(idx, 'done', 100);
       }
+      return { idx, ok: !!result };
+    });
+
+    const results = await Promise.all(chunkPromises);
+
+    // If this is the first chunk and ALL failed, VPS is down → abort VPS path
+    if (chunks[0] === chunk && results.every(r => !r.ok)) {
+      console.log(`[VideoProcessor] ⚠️ First chunk all failed VPS, switching to WASM`);
+      vpsAvailable = false;
+      break;
     }
   }
 
@@ -405,7 +419,7 @@ export async function preProcessBatch(
   const vpsSuccessCount = vpsResults.filter(Boolean).length;
 
   if (vpsSuccessCount > 0) {
-    console.log(`[VideoProcessor] ⚡ VPS processed ${vpsSuccessCount}/${files.length} files`);
+    console.log(`[VideoProcessor] ⚡ VPS processed ${vpsSuccessCount}/${files.length} files in parallel`);
   }
 
   if (failedIndices.length > 0) {
@@ -415,13 +429,12 @@ export async function preProcessBatch(
     } else {
       console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
     }
-    // WASM fallback only writes files that failed VPS
     const failedFiles = failedIndices.map(i => files[i]);
     await localPreprocessFiles(failedFiles, failedIndices, sectionLabel, settings, onFileProgress, abortSignal);
   }
 
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
-  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s ${vpsAvailable ? '(VPS)' : '(WASM)'}`);
+  console.log(`[VideoProcessor] ✅ Batch "${sectionLabel}" complete: ${files.length} files in ${totalElapsed}s ${vpsAvailable ? '(VPS-PARALLEL)' : '(WASM)'}`);
 }
 
 /** Fallback: local WASM pre-processing */
