@@ -802,6 +802,7 @@ async function clearCache(): Promise<void> {
     try { await ffmpeg.deleteFile(filename); } catch {}
   }
   preProcessCache.clear();
+  vpsFileCache.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
@@ -857,15 +858,73 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
+    // ─── Try VPS parallel concat first (process multiple combos simultaneously) ───
+    const VPS_PARALLEL_BATCH = settings.batchSize || 3;
+    let useVpsParallel = vpsFileCache.size > 0; // VPS files available = VPS is working
+
+    if (useVpsParallel) {
+      console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${VPS_PARALLEL_BATCH} simultaneous`);
+      
+      for (let batchStart = 0; batchStart < combinations.length; batchStart += VPS_PARALLEL_BATCH) {
+        checkAbort(abortSignal);
+        
+        const batch = combinations.slice(batchStart, batchStart + VPS_PARALLEL_BATCH);
+        
+        for (const combo of batch) {
+          combo.status = 'processing';
+          combo.errorMessage = undefined;
+        }
+        onUpdate([...combinations]);
+
+        const results = await Promise.all(
+          batch.map(async (combo) => {
+            try {
+              console.log(`[VideoProcessor] 🎬 VPS concat combo ${combo.id}: ${combo.outputName}`);
+              const url = await vpsConcatenateFiles(combo, settings);
+              if (url) {
+                combo.status = 'done';
+                combo.outputUrl = url;
+                console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} concluído (VPS)!`, 'color: #22c55e; font-weight: bold;');
+                return true;
+              }
+              return false;
+            } catch {
+              return false;
+            }
+          })
+        );
+
+        onUpdate([...combinations]);
+
+        // If first batch all failed, VPS concat is broken — fall back
+        if (batchStart === 0 && results.every(r => !r)) {
+          console.log(`[VideoProcessor] 📦 VPS parallel concat failed, falling back to sequential`);
+          useVpsParallel = false;
+          // Reset statuses
+          for (const combo of batch) {
+            if (combo.status !== 'done') {
+              combo.status = 'pending';
+            }
+          }
+          onUpdate([...combinations]);
+          break;
+        }
+      }
+    }
+
+    // ─── Sequential fallback for remaining/failed combos ───
+    const remaining = combinations.filter(c => c.status !== 'done');
+    if (remaining.length > 0) {
+      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially`);
+    }
+
     const MAX_RETRIES = 5;
     const retryCount = new Map<number, number>();
 
-    // Process ALL combinations, retrying failures until all succeed or max retries hit
     for (let i = 0; i < combinations.length; i++) {
       checkAbort(abortSignal);
 
       const combo = combinations[i];
-      // Skip already done combos (from previous retry rounds)
       if (combo.status === 'done') continue;
 
       combo.status = 'processing';
@@ -890,11 +949,10 @@ export async function processQueue(
         combo.outputUrl = url;
         console.log(`%c[VideoProcessor] ✅ Combo ${combo.id} (${combo.outputName}) concluído!`, 'color: #22c55e; font-weight: bold;');
       } catch (err) {
-        // If aborted, mark remaining as pending and exit
         if (abortSignal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
           combo.status = 'pending';
           onUpdate([...combinations]);
-          return; // exit entirely on abort
+          return;
         }
 
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -902,7 +960,6 @@ export async function processQueue(
 
         const retries = retryCount.get(combo.id) || 0;
         if (retries < MAX_RETRIES - 1) {
-          // Retry: recycle FFmpeg and rebuild cache if needed
           console.log(`%c[VideoProcessor] ♻️ Reciclando FFmpeg e retentando combo ${combo.id} (${retries + 2}/${MAX_RETRIES})`, 'color: #f59e0b; font-weight: bold;');
           retryCount.set(combo.id, retries + 1);
           await terminateFFmpeg();
@@ -912,7 +969,7 @@ export async function processQueue(
           }
           combo.status = 'pending';
           combo.errorMessage = undefined;
-          i--; // retry same index
+          i--;
         } else {
           combo.status = 'error';
           combo.errorMessage = errorMsg;
@@ -924,7 +981,7 @@ export async function processQueue(
       onProgressItem(0);
     }
 
-    // Final validation: check all combos are done
+    // Final validation
     const doneCount = combinations.filter(c => c.status === 'done').length;
     const errorCount = combinations.filter(c => c.status === 'error').length;
     console.log(
