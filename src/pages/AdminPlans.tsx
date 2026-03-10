@@ -430,7 +430,52 @@ export default function AdminPlans() {
     setRecoveryLoading(false);
   };
 
-  const toggleUserAiChat = async (userId: string, currentValue: boolean) => {
+  const loadAgentPrompt = async () => {
+    const { data } = await supabase
+      .from('admin_settings' as any)
+      .select('value')
+      .eq('key', 'recovery_agent_prompt')
+      .single();
+    if (data) setAgentPrompt((data as any).value || '');
+  };
+
+  const saveAgentPrompt = async () => {
+    setAgentPromptSaving(true);
+    const { error } = await supabase
+      .from('admin_settings' as any)
+      .update({ value: agentPrompt, updated_at: new Date().toISOString() } as any)
+      .eq('key', 'recovery_agent_prompt');
+    if (error) {
+      toast.error('Erro ao salvar prompt: ' + error.message);
+    } else {
+      toast.success('Prompt do agente atualizado!');
+    }
+    setAgentPromptSaving(false);
+  };
+
+  const generateRecoveryMessage = async (lead: RecoveryLead) => {
+    setGeneratingMessageFor(lead.user_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('recovery-message', {
+        body: {
+          leadName: lead.name,
+          leadEmail: lead.email,
+          agentPrompt,
+        },
+      });
+      if (error) {
+        toast.error('Erro ao gerar mensagem: ' + error.message);
+      } else if (data?.message) {
+        setGeneratedMessages(prev => ({ ...prev, [lead.user_id]: data.message }));
+        toast.success('Mensagem gerada! Clique em "Enviar" para abrir o WhatsApp.');
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setGeneratingMessageFor(null);
+  };
+
+
     setUpdatingUser(userId);
     const newValue = !currentValue;
     const { error } = await supabase
