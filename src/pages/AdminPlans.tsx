@@ -1327,6 +1327,35 @@ export default function AdminPlans() {
 
            {/* ===== DOMAIN VERIFICATION TAB ===== */}
           <TabsContent value="domain" className="space-y-6">
+            {/* DevTools Toggle */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4" /> DevTools / Console
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Desbloquear DevTools</p>
+                    <p className="text-xs text-muted-foreground">Permite abrir o console (F12) e inspecionar elementos no site de produção</p>
+                  </div>
+                  <Switch
+                    checked={devToolsEnabled}
+                    onCheckedChange={(checked) => {
+                      setDevToolsEnabled(checked);
+                      if (checked) {
+                        localStorage.setItem('devtools_unlocked', '1');
+                      } else {
+                        localStorage.removeItem('devtools_unlocked');
+                      }
+                      toast.success(checked ? 'DevTools desbloqueado! Recarregue a página.' : 'DevTools bloqueado. Recarregue a página.');
+                    }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Method 1: HTML File */}
             <Card>
               <CardHeader>

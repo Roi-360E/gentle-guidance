@@ -13,8 +13,9 @@ export function enableSourceProtection() {
     if (window.location.hostname.includes('lovable.app')) return;
   } catch { return; }
 
-  // Allow temporary unlock via URL param: ?debug=1
-  if (new URLSearchParams(window.location.search).get('debug') === '1') {
+  // Allow unlock via URL param (?debug=1) or admin toggle (localStorage)
+  if (new URLSearchParams(window.location.search).get('debug') === '1' ||
+      localStorage.getItem('devtools_unlocked') === '1') {
     console.log('[SourceProtection] Debug mode — protection disabled');
     return;
   }
