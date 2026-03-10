@@ -634,73 +634,46 @@ export async function concatenateVideos(
       }
 
       const outputFile = `out_${combination.id}.mp4`;
-      const scale = getScale(settings);
 
-      if (!scale) {
-        const concatList = `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`;
-        await ff.writeFile('concat.txt', concatList);
+      // ─── ALWAYS use concat demuxer + stream copy (~1-2s) ───
+      // Scaling was already applied during pre-processing, so no re-encode needed here
+      const concatList = `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`;
+      await ff.writeFile('concat.txt', concatList);
 
-        let exitCode = await ff.exec([
-          '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
-          '-c', 'copy', '-movflags', '+faststart', '-y', outputFile,
-        ]);
-        checkAbort(abortSignal);
+      let exitCode = await ff.exec([
+        '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+        '-c', 'copy', '-movflags', '+faststart', '-y', outputFile,
+      ]);
+      checkAbort(abortSignal);
 
-        if (exitCode !== 0) {
-          exitCode = await ff.exec([
-            '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
-            '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
-            '-map', '[outv]', '-map', '[outa]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
-            '-crf', '23', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
-            '-y', outputFile,
-          ]);
-          checkAbort(abortSignal);
-        }
-
-        if (exitCode !== 0) {
-          exitCode = await ff.exec([
-            '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
-            '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
-            '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
-            '-crf', '23', '-an', '-movflags', '+faststart',
-            '-y', outputFile,
-          ]);
-          checkAbort(abortSignal);
-        }
-
-        if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
-      } else {
-        let exitCode = await ff.exec([
+      // Fallback 1: filter_complex re-encode (slower but handles codec mismatches)
+      if (exitCode !== 0) {
+        console.warn(`[VideoProcessor] ⚠️ Stream copy concat failed for combo ${combination.id}, re-encoding...`);
+        exitCode = await ff.exec([
           '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
-          '-filter_complex',
-          `[0:v]scale=${scale},setsar=1[v0];[1:v]scale=${scale},setsar=1[v1];[2:v]scale=${scale},setsar=1[v2];` +
-          `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
+          '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
           '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main',
-          '-pix_fmt', 'yuv420p', '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+          '-crf', '23', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
           '-y', outputFile,
         ]);
         checkAbort(abortSignal);
-
-        if (exitCode !== 0) {
-          exitCode = await ff.exec([
-            '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
-            '-filter_complex',
-            `[0:v]scale=${scale},setsar=1[v0];[1:v]scale=${scale},setsar=1[v1];[2:v]scale=${scale},setsar=1[v2];` +
-            `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
-            '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
-            '-crf', '23', '-an', '-movflags', '+faststart',
-            '-y', outputFile,
-          ]);
-          checkAbort(abortSignal);
-        }
-
-        if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
       }
+
+      // Fallback 2: video-only (no audio)
+      if (exitCode !== 0) {
+        exitCode = await ff.exec([
+          '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+          '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
+          '-map', '[outv]',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+          '-crf', '23', '-an', '-movflags', '+faststart',
+          '-y', outputFile,
+        ]);
+        checkAbort(abortSignal);
+      }
+
+      if (exitCode !== 0) throw new Error(`All concat methods failed for combo ${combination.id}`);
 
       const data = await ff.readFile(outputFile);
       const blob = new Blob([new Uint8Array(data as Uint8Array)], { type: 'video/mp4' });
