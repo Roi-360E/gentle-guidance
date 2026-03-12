@@ -53,8 +53,15 @@ const Index = () => {
   const [bodies, setBodies] = useState<VideoFileWithProgress[]>([]);
   const [ctas, setCtas] = useState<VideoFileWithProgress[]>([]);
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
-  
-  
+
+  // Check admin role
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return; }
+    supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' })
+      .then(({ data }) => setIsAdmin(data === true));
+  }, [user]);
+
+
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [planName, setPlanName] = useState<string>('Gratuito');
