@@ -1,100 +1,99 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  Upload, Type, Plus, ArrowLeft, SplitSquareHorizontal, Columns2,
-  PanelTop, Camera, Scissors, Image, LayoutGrid, Video, Sparkles,
-  Send, User, Lock
+  ArrowLeft, Video, Scissors, Image, LayoutGrid, Sparkles,
+  Send, User, Lock, Wand2, Upload, FileText, Zap, Home,
+  Settings, Film, PenTool, Eye, Copy, Download, RefreshCw
 } from "lucide-react";
 
-type SplitMode = "50/50" | "60/40" | "40/60" | "pip";
-
 const tabs = [
-  { id: "shorts", label: "Shorts & Reels", icon: Video, available: true },
+  { id: "criar-anuncio", label: "Criar Anúncio", icon: PenTool, available: true },
+  { id: "criar-campanha", label: "Criar Campanha", icon: Zap, available: false },
+  { id: "criar-criacao", label: "Criar Criação", icon: Sparkles, available: false },
+  { id: "galerias", label: "Galerias", icon: Image, available: false },
+  { id: "editor-video", label: "Editor de Vídeo", icon: Video, available: false },
+  { id: "shorts-reels", label: "Shorts & Reels", icon: Film, available: false },
   { id: "cortes", label: "Cortes IA", icon: Scissors, available: false },
-  { id: "galeria", label: "Galeria", icon: Image, available: false },
-  { id: "carrossel", label: "Criar Carrossel", icon: LayoutGrid, available: false },
-  { id: "criativo", label: "Criar Criativo", icon: Sparkles, available: false },
   { id: "publicar", label: "Publicar", icon: Send, available: false },
+  { id: "perfil", label: "Meu Perfil", icon: User, available: false },
 ];
+
+type CreateMode = "zero" | "concorrente";
 
 const ShortsReels = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("shorts");
-  const [topVideo, setTopVideo] = useState<File | null>(null);
-  const [bottomVideo, setBottomVideo] = useState<File | null>(null);
-  const [topVideoUrl, setTopVideoUrl] = useState<string | null>(null);
-  const [bottomVideoUrl, setBottomVideoUrl] = useState<string | null>(null);
-  const [splitMode, setSplitMode] = useState<SplitMode>("50/50");
-  const [position, setPosition] = useState(50);
-  const [transparency, setTransparency] = useState(0);
-  const [texts, setTexts] = useState<string[]>([]);
-  const topInputRef = useRef<HTMLInputElement>(null);
-  const bottomInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState("criar-anuncio");
+  const [createMode, setCreateMode] = useState<CreateMode>("zero");
+  const [productName, setProductName] = useState("");
+  const [description, setDescription] = useState("");
+  const [magicPrompt, setMagicPrompt] = useState("");
+  const [generatedAd, setGeneratedAd] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [referenceImages, setReferenceImages] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleVideoUpload = (file: File, slot: "top" | "bottom") => {
-    const url = URL.createObjectURL(file);
-    if (slot === "top") {
-      setTopVideo(file);
-      setTopVideoUrl(url);
-    } else {
-      setBottomVideo(file);
-      setBottomVideoUrl(url);
-    }
-  };
-
-  const splitPercent = () => {
-    switch (splitMode) {
-      case "50/50": return { top: 50, bottom: 50 };
-      case "60/40": return { top: 60, bottom: 40 };
-      case "40/60": return { top: 40, bottom: 60 };
-      case "pip": return { top: 75, bottom: 25 };
-    }
-  };
-
-  const split = splitPercent();
   const userName = user?.email?.split("@")[0] || "Usuário";
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    // Simulating generation
+    setTimeout(() => {
+      setGeneratedAd(
+        `🚀 ${productName || "Seu Produto"}\n\n${description || "Descrição incrível do seu produto que vai converter muito!"}\n\n✅ Resultados comprovados\n✅ Garantia de satisfação\n✅ Suporte exclusivo\n\n👉 Clique no link e garanta o seu agora!`
+      );
+      setIsGenerating(false);
+    }, 2000);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            EscalaXPro
-          </h1>
-          <span className="text-[10px] font-bold bg-primary/20 text-primary px-2 py-0.5 rounded-full">Pro</span>
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm px-4 sm:px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              EscalaXPro
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="text-muted-foreground gap-2" onClick={() => navigate("/")}>
+              <Home className="h-4 w-4" />
+              <span className="hidden sm:inline">Home</span>
+            </Button>
+            <Button variant="ghost" size="sm" className="text-muted-foreground gap-2" onClick={() => navigate("/")}>
+              Sair
+            </Button>
+          </div>
         </div>
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => navigate("/")}>
-          Sair
-        </Button>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Welcome */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {/* Welcome Section */}
         <div className="mb-6">
           <h2 className="text-xl sm:text-2xl font-bold text-foreground">
             Olá, {userName}! 👋
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Novas funcionalidades em desenvolvimento — acompanhe o progresso aqui
+            Crie anúncios persuasivos em segundos com inteligência artificial
           </p>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex gap-2 overflow-x-auto pb-3 mb-6 scrollbar-none">
+        {/* Tab Navigation - Scrollable */}
+        <div className="flex gap-2 overflow-x-auto pb-3 mb-6 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => tab.available && setActiveTab(tab.id)}
               className={`
-                flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all
+                flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all shrink-0
                 ${activeTab === tab.id
                   ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
                   : tab.available
@@ -103,189 +102,225 @@ const ShortsReels = () => {
                 }
               `}
             >
-              <tab.icon className="h-4 w-4" />
+              <tab.icon className="h-3.5 w-3.5" />
               {tab.label}
-              {!tab.available && <Lock className="h-3 w-3" />}
+              {!tab.available && <Lock className="h-3 w-3 opacity-50" />}
             </button>
           ))}
         </div>
 
-        {/* Tab Content */}
-        {activeTab === "shorts" ? (
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Left: Preview */}
-            <div className="flex-1">
-              <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
+        {/* Main Content */}
+        {activeTab === "criar-anuncio" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Panel: Form */}
+            <div className="space-y-5">
+              {/* Dados do Anúncio Card */}
+              <div className="bg-card border border-border rounded-xl p-5">
+                <h3 className="text-base font-semibold text-foreground mb-1">📝 Dados do Anúncio</h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Preencha as informações para gerar seu anúncio
+                </p>
+
+                {/* Create mode toggle */}
+                <div className="flex gap-2 mb-5">
+                  <button
+                    onClick={() => setCreateMode("zero")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                      createMode === "zero"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/30 text-muted-foreground hover:text-foreground border border-border"
+                    }`}
+                  >
+                    Criar do Zero
+                  </button>
+                  <button
+                    onClick={() => setCreateMode("concorrente")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                      createMode === "concorrente"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/30 text-muted-foreground hover:text-foreground border border-border"
+                    }`}
+                  >
+                    Superar Concorrente
+                  </button>
+                </div>
+
+                {/* Product Name */}
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <span className="text-primary">👁</span> Preview — Shorts / Reels
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-1">Formato 9:16 — Arraste os vídeos para personalizar</p>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                    Nome do Produto/Serviço
+                  </label>
+                  <Input
+                    placeholder="Ex: Curso de Marketing Digital para Influenciadores"
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    className="bg-muted/20 border-border"
+                  />
                 </div>
 
-                {/* Split mode buttons */}
-                <div className="flex gap-2 mb-4 flex-wrap">
-                  {([
-                    { mode: "50/50" as SplitMode, icon: <SplitSquareHorizontal className="h-3 w-3" />, label: "Split 50/50" },
-                    { mode: "60/40" as SplitMode, icon: <Columns2 className="h-3 w-3" />, label: "Split 60/40" },
-                    { mode: "40/60" as SplitMode, icon: <PanelTop className="h-3 w-3" />, label: "Split 40/60" },
-                    { mode: "pip" as SplitMode, icon: <Camera className="h-3 w-3" />, label: "PIP (Câmera)" },
-                  ]).map(({ mode, icon, label }) => (
-                    <Button
-                      key={mode}
-                      size="sm"
-                      variant={splitMode === mode ? "default" : "outline"}
-                      className={splitMode === mode ? "bg-primary text-primary-foreground" : "border-border text-muted-foreground"}
-                      onClick={() => setSplitMode(mode)}
-                    >
-                      {icon}
-                      <span className="text-xs">{label}</span>
-                    </Button>
-                  ))}
+                {/* Description */}
+                <div className="mb-4">
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                    Descrição*
+                  </label>
+                  <Textarea
+                    placeholder="Preencha o formulário e clique em gerar"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="bg-muted/20 border-border min-h-[80px]"
+                  />
                 </div>
+              </div>
 
-                {/* Video preview area */}
-                <div className="relative bg-muted/20 border border-border rounded-xl overflow-hidden mx-auto" style={{ width: 280, aspectRatio: "9/16" }}>
-                  {/* Top video */}
-                  <div
-                    className="w-full overflow-hidden relative"
-                    style={{ height: splitMode === "pip" ? "100%" : `${split.top}%` }}
-                  >
-                    {topVideoUrl ? (
-                      <video src={topVideoUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline />
-                    ) : (
-                      <button
-                        onClick={() => topInputRef.current?.click()}
-                        className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-primary transition-colors bg-muted/10"
-                      >
-                        <Upload className="h-6 w-6" />
-                        <span className="text-xs">Vídeo de Cima</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Divider line */}
-                  {splitMode !== "pip" && (
-                    <div className="w-full h-[2px] bg-gradient-to-r from-primary to-accent" />
+              {/* Magic Prompt Card */}
+              <div className="bg-card border border-border rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Wand2 className="h-4 w-4 text-primary" />
+                  <h3 className="text-base font-semibold text-foreground">MAGIC PROMPT — UM CLIQUE</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Informe o nome do produto, defina a publicação para que a intenção alcance a região desejada.
+                </p>
+                <Textarea
+                  placeholder="Ex: Lançamento, curso de marketing digital para influenciadores"
+                  value={magicPrompt}
+                  onChange={(e) => setMagicPrompt(e.target.value)}
+                  className="bg-muted/20 border-border min-h-[70px] mb-3"
+                />
+                <Button
+                  className="w-full gap-2 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold"
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      Gerando...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-4 w-4" />
+                      Gerar Anúncio com IA
+                    </>
                   )}
+                </Button>
+              </div>
 
-                  {/* Bottom video */}
-                  <div
-                    className={splitMode === "pip"
-                      ? "absolute bottom-3 right-3 w-[35%] aspect-square rounded-lg overflow-hidden border-2 border-primary shadow-lg"
-                      : "w-full overflow-hidden"
+              {/* Reference Images Card */}
+              <div className="bg-card border border-border rounded-xl p-5">
+                <h3 className="text-base font-semibold text-foreground mb-1">🖼️ Imagens de Referência (opcional)</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Adicione imagens para melhorar a geração do anúncio
+                </p>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
+                >
+                  <Upload className="h-8 w-8" />
+                  <span className="text-sm">Clique para enviar imagens</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setReferenceImages(Array.from(e.target.files));
                     }
-                    style={splitMode !== "pip" ? { height: `${split.bottom}%` } : undefined}
-                  >
-                    {bottomVideoUrl ? (
-                      <video
-                        src={bottomVideoUrl}
-                        className="w-full h-full object-cover"
-                        style={{ opacity: 1 - transparency / 100 }}
-                        muted loop autoPlay playsInline
-                      />
-                    ) : (
-                      <button
-                        onClick={() => bottomInputRef.current?.click()}
-                        className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-primary transition-colors bg-muted/10"
-                      >
-                        <Upload className="h-6 w-6" />
-                        <span className="text-xs">Vídeo de Baixo</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Text overlays */}
-                  {texts.map((text, i) => (
-                    <div
-                      key={i}
-                      className="absolute left-1/2 -translate-x-1/2 text-primary-foreground font-bold text-sm bg-primary/70 px-3 py-1 rounded"
-                      style={{ top: `${20 + i * 12}%` }}
-                    >
-                      {text}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Hidden file inputs */}
-                <input ref={topInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleVideoUpload(e.target.files[0], "top")} />
-                <input ref={bottomInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleVideoUpload(e.target.files[0], "bottom")} />
-              </div>
-            </div>
-
-            {/* Right: Controls */}
-            <div className="w-full lg:w-80 space-y-4">
-              {/* Videos section */}
-              <div className="bg-card border border-border rounded-xl p-4">
-                <h3 className="font-semibold mb-3 text-sm">Vídeos</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
-                    <span className="text-sm truncate">{topVideo ? topVideo.name : "Vídeo de Cima"}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-accent hover:text-primary shrink-0" onClick={() => topInputRef.current?.click()}>
-                      <Upload className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
-                    <span className="text-sm truncate">{bottomVideo ? bottomVideo.name : "Vídeo de Baixo"}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-accent hover:text-primary shrink-0" onClick={() => bottomInputRef.current?.click()}>
-                      <Upload className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Divisor section */}
-              <div className="bg-card border border-border rounded-xl p-4">
-                <h3 className="font-semibold mb-3 text-sm">Divisor</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-2 block">Posição ({position}%)</label>
-                    <Slider value={[position]} onValueChange={([v]) => setPosition(v)} max={80} min={20} step={1} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-2 block">Transparência ({transparency}%)</label>
-                    <Slider value={[transparency]} onValueChange={([v]) => setTransparency(v)} max={100} min={0} step={1} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Texts section */}
-              <div className="bg-card border border-border rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm flex items-center gap-2">
-                    <Type className="h-4 w-4" /> Textos
-                  </h3>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs border-border"
-                    onClick={() => {
-                      const text = prompt("Digite o texto:");
-                      if (text) setTexts([...texts, text]);
-                    }}
-                  >
-                    <Plus className="h-3 w-3" /> Adicionar
-                  </Button>
-                </div>
-                {texts.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-2">
-                    Clique em "Adicionar" para inserir texto
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    {texts.map((t, i) => (
-                      <div key={i} className="text-xs bg-muted/20 rounded p-2 flex justify-between items-center">
-                        <span>{t}</span>
-                        <button className="text-destructive text-xs hover:underline" onClick={() => setTexts(texts.filter((_, j) => j !== i))}>✕</button>
+                  }}
+                />
+                {referenceImages.length > 0 && (
+                  <div className="mt-3 flex gap-2 flex-wrap">
+                    {referenceImages.map((img, i) => (
+                      <div key={i} className="bg-muted/20 rounded-lg px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-1.5">
+                        <FileText className="h-3 w-3" />
+                        {img.name}
+                        <button
+                          className="text-destructive hover:text-destructive/80 ml-1"
+                          onClick={() => setReferenceImages(referenceImages.filter((_, j) => j !== i))}
+                        >
+                          ✕
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Right Panel: Result */}
+            <div>
+              <div className="bg-card border border-border rounded-xl p-5 sticky top-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-primary" />
+                      Resultado
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Seu anúncio gerado por IA
+                    </p>
+                  </div>
+                  {generatedAd && (
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => navigator.clipboard.writeText(generatedAd)}
+                        title="Copiar"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={handleGenerate}
+                        title="Regenerar"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {generatedAd ? (
+                  <div className="bg-muted/20 border border-border rounded-lg p-4">
+                    <pre className="whitespace-pre-wrap text-sm text-foreground font-sans leading-relaxed">
+                      {generatedAd}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="bg-muted/10 border border-dashed border-border rounded-lg p-8 sm:p-12 text-center">
+                    <div className="bg-primary/10 rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-3">
+                      <Sparkles className="h-7 w-7 text-primary" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Preencha o formulário e clique em <span className="text-primary font-medium">"Gerar Anúncio com IA"</span> para ver o resultado aqui.
+                    </p>
+                  </div>
+                )}
+
+                {generatedAd && (
+                  <div className="mt-4 flex gap-2">
+                    <Button className="flex-1 gap-2" variant="outline" onClick={() => navigator.clipboard.writeText(generatedAd)}>
+                      <Copy className="h-4 w-4" />
+                      Copiar Texto
+                    </Button>
+                    <Button className="flex-1 gap-2 bg-gradient-to-r from-primary to-accent text-primary-foreground" onClick={handleGenerate}>
+                      <RefreshCw className="h-4 w-4" />
+                      Regenerar
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
-          /* Coming soon placeholder for other tabs */
+          /* Locked tab placeholder */
           <div className="bg-card border border-border rounded-xl p-12 text-center">
             <div className="bg-primary/10 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
               <Lock className="h-8 w-8 text-primary" />
