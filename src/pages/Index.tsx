@@ -53,8 +53,15 @@ const Index = () => {
   const [bodies, setBodies] = useState<VideoFileWithProgress[]>([]);
   const [ctas, setCtas] = useState<VideoFileWithProgress[]>([]);
   const [settings, setSettings] = useState<ProcessingSettings>(defaultSettings);
-  
-  
+
+  // Check admin role
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return; }
+    supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' })
+      .then(({ data }) => setIsAdmin(data === true));
+  }, [user]);
+
+
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [planName, setPlanName] = useState<string>('Gratuito');
@@ -63,6 +70,7 @@ const Index = () => {
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
   const [bodiesPreprocessed, setBodiesPreprocessed] = useState(false);
   const [ctasPreprocessed, setCtasPreprocessed] = useState(false);
@@ -300,7 +308,7 @@ const Index = () => {
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
             )}
-            {user?.email === 'matheuslaurindo900@gmail.com' && (
+            {isAdmin && (
               <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/shorts-reels')}>
                 🚀 Novidades
               </Button>
@@ -337,7 +345,7 @@ const Index = () => {
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
             )}
-            {user?.email === 'matheuslaurindo900@gmail.com' && (
+            {isAdmin && (
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/shorts-reels'); setMobileMenuOpen(false); }}>
                 🚀 Novas funcionalidades
               </Button>
@@ -623,7 +631,7 @@ const Index = () => {
 
 
         {/* CTA banner */}
-        {user?.email === 'matheuslaurindo900@gmail.com' && (
+        {isAdmin && (
           <div className="flex justify-center pb-8">
             <Button
               className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
