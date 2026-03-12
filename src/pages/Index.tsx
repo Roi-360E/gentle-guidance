@@ -63,6 +63,7 @@ const Index = () => {
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [hooksPreprocessed, setHooksPreprocessed] = useState(false);
   const [bodiesPreprocessed, setBodiesPreprocessed] = useState(false);
   const [ctasPreprocessed, setCtasPreprocessed] = useState(false);
