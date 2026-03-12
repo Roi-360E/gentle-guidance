@@ -337,9 +337,11 @@ const Index = () => {
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/shorts-reels'); setMobileMenuOpen(false); }}>
-              🚀 Novas funcionalidades
-            </Button>
+            {user?.email === 'matheuslaurindo900@gmail.com' && (
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/shorts-reels'); setMobileMenuOpen(false); }}>
+                🚀 Novas funcionalidades
+              </Button>
+            )}
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
                 <LogOut className="w-4 h-4" /> Sair
