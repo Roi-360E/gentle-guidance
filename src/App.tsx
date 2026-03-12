@@ -23,6 +23,7 @@ import ResetPassword from "./pages/ResetPassword";
 import AdminPlans from "./pages/AdminPlans";
 import VoiceRewrite from "./pages/VoiceRewrite";
 import ThankYou from "./pages/ThankYou";
+import ShortsReels from "./pages/ShortsReels";
 
 const Checkout = lazy(() => import("./pages/Checkout"));
 
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
               <Route path="/auto-subtitles" element={<ProtectedRoute><AutoSubtitles /></ProtectedRoute>} />
               <Route path="/voice-rewrite" element={<ProtectedRoute><VoiceRewrite /></ProtectedRoute>} />
+              <Route path="/shorts-reels" element={<ProtectedRoute><ShortsReels /></ProtectedRoute>} />
               <Route path="/obrigado" element={<ThankYou />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
