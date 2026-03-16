@@ -1,11 +1,57 @@
 import { useAuth } from '@/hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    if (!user) {
+      setCheckingSubscription(false);
+      return;
+    }
+
+    const checkSub = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_subscriptions')
+          .select('status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error checking subscription:', error);
+          // If table doesn't exist yet or error, allow access (graceful fallback)
+          setHasSubscription(true);
+          setCheckingSubscription(false);
+          return;
+        }
+
+        if (!data) {
+          // No subscription = needs onboarding
+          setHasSubscription(false);
+        } else if (data.status === 'blocked') {
+          setIsBlocked(true);
+          setHasSubscription(true);
+        } else {
+          setHasSubscription(true);
+        }
+      } catch {
+        setHasSubscription(true);
+      }
+      setCheckingSubscription(false);
+    };
+
+    checkSub();
+  }, [user]);
+
+  if (loading || checkingSubscription) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -14,6 +60,34 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  // If user has no subscription and is not on the onboarding page, redirect there
+  if (hasSubscription === false && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  // If user is blocked, show blocked message
+  if (isBlocked && location.pathname !== '/plans' && location.pathname !== '/checkout') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mx-auto">
+            <Loader2 className="w-8 h-8 text-destructive" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Assinatura Bloqueada</h2>
+          <p className="text-muted-foreground text-sm">
+            Sua cobrança não foi aprovada. Atualize seus dados de pagamento para continuar usando o plano.
+          </p>
+          <a
+            href="/plans"
+            className="inline-block px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition"
+          >
+            Regularizar Plano
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }
