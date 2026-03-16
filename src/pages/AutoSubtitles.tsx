@@ -27,7 +27,7 @@ import { Label } from '@/components/ui/label';
 import {
   Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
   Lock, Eye, CheckCircle2, X, Film, Play, Square, Clock,
-  ChevronLeft, ChevronRight, AlertCircle, Bold, Palette, Pencil,
+  ChevronLeft, ChevronRight, AlertCircle, Bold, Palette, Pencil, Move,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -46,6 +46,7 @@ import {
   type ResolutionPreset,
 } from '@/lib/video-processor';
 import SubtitleRemovalSection from '@/components/SubtitleRemovalSection';
+import { DraggableSubtitle } from '@/components/DraggableSubtitle';
 
 /* ───────────── Types ───────────── */
 
@@ -188,7 +189,7 @@ const AutoSubtitles = () => {
 
   const [mainStep, setMainStep] = useState<MainStep>('upload');
   const [selectedStyle, setSelectedStyle] = useState('classic');
-  const [subtitlePosition, setSubtitlePosition] = useState<'bottom' | 'center' | 'top'>('bottom');
+  const [subtitlePositionY, setSubtitlePositionY] = useState(85); // percentage from top (85% = bottom)
   const [fontSizePct, setFontSizePct] = useState(5);
   const [useBold, setUseBold] = useState(true);
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
@@ -534,7 +535,7 @@ const AutoSubtitles = () => {
             bold: useBold,
           },
           fontSizePct,
-          position: subtitlePosition,
+          position: (subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
           wordsPerGroup: 4,
         };
 
@@ -572,7 +573,7 @@ const AutoSubtitles = () => {
       setMainStep('style');
       toast.info('Processamento cancelado.');
     }
-  }, [sections, selectedStyle, fontSizePct, subtitlePosition, updateVideo, effectiveColors, useBold]);
+  }, [sections, selectedStyle, fontSizePct, subtitlePositionY, updateVideo, effectiveColors, useBold]);
 
   /* ──── Cancelar processamento ──── */
   const handleCancel = useCallback(() => {
@@ -1095,49 +1096,19 @@ const AutoSubtitles = () => {
                             style={{ display: 'block' }}
                             onTimeUpdate={(e) => setPreviewTime(e.currentTarget.currentTime)}
                           />
-                          {/* Overlay de legenda sincronizada */}
+                          {/* Overlay de legenda arrastável estilo CapCut */}
                           {activeWordGroup && (
-                            <div
-                              className={`absolute inset-x-0 pointer-events-none px-[5%] text-center ${
-                                subtitlePosition === 'top' ? 'top-[8%]'
-                                : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2'
-                                : 'bottom-[8%]'
-                              }`}
-                            >
-                              <span
-                                className="inline-block max-w-[90%]"
-                                style={{
-                                  backgroundColor: effectiveColors.bg !== 'transparent'
-                                    ? effectiveColors.bg : 'transparent',
-                                  padding: effectiveColors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
-                                  borderRadius: effectiveColors.bg !== 'transparent' ? '8px' : '0',
-                                }}
-                              >
-                                {activeWordGroup.words.map((word, i) => {
-                                  const isHighlighted = i === activeWordGroup.highlightIndex;
-                                  const effects = getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors });
-                                  return (
-                                    <span
-                                      key={i}
-                                      className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide transition-colors duration-75`}
-                                      style={{
-                                        color: isHighlighted
-                                          ? effectiveColors.highlight
-                                          : effectiveColors.primary,
-                                        fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
-                                        ...effects,
-                                        marginRight: i < activeWordGroup.words.length - 1 ? '0.3em' : '0',
-                                        display: 'inline-block',
-                                        transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
-                                        transition: 'transform 0.1s ease, color 0.1s ease',
-                                      }}
-                                    >
-                                      {word.toUpperCase()}
-                                    </span>
-                                  );
-                                })}
-                              </span>
-                            </div>
+                            <DraggableSubtitle
+                              words={activeWordGroup.words}
+                              highlightIndex={activeWordGroup.highlightIndex}
+                              positionY={subtitlePositionY}
+                              fontSizePct={fontSizePct}
+                              onPositionChange={setSubtitlePositionY}
+                              onFontSizeChange={setFontSizePct}
+                              colors={effectiveColors}
+                              textEffects={getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors })}
+                              useBold={useBold}
+                            />
                           )}
                         </div>
                       </div>
@@ -1333,30 +1304,18 @@ const AutoSubtitles = () => {
                   </div>
                 </div>
 
-                {/* Posição & Tamanho */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Posição</Label>
-                    <Select value={subtitlePosition} onValueChange={(v) => setSubtitlePosition(v as any)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bottom">Embaixo</SelectItem>
-                        <SelectItem value="center">Centro</SelectItem>
-                        <SelectItem value="top">Topo</SelectItem>
-                      </SelectContent>
-                    </Select>
+                {/* Posição & Tamanho — controlados arrastando a legenda no preview */}
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Move className="w-4 h-4 text-primary" />
+                    <Label className="text-sm font-semibold">Posição e Tamanho</Label>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Tamanho da Fonte</Label>
-                    <Select value={String(fontSizePct)} onValueChange={(v) => setFontSizePct(Number(v))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3">Pequeno (3%)</SelectItem>
-                        <SelectItem value="5">Médio (5%)</SelectItem>
-                        <SelectItem value="7">Grande (7%)</SelectItem>
-                        <SelectItem value="9">Extra Grande (9%)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Arraste a legenda no preview acima para reposicionar. Use as alças nos cantos para redimensionar.
+                  </p>
+                  <div className="flex gap-4 text-xs font-mono text-muted-foreground">
+                    <span>Posição: {Math.round(subtitlePositionY)}%</span>
+                    <span>Fonte: {fontSizePct}%</span>
                   </div>
                 </div>
 
