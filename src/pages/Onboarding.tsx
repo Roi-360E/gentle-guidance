@@ -208,10 +208,10 @@ export default function Onboarding() {
 
               <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-center">
                 <p className="text-sm text-primary font-medium">
-                  💳 A cobrança de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} será feita após seu primeiro uso
+                  💳 Cobrança de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} será realizada agora
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Depois, R$ {selectedPlan.price.toFixed(2).replace('.', ',')} /mês cobrado automaticamente
+                  Recorrente: R$ {selectedPlan.price.toFixed(2).replace('.', ',')} /mês cobrado automaticamente
                 </p>
               </div>
 
