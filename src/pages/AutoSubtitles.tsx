@@ -1244,8 +1244,8 @@ const AutoSubtitles = () => {
                         style={{
                           backgroundColor: effectiveColors.bg !== 'transparent'
                             ? effectiveColors.bg : 'transparent',
-                          padding: effectiveColors.bg !== 'transparent' ? '4px 14px' : '0',
-                          borderRadius: '6px',
+                          padding: effectiveColors.bg !== 'transparent' ? '6px 18px' : '0',
+                          borderRadius: effectiveColors.bg !== 'transparent' ? '12px' : '6px',
                         }}
                       >
                         {['ESCALE', 'SEUS', 'CRIATIVOS', 'AGORA'].map((word, i) => {
