@@ -26,6 +26,13 @@ export const SUBTITLE_STYLES: SubtitleStyle[] = [
     preview: '💛',
     colors: { primary: '#FFFFFF', highlight: '#FFE500', outline: '#000000', bg: '#000000' },
   },
+  {
+    id: 'cleanpop',
+    name: 'Clean Pop',
+    description: 'Sem fundo, texto branco com destaque amarelo — estilo limpo',
+    preview: '✨',
+    colors: { primary: '#FFFFFF', highlight: '#FFE500', outline: '#000000', bg: 'transparent' },
+  },
 ];
 
 /**
