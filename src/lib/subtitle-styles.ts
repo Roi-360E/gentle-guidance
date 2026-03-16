@@ -172,7 +172,7 @@ export function splitSegmentsIntoWordGroups(
           highlightIndex: wi,
           fromMs: wordStartMs,
           toMs: wordEndMs,
-          fullText: formatTwoLines(groupWords),
+          fullText: formatLines(groupWords, maxLines),
         });
       }
     }
