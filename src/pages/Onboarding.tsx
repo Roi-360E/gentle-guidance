@@ -279,9 +279,9 @@ export default function Onboarding() {
                   className="w-full h-12 text-base font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-xl"
                 >
                   {processing ? (
-                    <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Salvando cartão...</>
+                    <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Processando pagamento...</>
                   ) : (
-                    <><Lock className="w-4 h-4 mr-2" /> Salvar Cartão e Ativar Plano</>
+                    <><Lock className="w-4 h-4 mr-2" /> Pagar e Ativar Plano</>
                   )}
                 </Button>
 
