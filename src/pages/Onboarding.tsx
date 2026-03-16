@@ -165,7 +165,7 @@ export default function Onboarding() {
         throw new Error(err.error || `Erro ${res.status}`);
       }
 
-      toast.success('Cartão salvo! Seu plano foi ativado 🎉');
+      toast.success('Pagamento aprovado! Plano ativado 🎉');
       navigate('/', { replace: true });
 
     } catch (err) {
@@ -208,10 +208,10 @@ export default function Onboarding() {
 
               <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-center">
                 <p className="text-sm text-primary font-medium">
-                  💳 A cobrança de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} será feita após seu primeiro uso
+                  💳 Cobrança de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} será realizada agora
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Depois, R$ {selectedPlan.price.toFixed(2).replace('.', ',')} /mês cobrado automaticamente
+                  Recorrente: R$ {selectedPlan.price.toFixed(2).replace('.', ',')} /mês cobrado automaticamente
                 </p>
               </div>
 
@@ -279,9 +279,9 @@ export default function Onboarding() {
                   className="w-full h-12 text-base font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-xl"
                 >
                   {processing ? (
-                    <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Salvando cartão...</>
+                    <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Processando pagamento...</>
                   ) : (
-                    <><Lock className="w-4 h-4 mr-2" /> Salvar Cartão e Ativar Plano</>
+                    <><Lock className="w-4 h-4 mr-2" /> Pagar e Ativar Plano</>
                   )}
                 </Button>
 
@@ -315,15 +315,15 @@ export default function Onboarding() {
                   <span className="font-bold text-foreground">R$ {selectedPlan.price.toFixed(2).replace('.', ',')}/mês</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Primeira cobrança</span>
-                  <span className="font-bold text-primary">Após o 1º uso</span>
+                  <span className="text-muted-foreground">Cobrança agora</span>
+                  <span className="font-bold text-primary">R$ {selectedPlan.price.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
 
               <div className="rounded-xl bg-primary/5 p-3">
                 <p className="text-xs text-muted-foreground">
                   ✅ Acesso total ao plano <strong className="text-foreground">{selectedPlan.name}</strong>.
-                  A cobrança de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} será feita após seu primeiro uso, depois recorrente mensalmente.
+                  Cobrança imediata de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} e recorrente mensalmente.
                 </p>
               </div>
 

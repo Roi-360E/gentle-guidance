@@ -182,7 +182,7 @@ const Auth = () => {
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground">Escolha seu plano</h1>
             <p className="text-muted-foreground mt-2 text-sm">
-              Teste grátis por <span className="text-primary font-bold">7 dias</span> — a cobrança só começa depois
+              Selecione o plano ideal e comece agora
             </p>
           </div>
 
@@ -281,7 +281,7 @@ const Auth = () => {
                 🎁 Plano {selectedPlan.name} — R$ {selectedPlan.price.toFixed(2).replace('.', ',')} /mês
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                7 dias grátis • Cobrança após o trial
+                Pagamento obrigatório no cadastro
               </p>
             </div>
           )}
