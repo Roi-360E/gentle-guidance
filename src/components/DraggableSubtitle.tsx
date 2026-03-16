@@ -16,6 +16,7 @@ interface DraggableSubtitleProps {
   textEffects?: React.CSSProperties;
   useBold: boolean;
   textAlign?: 'left' | 'center' | 'right';
+  maxLines?: number;
 }
 
 export function DraggableSubtitle({
