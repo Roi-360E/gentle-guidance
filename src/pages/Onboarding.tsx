@@ -315,15 +315,15 @@ export default function Onboarding() {
                   <span className="font-bold text-foreground">R$ {selectedPlan.price.toFixed(2).replace('.', ',')}/mês</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Primeira cobrança</span>
-                  <span className="font-bold text-primary">Após o 1º uso</span>
+                  <span className="text-muted-foreground">Cobrança agora</span>
+                  <span className="font-bold text-primary">R$ {selectedPlan.price.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
 
               <div className="rounded-xl bg-primary/5 p-3">
                 <p className="text-xs text-muted-foreground">
                   ✅ Acesso total ao plano <strong className="text-foreground">{selectedPlan.name}</strong>.
-                  A cobrança de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} será feita após seu primeiro uso, depois recorrente mensalmente.
+                  Cobrança imediata de R$ {selectedPlan.price.toFixed(2).replace('.', ',')} e recorrente mensalmente.
                 </p>
               </div>
 
