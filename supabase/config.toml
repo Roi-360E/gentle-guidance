@@ -62,3 +62,9 @@ verify_jwt = false
 
 [functions.vps-concatenate]
 verify_jwt = false
+
+[functions.save-card]
+verify_jwt = false
+
+[functions.trial-charge]
+verify_jwt = false
