@@ -325,7 +325,7 @@ const AutoSubtitles = () => {
     if (section.videos.length === 0) return;
 
     setSectionStarted(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
-    setPreprocessingSection(section.label);
+    setPreprocessingSections(prev => new Set(prev).add(section.label));
     const sectionStart = performance.now();
 
     try {
