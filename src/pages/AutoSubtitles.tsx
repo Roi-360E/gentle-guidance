@@ -217,7 +217,7 @@ const AutoSubtitles = () => {
   const transcribedCount = allVideos.filter(v => v.status === 'transcribed' || v.status === 'done').length;
   const doneCount = allVideos.filter(v => v.status === 'done').length;
   const hasVideos = totalVideos > 0;
-  const allPreprocessed = sectionPreprocessed.every(Boolean) && hasVideos;
+  const allPreprocessed = sectionPreprocessed.some(Boolean) && hasVideos;
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
 
