@@ -26,6 +26,7 @@ export interface BurnOptions {
   /** fontSize as percentage of video height (e.g. 5 = 5%) */
   fontSizePct: number;
   position: 'bottom' | 'center' | 'top';
+  textAlign?: 'left' | 'center' | 'right';
   wordsPerGroup?: number;
 }
 
