@@ -896,7 +896,7 @@ const AutoSubtitles = () => {
                     disabled={sectionStarted[si]}
                     onClick={() => handlePreprocessSection(si)}
                   >
-                    {preprocessingSection === section.label || sectionStarted[si] ? (
+                    {preprocessingSections.has(section.label) || sectionStarted[si] ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Pré-processando {section.label.toLowerCase()}...
