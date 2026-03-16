@@ -112,7 +112,7 @@ export function DraggableSubtitle({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => !isDragging && !isResizing && setIsHovered(false)}
     >
-      <div className={`flex px-[5%] ${textAlign === 'left' ? 'justify-start' : textAlign === 'right' ? 'justify-end' : 'justify-center'}`}>
+      <div className={`flex px-[5%] ${textAlign === 'left' ? 'justify-start' : textAlign === 'right' ? 'justify-end' : 'justify-center'}`} style={{ textAlign }}>
         <div
           className="relative group"
           style={{
