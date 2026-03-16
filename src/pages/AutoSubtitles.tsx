@@ -564,13 +564,11 @@ const AutoSubtitles = () => {
 
   /* ──── STEP 4: Burn legendas em batch ──── */
   const handleBurnAll = useCallback(async () => {
-    const style = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
     setMainStep('burning');
     setIsProcessing(true);
     cancelRef.current = false;
     setOverallProgress(0);
 
-    // Filtrar apenas vídeos com transcrição bem-sucedida
     const videosToProcess: { si: number; vi: number; video: BatchVideo }[] = [];
     sections.forEach((sec, si) => {
       sec.videos.forEach((v, vi) => {
@@ -592,21 +590,29 @@ const AutoSubtitles = () => {
       });
 
       try {
+        const videoStyle = SUBTITLE_STYLES.find(s => s.id === video.subtitleSettings.styleId) || SUBTITLE_STYLES[0];
+        const videoColors = {
+          ...videoStyle.colors,
+          primary: video.subtitleSettings.customPrimaryColor || videoStyle.colors.primary,
+          highlight: video.subtitleSettings.customHighlightColor || videoStyle.colors.highlight,
+        };
+        const videoWordsPerGroup = video.subtitleSettings.maxLines === 1 ? 3 : video.subtitleSettings.maxLines === 3 ? 6 : 4;
+
         const burnOptions = {
           segments: video.transcription!.segments,
           style: {
-            fontColor: effectiveColors.primary,
-            highlightColor: effectiveColors.highlight,
-            borderColor: effectiveColors.outline,
-            bgColor: effectiveColors.bg,
-            borderW: selectedStyle === 'minimal' ? 2 : selectedStyle === 'neon' ? 7 : 5,
-            bold: useBold,
+            fontColor: videoColors.primary,
+            highlightColor: videoColors.highlight,
+            borderColor: videoColors.outline,
+            bgColor: videoColors.bg,
+            borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : 5,
+            bold: video.subtitleSettings.useBold,
           },
-          fontSizePct,
-          position: (subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
-          wordsPerGroup: wordsPerSubtitleGroup,
-          maxLines,
-          textAlign,
+          fontSizePct: video.subtitleSettings.fontSizePct,
+          position: (video.subtitleSettings.positionY <= 30 ? 'top' : video.subtitleSettings.positionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
+          wordsPerGroup: videoWordsPerGroup,
+          maxLines: video.subtitleSettings.maxLines,
+          textAlign: video.subtitleSettings.textAlign,
         };
 
         const outputBlob = await burnSubtitlesIntoVideo(video.file, burnOptions, (pct, status) => {
