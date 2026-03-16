@@ -424,11 +424,12 @@ const AutoSubtitles = () => {
     setOverallProgress(0);
     setOverallStatus('Iniciando transcrição turbo...');
 
-    const jobs: { si: number; vi: number }[] = [];
+    // Snapshot file references upfront to avoid stale closure issues
+    const jobs: { si: number; vi: number; file: File; label: string }[] = [];
     sections.forEach((section, si) => {
       section.videos.forEach((video, vi) => {
         if (video.status !== 'transcribed' && video.status !== 'done') {
-          jobs.push({ si, vi });
+          jobs.push({ si, vi, file: video.file, label: section.label });
         }
       });
     });
@@ -440,18 +441,17 @@ const AutoSubtitles = () => {
     }
 
     let completed = 0;
-    let cursor = 0;
+    // Thread-safe job queue: each worker atomically picks next job
+    const jobQueue = [...jobs];
+    const takeJob = () => jobQueue.shift() ?? null;
     const MAX_PARALLEL = Math.min(3, jobs.length);
 
     const runWorker = async () => {
       while (!cancelRef.current) {
-        const currentIndex = cursor;
-        cursor += 1;
-        if (currentIndex >= jobs.length) break;
+        const job = takeJob();
+        if (!job) break;
 
-        const { si, vi } = jobs[currentIndex];
-        const section = sections[si];
-        const video = section.videos[vi];
+        const { si, vi, file, label } = job;
 
         updateVideo(si, vi, {
           status: 'transcribing',
@@ -460,7 +460,8 @@ const AutoSubtitles = () => {
         });
 
         try {
-          const result = await transcribeVideo(video.file, (pct, status) => {
+          // Each job uses its own snapshotted File reference
+          const result = await transcribeVideo(file, (pct, status) => {
             updateVideo(si, vi, {
               progress: pct,
               statusText: status,
@@ -484,7 +485,7 @@ const AutoSubtitles = () => {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           const workerLimit = message.includes('546') || message.includes('WORKER_LIMIT');
-          console.error(`Transcription error [${section.label} #${vi + 1}]:`, err);
+          console.error(`Transcription error [${label} #${vi + 1}]:`, err);
           updateVideo(si, vi, {
             status: 'error',
             progress: 100,
