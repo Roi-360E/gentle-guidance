@@ -1098,14 +1098,13 @@ const AutoSubtitles = () => {
                     return (
                       <div className="flex justify-center">
                         <div
-                          className="relative"
+                          className="relative w-full"
                           style={{
                             maxHeight: '450px',
                             maxWidth: '100%',
                             aspectRatio: video.dimensions
                               ? `${video.dimensions.width}/${video.dimensions.height}`
                               : 'auto',
-                            containerType: 'inline-size',
                           }}
                         >
                           <video
