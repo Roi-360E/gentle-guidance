@@ -205,7 +205,7 @@ const AutoSubtitles = () => {
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
 
   /* ──── Pré-processamento por seção (mesma lógica do concatenador) ──── */
-  const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
+  const [preprocessingSections, setPreprocessingSections] = useState<Set<string>>(new Set());
   const [sectionPreprocessed, setSectionPreprocessed] = useState<boolean[]>([false, false, false]);
   const [sectionStarted, setSectionStarted] = useState<boolean[]>([false, false, false]);
   // Subtitle removal state removed — now managed by SubtitleRemovalSection component
