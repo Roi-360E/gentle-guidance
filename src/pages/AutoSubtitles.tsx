@@ -1105,6 +1105,7 @@ const AutoSubtitles = () => {
                             aspectRatio: video.dimensions
                               ? `${video.dimensions.width}/${video.dimensions.height}`
                               : 'auto',
+                            containerType: 'inline-size',
                           }}
                         >
                           <video
