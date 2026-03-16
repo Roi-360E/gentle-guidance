@@ -194,6 +194,7 @@ const AutoSubtitles = () => {
   const [fontSizePct, setFontSizePct] = useState(5);
   const [useBold, setUseBold] = useState(true);
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
+  const [maxLines, setMaxLines] = useState<1 | 2 | 3>(2);
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
   const [customHighlightColor, setCustomHighlightColor] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
