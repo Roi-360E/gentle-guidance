@@ -281,8 +281,10 @@ const Auth = () => {
                 🎁 Plano {selectedPlan.name} — R$ {selectedPlan.price.toFixed(2).replace('.', ',')} /mês
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                7 dias grátis • Cobrança após o trial
+                Pagamento obrigatório no cadastro
               </p>
+            </div>
+          )}
             </div>
           )}
 

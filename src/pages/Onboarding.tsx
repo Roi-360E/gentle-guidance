@@ -165,7 +165,7 @@ export default function Onboarding() {
         throw new Error(err.error || `Erro ${res.status}`);
       }
 
-      toast.success('Cartão salvo! Seu plano foi ativado 🎉');
+      toast.success('Pagamento aprovado! Plano ativado 🎉');
       navigate('/', { replace: true });
 
     } catch (err) {
