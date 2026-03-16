@@ -1254,6 +1254,32 @@ const AutoSubtitles = () => {
                   </div>
                 )}
 
+                {/* Alinhamento do texto */}
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <AlignCenter className="w-4 h-4 text-foreground" />
+                    <Label className="cursor-pointer">Alinhamento</Label>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {([
+                      { value: 'left' as const, icon: AlignLeft, label: 'Esquerda' },
+                      { value: 'center' as const, icon: AlignCenter, label: 'Centro' },
+                      { value: 'right' as const, icon: AlignRight, label: 'Direita' },
+                    ]).map(({ value, icon: Icon, label }) => (
+                      <Button
+                        key={value}
+                        variant={textAlign === value ? 'default' : 'outline'}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setTextAlign(value)}
+                        title={label}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Negrito toggle */}
                 <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
                   <div className="flex items-center gap-2">
