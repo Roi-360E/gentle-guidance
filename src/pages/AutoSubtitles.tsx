@@ -429,6 +429,26 @@ const AutoSubtitles = () => {
     });
   }, []);
 
+  const updateVideoSubtitleSettings = useCallback(
+    (sectionIdx: number, videoIdx: number, patch: Partial<SubtitleSettings>) => {
+      setSections(prev => {
+        const updated = [...prev];
+        const videos = [...updated[sectionIdx].videos];
+        const currentVideo = videos[videoIdx];
+        videos[videoIdx] = {
+          ...currentVideo,
+          subtitleSettings: {
+            ...currentVideo.subtitleSettings,
+            ...patch,
+          },
+        };
+        updated[sectionIdx] = { ...updated[sectionIdx], videos };
+        return updated;
+      });
+    },
+    []
+  );
+
   /* ──── Callbacks para SubtitleRemovalSection ──── */
   const handleRemovalUpdateVideo = useCallback((sectionIdx: number, videoIdx: number, patch: Partial<BatchVideo>) => {
     updateVideo(sectionIdx, videoIdx, patch);
