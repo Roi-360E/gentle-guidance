@@ -247,8 +247,8 @@ const AutoSubtitles = () => {
   const carouselWordGroups = useMemo(() => {
     const video = transcribedVideos[carouselIndex];
     if (!video?.transcription) return [];
-    return splitSegmentsIntoWordGroups(video.transcription.segments, 4);
-  }, [transcribedVideos, carouselIndex]);
+    return splitSegmentsIntoWordGroups(video.transcription.segments, 4, maxLines);
+  }, [transcribedVideos, carouselIndex, maxLines]);
 
   // Word group ativo baseado no tempo do preview
   const activeWordGroup = useMemo((): WordGroup | null => {
