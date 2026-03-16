@@ -1354,7 +1354,7 @@ const AutoSubtitles = () => {
                         variant={maxLines === n ? 'default' : 'outline'}
                         size="sm"
                         className="h-8 px-3 text-xs"
-                        onClick={() => setMaxLines(n)}
+                        onClick={() => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { maxLines: n })}
                       >
                         {n} {n === 1 ? 'linha' : 'linhas'}
                       </Button>
