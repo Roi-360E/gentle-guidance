@@ -541,7 +541,7 @@ const AutoSubtitles = () => {
           },
           fontSizePct,
           position: (subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
-          wordsPerGroup: maxLines === 1 ? 3 : maxLines === 3 ? 6 : 4,
+          wordsPerGroup: wordsPerSubtitleGroup,
           maxLines,
           textAlign,
         };
