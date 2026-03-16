@@ -205,7 +205,7 @@ const AutoSubtitles = () => {
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
 
   /* ──── Pré-processamento por seção (mesma lógica do concatenador) ──── */
-  const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
+  const [preprocessingSections, setPreprocessingSections] = useState<Set<string>>(new Set());
   const [sectionPreprocessed, setSectionPreprocessed] = useState<boolean[]>([false, false, false]);
   const [sectionStarted, setSectionStarted] = useState<boolean[]>([false, false, false]);
   // Subtitle removal state removed — now managed by SubtitleRemovalSection component
@@ -325,7 +325,7 @@ const AutoSubtitles = () => {
     if (section.videos.length === 0) return;
 
     setSectionStarted(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
-    setPreprocessingSection(section.label);
+    setPreprocessingSections(prev => new Set(prev).add(section.label));
     const sectionStart = performance.now();
 
     try {
@@ -370,7 +370,7 @@ const AutoSubtitles = () => {
       setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
       toast.warning(`${section.label}: normalização concluída com avisos.`);
     } finally {
-      setPreprocessingSection(null);
+      setPreprocessingSections(prev => { const next = new Set(prev); next.delete(section.label); return next; });
     }
   }, [sections]);
 
@@ -893,10 +893,10 @@ const AutoSubtitles = () => {
                 {section.videos.length > 0 && !sectionPreprocessed[si] && (
                   <Button
                     className="w-full rounded-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
-                    disabled={preprocessingSection !== null || sectionStarted[si]}
+                    disabled={sectionStarted[si]}
                     onClick={() => handlePreprocessSection(si)}
                   >
-                    {preprocessingSection === section.label || sectionStarted[si] ? (
+                    {preprocessingSections.has(section.label) || sectionStarted[si] ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Pré-processando {section.label.toLowerCase()}...
