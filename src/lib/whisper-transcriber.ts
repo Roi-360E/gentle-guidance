@@ -94,7 +94,8 @@ export async function extractAudioAsFile(videoFile: File): Promise<File> {
       await ffmpeg.deleteFile(outputName);
     } catch { /* ignore */ }
 
-    return new File([new Uint8Array(wavBytes).buffer as ArrayBuffer], 'audio.wav', { type: 'audio/wav' });
+    const audioFileName = `audio_${uid}.wav`;
+    return new File([new Uint8Array(wavBytes).buffer as ArrayBuffer], audioFileName, { type: 'audio/wav' });
   });
 }
 
