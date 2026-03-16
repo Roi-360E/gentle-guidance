@@ -1,6 +1,18 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Move, Maximize2 } from 'lucide-react';
 
+// CSS for typewriter blink cursor injected once
+const TYPEWRITER_STYLE_ID = 'typewriter-subtitle-style';
+if (typeof document !== 'undefined' && !document.getElementById(TYPEWRITER_STYLE_ID)) {
+  const style = document.createElement('style');
+  style.id = TYPEWRITER_STYLE_ID;
+  style.textContent = `
+    @keyframes tw-blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    .tw-cursor::after { content:'|'; animation: tw-blink 0.7s step-end infinite; margin-left:2px; }
+  `;
+  document.head.appendChild(style);
+}
+
 interface DraggableSubtitleProps {
   words: string[];
   highlightIndex: number;

@@ -33,6 +33,13 @@ export const SUBTITLE_STYLES: SubtitleStyle[] = [
     preview: '✨',
     colors: { primary: '#FFFFFF', highlight: '#FFE500', outline: '#000000', bg: 'transparent' },
   },
+  {
+    id: 'typewriter',
+    name: 'Typewriter',
+    description: 'Letra digitada roxo neon — efeito máquina de escrever',
+    preview: '⌨️',
+    colors: { primary: '#B44AFF', highlight: '#E066FF', outline: '#000000', bg: 'transparent' },
+  },
 ];
 
 /**
