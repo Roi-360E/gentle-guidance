@@ -189,7 +189,7 @@ const AutoSubtitles = () => {
   ]);
 
   const [mainStep, setMainStep] = useState<MainStep>('upload');
-  const [selectedStyle, setSelectedStyle] = useState('classic');
+  const [selectedStyle, setSelectedStyle] = useState('greenbox');
   const [subtitlePositionY, setSubtitlePositionY] = useState(85); // percentage from top (85% = bottom)
   const [fontSizePct, setFontSizePct] = useState(5);
   const [useBold, setUseBold] = useState(true);
