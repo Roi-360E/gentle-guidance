@@ -41,38 +41,61 @@ export function msToAss(ms: number): string {
 }
 
 /**
+ * Simple async mutex to serialize FFmpeg access.
+ * FFmpeg WASM is single-threaded — concurrent execs corrupt file I/O.
+ */
+let _ffmpegMutex: Promise<void> = Promise.resolve();
+function withFFmpegLock<T>(fn: () => Promise<T>): Promise<T> {
+  let release: () => void;
+  const next = new Promise<void>(r => { release = r; });
+  const prev = _ffmpegMutex;
+  _ffmpegMutex = next;
+  return prev.then(async () => {
+    try {
+      return await fn();
+    } finally {
+      release!();
+    }
+  });
+}
+
+/**
  * Extract audio from video as a lightweight WAV (mono 16kHz, ~200KB)
  * Used to avoid memory limits on the edge function.
+ * Serialized via mutex to prevent concurrent FFmpeg corruption.
  */
 export async function extractAudioAsFile(videoFile: File): Promise<File> {
-  const { getFFmpeg } = await import('@/lib/video-processor');
-  const { fetchFile } = await import('@ffmpeg/util');
+  return withFFmpegLock(async () => {
+    const { getFFmpeg } = await import('@/lib/video-processor');
+    const { fetchFile } = await import('@ffmpeg/util');
 
-  const ffmpeg = await getFFmpeg();
-  const inputName = 'input_audio_extract' + Date.now() + '.mp4';
-  const outputName = 'output_audio' + Date.now() + '.wav';
+    const ffmpeg = await getFFmpeg();
+    const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const inputName = `in_audio_${uid}.mp4`;
+    const outputName = `out_audio_${uid}.wav`;
 
-  await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
+    await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-  // Extract mono 16kHz WAV
-  await ffmpeg.exec([
-    '-i', inputName,
-    '-ar', '16000',
-    '-ac', '1',
-    '-f', 'wav',
-    '-y', outputName,
-  ]);
+    // Extract mono 16kHz WAV
+    await ffmpeg.exec([
+      '-i', inputName,
+      '-ar', '16000',
+      '-ac', '1',
+      '-f', 'wav',
+      '-y', outputName,
+    ]);
 
-  const wavData = await ffmpeg.readFile(outputName);
-  const wavBytes = wavData instanceof Uint8Array ? wavData : new Uint8Array(wavData as unknown as ArrayBuffer);
+    const wavData = await ffmpeg.readFile(outputName);
+    const wavBytes = wavData instanceof Uint8Array ? wavData : new Uint8Array(wavData as unknown as ArrayBuffer);
 
-  // Clean up
-  try {
-    await ffmpeg.deleteFile(inputName);
-    await ffmpeg.deleteFile(outputName);
-  } catch { /* ignore */ }
+    // Clean up
+    try {
+      await ffmpeg.deleteFile(inputName);
+      await ffmpeg.deleteFile(outputName);
+    } catch { /* ignore */ }
 
-  return new File([new Uint8Array(wavBytes).buffer as ArrayBuffer], 'audio.wav', { type: 'audio/wav' });
+    return new File([new Uint8Array(wavBytes).buffer as ArrayBuffer], 'audio.wav', { type: 'audio/wav' });
+  });
 }
 
 /**
