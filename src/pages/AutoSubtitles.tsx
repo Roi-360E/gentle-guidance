@@ -1368,7 +1368,7 @@ const AutoSubtitles = () => {
                     <Bold className="w-4 h-4 text-foreground" />
                     <Label className="cursor-pointer">Texto em Negrito</Label>
                   </div>
-                  <Switch checked={useBold} onCheckedChange={setUseBold} />
+                  <Switch checked={useBold} onCheckedChange={(value) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { useBold: value })} />
                 </div>
 
                 {/* Cores personalizadas */}
