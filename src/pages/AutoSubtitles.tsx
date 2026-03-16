@@ -28,6 +28,7 @@ import {
   Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
   Lock, Eye, CheckCircle2, X, Film, Play, Square, Clock,
   ChevronLeft, ChevronRight, AlertCircle, Bold, Palette, Pencil, Move,
+  AlignLeft, AlignCenter, AlignRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -192,6 +193,7 @@ const AutoSubtitles = () => {
   const [subtitlePositionY, setSubtitlePositionY] = useState(85); // percentage from top (85% = bottom)
   const [fontSizePct, setFontSizePct] = useState(5);
   const [useBold, setUseBold] = useState(true);
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
   const [customHighlightColor, setCustomHighlightColor] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
@@ -1108,6 +1110,7 @@ const AutoSubtitles = () => {
                               colors={effectiveColors}
                               textEffects={getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors })}
                               useBold={useBold}
+                              textAlign={textAlign}
                             />
                           )}
                         </div>
@@ -1250,6 +1253,32 @@ const AutoSubtitles = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Alinhamento do texto */}
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <AlignCenter className="w-4 h-4 text-foreground" />
+                    <Label className="cursor-pointer">Alinhamento</Label>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {([
+                      { value: 'left' as const, icon: AlignLeft, label: 'Esquerda' },
+                      { value: 'center' as const, icon: AlignCenter, label: 'Centro' },
+                      { value: 'right' as const, icon: AlignRight, label: 'Direita' },
+                    ]).map(({ value, icon: Icon, label }) => (
+                      <Button
+                        key={value}
+                        variant={textAlign === value ? 'default' : 'outline'}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setTextAlign(value)}
+                        title={label}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </Button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Negrito toggle */}
                 <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">

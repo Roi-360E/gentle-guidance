@@ -2,28 +2,20 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Move, Maximize2 } from 'lucide-react';
 
 interface DraggableSubtitleProps {
-  /** Words to display */
   words: string[];
-  /** Which word index is highlighted */
   highlightIndex: number;
-  /** Current Y position as percentage (0 = top, 100 = bottom) */
   positionY: number;
-  /** Font size as percentage of container width */
   fontSizePct: number;
-  /** Callback when position changes */
   onPositionChange: (y: number) => void;
-  /** Callback when font size changes */
   onFontSizeChange: (pct: number) => void;
-  /** Style colors */
   colors: {
     primary: string;
     highlight: string;
     bg: string;
   };
-  /** Text effects (textShadow etc) */
   textEffects?: React.CSSProperties;
-  /** Bold */
   useBold: boolean;
+  textAlign?: 'left' | 'center' | 'right';
 }
 
 export function DraggableSubtitle({
@@ -36,6 +28,7 @@ export function DraggableSubtitle({
   colors,
   textEffects = {},
   useBold,
+  textAlign = 'center',
 }: DraggableSubtitleProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -119,7 +112,7 @@ export function DraggableSubtitle({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => !isDragging && !isResizing && setIsHovered(false)}
     >
-      <div className="flex justify-center px-[5%]">
+      <div className={`flex px-[5%] ${textAlign === 'left' ? 'justify-start' : textAlign === 'right' ? 'justify-end' : 'justify-center'}`}>
         <div
           className="relative group"
           style={{
