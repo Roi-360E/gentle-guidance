@@ -370,7 +370,7 @@ const AutoSubtitles = () => {
       setSectionPreprocessed(prev => { const u = [...prev]; u[sectionIndex] = true; return u; });
       toast.warning(`${section.label}: normalização concluída com avisos.`);
     } finally {
-      setPreprocessingSection(null);
+      setPreprocessingSections(prev => { const next = new Set(prev); next.delete(section.label); return next; });
     }
   }, [sections]);
 
