@@ -675,8 +675,8 @@ const AutoSubtitles = () => {
     setOverallStatus('');
     setIsProcessing(false);
     cancelRef.current = false;
-    setCustomPrimaryColor('');
-    setCustomHighlightColor('');
+    setCarouselIndex(0);
+    setPreviewTime(0);
   }, [allVideos]);
 
   /* ──── Edição manual da transcrição ──── */
