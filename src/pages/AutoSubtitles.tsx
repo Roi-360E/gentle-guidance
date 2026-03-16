@@ -55,6 +55,17 @@ import { DraggableSubtitle } from '@/components/DraggableSubtitle';
 type VideoStatus = 'idle' | 'transcribing' | 'transcribed' | 'burning' | 'done' | 'error';
 
 /** Cada vídeo rastreado no batch */
+interface SubtitleSettings {
+  styleId: string;
+  positionY: number;
+  fontSizePct: number;
+  useBold: boolean;
+  textAlign: 'left' | 'center' | 'right';
+  maxLines: 1 | 2 | 3;
+  customPrimaryColor: string;
+  customHighlightColor: string;
+}
+
 interface BatchVideo {
   file: File;
   name: string;
@@ -66,6 +77,7 @@ interface BatchVideo {
   outputUrl: string | null;
   /** Dimensões do vídeo (detectadas no upload) */
   dimensions: { width: number; height: number } | null;
+  subtitleSettings: SubtitleSettings;
 }
 
 /** Seção do batch (Ganchos, Corpos, CTAs) */
@@ -79,6 +91,17 @@ interface BatchSection {
 
 /** Steps do fluxo principal */
 type MainStep = 'upload' | 'transcribing' | 'style' | 'burning' | 'done';
+
+const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
+  styleId: 'greenbox',
+  positionY: 85,
+  fontSizePct: 5,
+  useBold: true,
+  textAlign: 'center',
+  maxLines: 2,
+  customPrimaryColor: '',
+  customHighlightColor: '',
+};
 
 /* ───────────── Helpers ───────────── */
 
