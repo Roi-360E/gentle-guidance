@@ -178,13 +178,14 @@ export function DraggableSubtitle({
           )}
 
           <span
-            className="inline-flex items-center select-none"
+            className="inline-flex flex-col select-none"
             style={{
               backgroundColor: colors.bg !== 'transparent' ? colors.bg : 'transparent',
               padding: '0.35em 0.6em',
               borderRadius: '6px',
-              gap: '0.25em',
+              gap: '0.1em',
               lineHeight: 1.1,
+              alignItems: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
             }}
             onMouseDown={handleDragStart}
             onTouchStart={handleDragStart}
@@ -195,10 +196,12 @@ export function DraggableSubtitle({
                 <span
                   key={li}
                   style={{
-                    display: 'contents',
+                    display: 'inline-flex',
+                    gap: '0.25em',
+                    justifyContent: 'center',
                   }}
                 >
-                  {lineWords.map((word, wordInLineIndex) => {
+                  {lineWords.map((word) => {
                     const idx = wordIndex++;
                     const isHighlighted = idx === highlightIndex;
                     return (
