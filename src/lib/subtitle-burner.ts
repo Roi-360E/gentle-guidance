@@ -28,6 +28,7 @@ export interface BurnOptions {
   position: 'bottom' | 'center' | 'top';
   textAlign?: 'left' | 'center' | 'right';
   wordsPerGroup?: number;
+  maxLines?: number;
 }
 
 const FONT_PATH = '/fonts/Inter-Variable.ttf';
@@ -93,7 +94,7 @@ export function buildDrawtextFilter(
   videoHeight: number,
   videoWidth: number,
 ): string {
-  const { segments, style, fontSizePct, position, textAlign = 'center', wordsPerGroup = 4 } = options;
+  const { segments, style, fontSizePct, position, textAlign = 'center', wordsPerGroup = 4, maxLines = 2 } = options;
 
   const fontSize = Math.round((fontSizePct / 100) * videoHeight);
   const borderW = Math.max(style.borderW, Math.round(fontSize * 0.06));
@@ -110,7 +111,7 @@ export function buildDrawtextFilter(
     ? '(h-text_h)/2'
     : `h-text_h-${marginBottom}`;
 
-  const wordGroups = splitSegmentsIntoWordGroups(segments, wordsPerGroup);
+  const wordGroups = splitSegmentsIntoWordGroups(segments, wordsPerGroup, maxLines);
   const filters: string[] = [];
 
   // Common style params
@@ -219,7 +220,7 @@ export async function burnSubtitlesIntoVideo(
   console.log('[SubtitleBurner] Video:', videoWidth, 'x', videoHeight, 'fontSizePct:', options.fontSizePct);
 
   const filterStr = buildDrawtextFilter(options, fontFile, videoHeight, videoWidth);
-  const wordGroups = splitSegmentsIntoWordGroups(options.segments, options.wordsPerGroup || 4);
+  const wordGroups = splitSegmentsIntoWordGroups(options.segments, options.wordsPerGroup || 4, options.maxLines || 2);
   console.log('[SubtitleBurner] Word groups:', wordGroups.length, 'Filter length:', filterStr.length);
 
   let duration = 0;

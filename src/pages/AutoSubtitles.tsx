@@ -194,6 +194,7 @@ const AutoSubtitles = () => {
   const [fontSizePct, setFontSizePct] = useState(5);
   const [useBold, setUseBold] = useState(true);
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
+  const [maxLines, setMaxLines] = useState<1 | 2 | 3>(2);
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
   const [customHighlightColor, setCustomHighlightColor] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
@@ -246,8 +247,8 @@ const AutoSubtitles = () => {
   const carouselWordGroups = useMemo(() => {
     const video = transcribedVideos[carouselIndex];
     if (!video?.transcription) return [];
-    return splitSegmentsIntoWordGroups(video.transcription.segments, 4);
-  }, [transcribedVideos, carouselIndex]);
+    return splitSegmentsIntoWordGroups(video.transcription.segments, 4, maxLines);
+  }, [transcribedVideos, carouselIndex, maxLines]);
 
   // Word group ativo baseado no tempo do preview
   const activeWordGroup = useMemo((): WordGroup | null => {
@@ -538,7 +539,8 @@ const AutoSubtitles = () => {
           },
           fontSizePct,
           position: (subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
-          wordsPerGroup: 4,
+          wordsPerGroup: maxLines === 1 ? 3 : maxLines === 3 ? 6 : 4,
+          maxLines,
           textAlign,
         };
 
@@ -1281,7 +1283,28 @@ const AutoSubtitles = () => {
                   </div>
                 </div>
 
-                {/* Negrito toggle */}
+                {/* Quantidade de linhas */}
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <Type className="w-4 h-4 text-foreground" />
+                    <Label className="cursor-pointer">Linhas por frase</Label>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {([1, 2, 3] as const).map((n) => (
+                      <Button
+                        key={n}
+                        variant={maxLines === n ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => setMaxLines(n)}
+                      >
+                        {n} {n === 1 ? 'linha' : 'linhas'}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+
                 <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
                   <div className="flex items-center gap-2">
                     <Bold className="w-4 h-4 text-foreground" />
