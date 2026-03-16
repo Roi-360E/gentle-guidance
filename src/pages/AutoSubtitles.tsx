@@ -28,6 +28,7 @@ import {
   Sparkles, ArrowLeft, Upload, Wand2, Download, Loader2, Type,
   Lock, Eye, CheckCircle2, X, Film, Play, Square, Clock,
   ChevronLeft, ChevronRight, AlertCircle, Bold, Palette, Pencil, Move,
+  AlignLeft, AlignCenter, AlignRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
