@@ -116,7 +116,43 @@ serve(async (req) => {
       customerId = customerData.id;
     }
 
-    // 2. Save card to customer
+    // 2. Charge immediately using card token
+    const webhookUrl = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
+    const chargePayload = {
+      transaction_amount: Number(planData.price),
+      token: cardToken,
+      description: `Plano ${planData.name} - EscalaXPro`,
+      installments: 1,
+      payer: {
+        email,
+        identification: identificationType && identificationNumber ? {
+          type: identificationType,
+          number: identificationNumber,
+        } : undefined,
+      },
+      notification_url: webhookUrl,
+    };
+
+    const chargeRes = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": `signup-${userId}-${Date.now()}`,
+      },
+      body: JSON.stringify(chargePayload),
+    });
+
+    const chargeData = await chargeRes.json();
+    console.log(`[save-card] Charge result for user ${userId}: status=${chargeData.status}`);
+
+    if (chargeData.status !== "approved") {
+      return jsonResponse({ 
+        error: `Pagamento não aprovado: ${chargeData.status_detail || chargeData.status}. Verifique os dados do cartão.` 
+      }, 400);
+    }
+
+    // 3. Save card to customer for future recurring charges
     const saveCardRes = await fetch(`https://api.mercadopago.com/v1/customers/${customerId}/cards`, {
       method: "POST",
       headers: {
@@ -126,26 +162,28 @@ serve(async (req) => {
       body: JSON.stringify({ token: cardToken }),
     });
 
-    if (!saveCardRes.ok) {
-      const errText = await saveCardRes.text();
-      console.error("Failed to save card:", errText);
-      return jsonResponse({ error: "Failed to save card. Please check your card details." }, 400);
+    let cardId = null;
+    if (saveCardRes.ok) {
+      const savedCard = await saveCardRes.json();
+      cardId = savedCard.id;
+    } else {
+      console.warn("[save-card] Could not save card for recurring, but initial payment was approved");
     }
 
-    const savedCard = await saveCardRes.json();
-    const cardId = savedCard.id;
+    // 4. Create subscription record - ACTIVE immediately (paid)
+    const nextChargeAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    // 3. Create subscription record - pending first use (NO trial, NO immediate charge)
     const { error: subError } = await adminClient
       .from("user_subscriptions")
       .insert({
         user_id: userId,
         selected_plan: selectedPlan,
-        status: "pending_charge",
-        trial_ends_at: new Date().toISOString(), // No trial
+        status: "active",
+        trial_ends_at: new Date().toISOString(),
         mp_customer_id: customerId,
         mp_card_id: cardId,
-        next_charge_at: null, // Will be set after first use
+        next_charge_at: nextChargeAt,
+        last_charge_at: new Date().toISOString(),
         charge_attempts: 0,
       });
 
@@ -154,7 +192,19 @@ serve(async (req) => {
       return jsonResponse({ error: "Failed to create subscription" }, 500);
     }
 
-    // 4. Grant access - set user plan in video_usage
+    // 5. Create payment record
+    await adminClient
+      .from("payments")
+      .insert({
+        user_id: userId,
+        plan: selectedPlan,
+        amount: planData.price,
+        status: "confirmed",
+        confirmed_at: new Date().toISOString(),
+        pix_tx_id: String(chargeData.id),
+      });
+
+    // 6. Grant access - set user plan in video_usage
     const monthYear = new Date().toISOString().slice(0, 7);
     const { data: existingUsage } = await adminClient
       .from("video_usage")
@@ -180,12 +230,11 @@ serve(async (req) => {
         });
     }
 
-    console.log(`[save-card] ✅ Card saved for user ${userId}, plan ${selectedPlan}, pending first use charge`);
+    console.log(`[save-card] ✅ Payment approved and plan activated for user ${userId}, plan ${selectedPlan}`);
 
     return jsonResponse({
       success: true,
       selectedPlan,
-      cardLast4: savedCard.last_four_digits,
     });
 
   } catch (e) {
