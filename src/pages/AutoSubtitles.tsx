@@ -605,7 +605,7 @@ const AutoSubtitles = () => {
             highlightColor: videoColors.highlight,
             borderColor: videoColors.outline,
             bgColor: videoColors.bg,
-            borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : 5,
+            borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : video.subtitleSettings.styleId === 'pixel' ? 4 : 5,
             bold: video.subtitleSettings.useBold,
           },
           fontSizePct: video.subtitleSettings.fontSizePct,

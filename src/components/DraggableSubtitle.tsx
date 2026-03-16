@@ -206,6 +206,7 @@ export function DraggableSubtitle({
           >
             {(() => {
               const isTypewriter = styleId === 'typewriter';
+              const isPixel = styleId === 'pixel';
               let wordIndex = 0;
               // For typewriter: only show words up to highlightIndex (typing effect)
               const totalWordsFlat = words.length;
@@ -216,7 +217,7 @@ export function DraggableSubtitle({
                   key={li}
                   style={{
                     display: 'inline-flex',
-                    gap: isTypewriter ? '0.35em' : '0.25em',
+                    gap: isTypewriter ? '0.35em' : isPixel ? '0.3em' : '0.25em',
                     justifyContent: 'center',
                   }}
                 >
@@ -234,18 +235,24 @@ export function DraggableSubtitle({
                         key={idx}
                         className={`font-black uppercase${isLastVisible ? ' tw-cursor' : ''}`}
                         style={{
-                          color: isTypewriter
+                          color: isPixel
+                            ? (isHighlighted ? colors.highlight : colors.primary)
+                            : isTypewriter
                             ? colors.primary
                             : (isHighlighted ? colors.highlight : colors.primary),
                           fontSize: `clamp(12px, calc(${fontSizePct} * 0.18rem), 48px)`,
-                          letterSpacing: isTypewriter ? '0.12em' : '0.02em',
+                          letterSpacing: isPixel ? '0.08em' : isTypewriter ? '0.12em' : '0.02em',
                           lineHeight: 1,
                           display: 'inline-block',
-                          fontFamily: isTypewriter
+                          fontFamily: isPixel
+                            ? "'Courier New', 'Courier', monospace"
+                            : isTypewriter
                             ? "'Courier New', 'Courier', 'Lucida Console', monospace"
                             : "'Nunito', 'Arial Rounded MT Bold', 'Arial Black', sans-serif",
                           transition: isTypewriter ? 'none' : 'color 0.08s ease',
-                          textShadow: isTypewriter
+                          textShadow: isPixel
+                            ? '3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000'
+                            : isTypewriter
                             ? '0 0 8px #B44AFF, 0 0 16px #B44AFF80, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000'
                             : (colors.bg === 'transparent'
                               ? '2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000'
