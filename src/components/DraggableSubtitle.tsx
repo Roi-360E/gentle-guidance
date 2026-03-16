@@ -205,34 +205,51 @@ export function DraggableSubtitle({
             onTouchStart={handleDragStart}
           >
             {(() => {
+              const isTypewriter = styleId === 'typewriter';
               let wordIndex = 0;
+              // For typewriter: only show words up to highlightIndex (typing effect)
+              const totalWordsFlat = words.length;
+              const visibleCount = isTypewriter ? highlightIndex + 1 : totalWordsFlat;
+
               return lines.map((lineWords, li) => (
                 <span
                   key={li}
                   style={{
                     display: 'inline-flex',
-                    gap: '0.25em',
+                    gap: isTypewriter ? '0.35em' : '0.25em',
                     justifyContent: 'center',
                   }}
                 >
                   {lineWords.map((word) => {
                     const idx = wordIndex++;
                     const isHighlighted = idx === highlightIndex;
+                    const isVisible = idx < visibleCount;
+
+                    if (isTypewriter && !isVisible) return null;
+
+                    const isLastVisible = isTypewriter && idx === visibleCount - 1;
+
                     return (
                       <span
                         key={idx}
-                        className="font-black uppercase"
+                        className={`font-black uppercase${isLastVisible ? ' tw-cursor' : ''}`}
                         style={{
-                          color: isHighlighted ? colors.highlight : colors.primary,
+                          color: isTypewriter
+                            ? colors.primary
+                            : (isHighlighted ? colors.highlight : colors.primary),
                           fontSize: `clamp(12px, calc(${fontSizePct} * 0.18rem), 48px)`,
-                          letterSpacing: '0.02em',
+                          letterSpacing: isTypewriter ? '0.12em' : '0.02em',
                           lineHeight: 1,
                           display: 'inline-block',
-                          fontFamily: "'Nunito', 'Arial Rounded MT Bold', 'Arial Black', sans-serif",
-                          transition: 'color 0.08s ease',
-                          ...(colors.bg === 'transparent' ? {
-                            textShadow: '2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000',
-                          } : {}),
+                          fontFamily: isTypewriter
+                            ? "'Courier New', 'Courier', 'Lucida Console', monospace"
+                            : "'Nunito', 'Arial Rounded MT Bold', 'Arial Black', sans-serif",
+                          transition: isTypewriter ? 'none' : 'color 0.08s ease',
+                          textShadow: isTypewriter
+                            ? '0 0 8px #B44AFF, 0 0 16px #B44AFF80, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000'
+                            : (colors.bg === 'transparent'
+                              ? '2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000'
+                              : 'none'),
                         }}
                       >
                         {word.toUpperCase()}
