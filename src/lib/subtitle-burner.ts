@@ -26,6 +26,7 @@ export interface BurnOptions {
   /** fontSize as percentage of video height (e.g. 5 = 5%) */
   fontSizePct: number;
   position: 'bottom' | 'center' | 'top';
+  textAlign?: 'left' | 'center' | 'right';
   wordsPerGroup?: number;
 }
 
@@ -92,7 +93,7 @@ export function buildDrawtextFilter(
   videoHeight: number,
   videoWidth: number,
 ): string {
-  const { segments, style, fontSizePct, position, wordsPerGroup = 4 } = options;
+  const { segments, style, fontSizePct, position, textAlign = 'center', wordsPerGroup = 4 } = options;
 
   const fontSize = Math.round((fontSizePct / 100) * videoHeight);
   const borderW = Math.max(style.borderW, Math.round(fontSize * 0.06));
@@ -143,7 +144,7 @@ export function buildDrawtextFilter(
     const baseParts = [
       `drawtext=${baseParams(style.fontColor).join(':')}`,
       `text='${fullText}'`,
-      `x=(w-text_w)/2`,
+      `x=${textAlign === 'left' ? `${marginBottom}` : textAlign === 'right' ? `w-text_w-${marginBottom}` : '(w-text_w)/2'}`,
       `y=${yExpr}`,
       enableExpr,
       ...bgParams,
@@ -168,7 +169,8 @@ export function buildDrawtextFilter(
 
     // Center the full text, then offset to the word
     // x = (w - totalTextWidth) / 2 + offsetToWord
-    const xExpr = `(w-${Math.round(totalTextWidth)})/2+${Math.round(offsetToWord)}`;
+    const baseXExpr = textAlign === 'left' ? `${marginBottom}` : textAlign === 'right' ? `w-${Math.round(totalTextWidth)}-${marginBottom}` : `(w-${Math.round(totalTextWidth)})/2`;
+    const xExpr = `${baseXExpr}+${Math.round(offsetToWord)}`;
 
     const highlightParts = [
       `drawtext=${baseParams(style.highlightColor).join(':')}`,
