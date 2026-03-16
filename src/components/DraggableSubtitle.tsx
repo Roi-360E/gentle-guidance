@@ -39,7 +39,6 @@ export function DraggableSubtitle({
   const dragStartRef = useRef({ y: 0, startPosY: 0 });
   const resizeStartRef = useRef({ y: 0, startSize: 0 });
 
-  // Drag to reposition (Y axis)
   const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -48,7 +47,6 @@ export function DraggableSubtitle({
     setIsDragging(true);
   }, [positionY]);
 
-  // Resize handles to change font size
   const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -74,9 +72,8 @@ export function DraggableSubtitle({
       }
 
       if (isResizing) {
-        // Drag down = bigger, drag up = smaller
         const deltaY = clientY - resizeStartRef.current.y;
-        const deltaPct = (deltaY / parentRect.height) * 30; // sensitivity
+        const deltaPct = (deltaY / parentRect.height) * 30;
         const newSize = Math.max(2, Math.min(12, resizeStartRef.current.startSize + deltaPct));
         onFontSizeChange(Math.round(newSize * 10) / 10);
       }
@@ -102,6 +99,29 @@ export function DraggableSubtitle({
 
   const showControls = isHovered || isDragging || isResizing;
 
+  // Split words into exactly maxLines lines (never more)
+  const buildLines = (): string[][] => {
+    if (maxLines <= 1) return [words];
+    if (words.length <= 1) return [words];
+    
+    const targetLines = Math.min(maxLines, words.length);
+    const perLine = Math.ceil(words.length / targetLines);
+    const lines: string[][] = [];
+    
+    for (let i = 0; i < words.length; i += perLine) {
+      if (lines.length < maxLines - 1) {
+        lines.push(words.slice(i, i + perLine));
+      } else {
+        // Last allowed line gets ALL remaining words
+        lines.push(words.slice(i));
+        break;
+      }
+    }
+    return lines;
+  };
+
+  const lines = buildLines();
+
   return (
     <div
       ref={containerRef}
@@ -121,7 +141,6 @@ export function DraggableSubtitle({
             cursor: isDragging ? 'grabbing' : 'grab',
           }}
         >
-          {/* Selection border */}
           {showControls && (
             <div
               className="absolute -inset-2 rounded-lg border-2 border-dashed border-white/60 pointer-events-none"
@@ -129,7 +148,6 @@ export function DraggableSubtitle({
             />
           )}
 
-          {/* Drag handle (center top) */}
           {showControls && (
             <div
               className="absolute -top-5 left-1/2 -translate-x-1/2 bg-primary rounded-full p-1 cursor-grab active:cursor-grabbing shadow-lg z-30"
@@ -140,7 +158,6 @@ export function DraggableSubtitle({
             </div>
           )}
 
-          {/* Resize handles (bottom corners) */}
           {showControls && (
             <>
               <div
@@ -160,7 +177,6 @@ export function DraggableSubtitle({
             </>
           )}
 
-          {/* The subtitle text itself */}
           <span
             className="inline-block select-none"
             style={{
@@ -174,16 +190,6 @@ export function DraggableSubtitle({
             onTouchStart={handleDragStart}
           >
             {(() => {
-              const lines: string[][] = [];
-              if (maxLines <= 1) {
-                lines.push(words);
-              } else {
-                const perLine = Math.ceil(words.length / maxLines);
-                for (let i = 0; i < words.length; i += perLine) {
-                  lines.push(words.slice(i, i + perLine));
-                }
-              }
-
               let wordIndex = 0;
               return lines.map((lineWords, li) => (
                 <span
@@ -191,7 +197,7 @@ export function DraggableSubtitle({
                   style={{
                     display: 'block',
                     textAlign,
-                    whiteSpace: maxLines <= 1 ? 'nowrap' : 'normal',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {lineWords.map((word, wordInLineIndex) => {
@@ -221,7 +227,6 @@ export function DraggableSubtitle({
             })()}
           </span>
 
-          {/* Size indicator while resizing */}
           {isResizing && (
             <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-background/90 text-foreground text-[10px] font-mono px-2 py-0.5 rounded-full border border-border shadow">
               {fontSizePct.toFixed(1)}%
