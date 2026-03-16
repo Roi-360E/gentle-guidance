@@ -22,9 +22,9 @@ export const SUBTITLE_STYLES: SubtitleStyle[] = [
   {
     id: 'greenbox',
     name: 'Green Box',
-    description: 'Fundo escuro com destaque verde — estilo anúncio',
-    preview: '💚',
-    colors: { primary: '#FFFFFF', highlight: '#00FF66', outline: '#000000', bg: '#000000DD' },
+    description: 'Fundo preto com destaque amarelo — estilo anúncio viral',
+    preview: '💛',
+    colors: { primary: '#FFFFFF', highlight: '#FFE500', outline: '#000000', bg: '#000000' },
   },
 ];
 

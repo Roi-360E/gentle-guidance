@@ -178,13 +178,13 @@ export function DraggableSubtitle({
           )}
 
           <span
-            className="inline-block select-none"
+            className="inline-flex items-center select-none"
             style={{
-              maxWidth: maxLines <= 1 ? 'none' : '90%',
-              whiteSpace: maxLines <= 1 ? 'nowrap' : 'normal',
               backgroundColor: colors.bg !== 'transparent' ? colors.bg : 'transparent',
-              padding: colors.bg !== 'transparent' ? '6px 18px' : '2px 4px',
-              borderRadius: colors.bg !== 'transparent' ? '12px' : '0',
+              padding: '0.35em 0.6em',
+              borderRadius: '6px',
+              gap: '0.25em',
+              lineHeight: 1.1,
             }}
             onMouseDown={handleDragStart}
             onTouchStart={handleDragStart}
@@ -195,27 +195,24 @@ export function DraggableSubtitle({
                 <span
                   key={li}
                   style={{
-                    display: 'block',
-                    textAlign,
-                    whiteSpace: 'nowrap',
+                    display: 'contents',
                   }}
                 >
                   {lineWords.map((word, wordInLineIndex) => {
                     const idx = wordIndex++;
                     const isHighlighted = idx === highlightIndex;
-                    const isLastWordInLine = wordInLineIndex === lineWords.length - 1;
                     return (
                       <span
                         key={idx}
-                        className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide transition-colors duration-75`}
+                        className="font-black uppercase"
                         style={{
                           color: isHighlighted ? colors.highlight : colors.primary,
-                          fontSize: `clamp(10px, calc(${fontSizePct} * 0.16rem), 42px)`,
-                          ...textEffects,
-                          marginRight: isLastWordInLine ? '0' : '0.3em',
+                          fontSize: `clamp(12px, calc(${fontSizePct} * 0.18rem), 48px)`,
+                          letterSpacing: '0.02em',
+                          lineHeight: 1,
                           display: 'inline-block',
-                          transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
-                          transition: 'transform 0.1s ease, color 0.1s ease',
+                          fontFamily: "'Nunito', 'Arial Rounded MT Bold', 'Arial Black', sans-serif",
+                          transition: 'color 0.08s ease',
                         }}
                       >
                         {word.toUpperCase()}
