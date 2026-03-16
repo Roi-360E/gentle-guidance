@@ -169,7 +169,8 @@ export function buildDrawtextFilter(
 
     // Center the full text, then offset to the word
     // x = (w - totalTextWidth) / 2 + offsetToWord
-    const xExpr = `(w-${Math.round(totalTextWidth)})/2+${Math.round(offsetToWord)}`;
+    const baseXExpr = textAlign === 'left' ? `${marginBottom}` : textAlign === 'right' ? `w-${Math.round(totalTextWidth)}-${marginBottom}` : `(w-${Math.round(totalTextWidth)})/2`;
+    const xExpr = `${baseXExpr}+${Math.round(offsetToWord)}`;
 
     const highlightParts = [
       `drawtext=${baseParams(style.highlightColor).join(':')}`,

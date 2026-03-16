@@ -539,6 +539,7 @@ const AutoSubtitles = () => {
           fontSizePct,
           position: (subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
           wordsPerGroup: 4,
+          textAlign,
         };
 
         const outputBlob = await burnSubtitlesIntoVideo(video.file, burnOptions, (pct, status) => {
