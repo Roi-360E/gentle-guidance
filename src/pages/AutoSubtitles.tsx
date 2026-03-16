@@ -535,7 +535,7 @@ const AutoSubtitles = () => {
             bold: useBold,
           },
           fontSizePct,
-          position: subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom',
+          position: (subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
           wordsPerGroup: 4,
         };
 
