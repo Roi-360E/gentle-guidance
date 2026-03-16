@@ -1384,12 +1384,12 @@ const AutoSubtitles = () => {
                         <input
                           type="color"
                           value={effectiveColors.primary}
-                          onChange={(e) => setCustomPrimaryColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customPrimaryColor: e.target.value })}
                           className="w-10 h-10 rounded-lg border border-border cursor-pointer"
                         />
                         <Input
                           value={customPrimaryColor || selectedStyleObj?.colors.primary || ''}
-                          onChange={(e) => setCustomPrimaryColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customPrimaryColor: e.target.value })}
                           placeholder={selectedStyleObj?.colors.primary}
                           className="font-mono text-xs h-10"
                         />
