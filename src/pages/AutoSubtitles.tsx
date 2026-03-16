@@ -1401,12 +1401,12 @@ const AutoSubtitles = () => {
                         <input
                           type="color"
                           value={effectiveColors.highlight}
-                          onChange={(e) => setCustomHighlightColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customHighlightColor: e.target.value })}
                           className="w-10 h-10 rounded-lg border border-border cursor-pointer"
                         />
                         <Input
                           value={customHighlightColor || selectedStyleObj?.colors.highlight || ''}
-                          onChange={(e) => setCustomHighlightColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customHighlightColor: e.target.value })}
                           placeholder={selectedStyleObj?.colors.highlight}
                           className="font-mono text-xs h-10"
                         />
