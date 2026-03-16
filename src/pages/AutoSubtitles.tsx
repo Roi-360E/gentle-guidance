@@ -1256,7 +1256,11 @@ const AutoSubtitles = () => {
                   {SUBTITLE_STYLES.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => { setSelectedStyle(s.id); setCustomPrimaryColor(''); setCustomHighlightColor(''); }}
+                      onClick={() => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, {
+                        styleId: s.id,
+                        customPrimaryColor: '',
+                        customHighlightColor: '',
+                      })}
                       className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all ${
                         selectedStyle === s.id
                           ? 'border-primary bg-primary/10 scale-105'
