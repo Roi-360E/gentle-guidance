@@ -24,6 +24,7 @@ import AdminPlans from "./pages/AdminPlans";
 import VoiceRewrite from "./pages/VoiceRewrite";
 import ThankYou from "./pages/ThankYou";
 import ShortsReels from "./pages/ShortsReels";
+import Onboarding from "./pages/Onboarding";
 
 const Checkout = lazy(() => import("./pages/Checkout"));
 
@@ -45,6 +46,7 @@ const App = () => (
               <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
               <Route path="/vendas" element={<Sales />} />
               <Route path="/viral-flux" element={<ViralFlux />} />
+              <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
