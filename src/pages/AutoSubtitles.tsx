@@ -1141,6 +1141,7 @@ const AutoSubtitles = () => {
                               useBold={useBold}
                               textAlign={textAlign}
                               maxLines={maxLines}
+                              styleId={selectedStyle}
                             />
                           )}
                         </div>
