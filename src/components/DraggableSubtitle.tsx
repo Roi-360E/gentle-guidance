@@ -29,6 +29,7 @@ interface DraggableSubtitleProps {
   useBold: boolean;
   textAlign?: 'left' | 'center' | 'right';
   maxLines?: number;
+  styleId?: string;
 }
 
 export function DraggableSubtitle({
