@@ -1282,6 +1282,26 @@ const AutoSubtitles = () => {
                   </div>
                 </div>
 
+                {/* Quantidade de linhas */}
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <Type className="w-4 h-4 text-foreground" />
+                    <Label className="cursor-pointer">Linhas por frase</Label>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {([1, 2, 3] as const).map((n) => (
+                      <Button
+                        key={n}
+                        variant={maxLines === n ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => setMaxLines(n)}
+                      >
+                        {n} {n === 1 ? 'linha' : 'linhas'}
+                      </Button>
+                    ))}
+                  </div>
+
                 {/* Negrito toggle */}
                 <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
                   <div className="flex items-center gap-2">
