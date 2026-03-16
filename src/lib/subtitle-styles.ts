@@ -40,6 +40,13 @@ export const SUBTITLE_STYLES: SubtitleStyle[] = [
     preview: '⌨️',
     colors: { primary: '#B44AFF', highlight: '#E066FF', outline: '#000000', bg: 'transparent' },
   },
+  {
+    id: 'pixel',
+    name: 'Pixel',
+    description: 'Estilo pixelado retrô — fonte blocada tipo videogame',
+    preview: '🎮',
+    colors: { primary: '#FFFFFF', highlight: '#00FF66', outline: '#000000', bg: '#000000CC' },
+  },
 ];
 
 /**

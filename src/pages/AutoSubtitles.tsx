@@ -605,7 +605,7 @@ const AutoSubtitles = () => {
             highlightColor: videoColors.highlight,
             borderColor: videoColors.outline,
             bgColor: videoColors.bg,
-            borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : 5,
+            borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : video.subtitleSettings.styleId === 'pixel' ? 4 : 5,
             bold: video.subtitleSettings.useBold,
           },
           fontSizePct: video.subtitleSettings.fontSizePct,
@@ -745,6 +745,18 @@ const AutoSubtitles = () => {
     const isFire = styleId === 'fire';
     const isMinimal = styleId === 'minimal';
     const isGreenBox = styleId === 'greenbox';
+    const isPixel = styleId === 'pixel';
+
+    if (isPixel) {
+      return {
+        WebkitTextStroke: 'none',
+        textShadow: '3px 3px 0 #000, -1px -1px 0 #000',
+        fontFamily: '"Courier New", "Courier", monospace',
+        letterSpacing: '0.08em',
+        imageRendering: 'pixelated',
+        paintOrder: 'stroke fill',
+      } as React.CSSProperties;
+    }
 
     if (isGreenBox) {
       return {
