@@ -1332,7 +1332,7 @@ const AutoSubtitles = () => {
                         variant={textAlign === value ? 'default' : 'outline'}
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => setTextAlign(value)}
+                        onClick={() => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { textAlign: value })}
                         title={label}
                       >
                         <Icon className="w-4 h-4" />
