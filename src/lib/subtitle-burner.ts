@@ -28,6 +28,7 @@ export interface BurnOptions {
   position: 'bottom' | 'center' | 'top';
   textAlign?: 'left' | 'center' | 'right';
   wordsPerGroup?: number;
+  maxLines?: number;
 }
 
 const FONT_PATH = '/fonts/Inter-Variable.ttf';
