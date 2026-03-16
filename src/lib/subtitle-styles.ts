@@ -103,6 +103,13 @@ export const SUBTITLE_STYLES: SubtitleStyle[] = [
     preview: '👑',
     colors: { primary: '#F5E6CA', highlight: '#FFD700', outline: '#3D2B1F', bg: 'transparent' },
   },
+  {
+    id: 'greenbox',
+    name: 'Green Box',
+    description: 'Fundo escuro com destaque verde — estilo anúncio',
+    preview: '💚',
+    colors: { primary: '#FFFFFF', highlight: '#00FF66', outline: '#000000', bg: '#000000DD' },
+  },
 ];
 
 /**
