@@ -144,7 +144,7 @@ export function buildDrawtextFilter(
     const baseParts = [
       `drawtext=${baseParams(style.fontColor).join(':')}`,
       `text='${fullText}'`,
-      `x=(w-text_w)/2`,
+      `x=${textAlign === 'left' ? `${marginBottom}` : textAlign === 'right' ? `w-text_w-${marginBottom}` : '(w-text_w)/2'}`,
       `y=${yExpr}`,
       enableExpr,
       ...bgParams,
