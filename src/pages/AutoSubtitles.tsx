@@ -212,14 +212,6 @@ const AutoSubtitles = () => {
   ]);
 
   const [mainStep, setMainStep] = useState<MainStep>('upload');
-  const [selectedStyle, setSelectedStyle] = useState('greenbox');
-  const [subtitlePositionY, setSubtitlePositionY] = useState(85); // percentage from top (85% = bottom)
-  const [fontSizePct, setFontSizePct] = useState(5);
-  const [useBold, setUseBold] = useState(true);
-  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
-  const [maxLines, setMaxLines] = useState<1 | 2 | 3>(2);
-  const [customPrimaryColor, setCustomPrimaryColor] = useState('');
-  const [customHighlightColor, setCustomHighlightColor] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
   const [overallStatus, setOverallStatus] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -243,18 +235,6 @@ const AutoSubtitles = () => {
   const hasVideos = totalVideos > 0;
   const allPreprocessed = sectionPreprocessed.some(Boolean) && hasVideos;
 
-  const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
-
-  // Effective colors (custom overrides style defaults)
-  const effectiveColors = useMemo(() => {
-    if (!selectedStyleObj) return { primary: '#FFFFFF', highlight: '#FFD700', outline: '#000000', bg: 'transparent' };
-    return {
-      ...selectedStyleObj.colors,
-      primary: customPrimaryColor || selectedStyleObj.colors.primary,
-      highlight: customHighlightColor || selectedStyleObj.colors.highlight,
-    };
-  }, [selectedStyleObj, customPrimaryColor, customHighlightColor]);
-
   /* ──── Carrossel de preview na etapa de estilo ──── */
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [previewTime, setPreviewTime] = useState(0);
@@ -277,6 +257,32 @@ const AutoSubtitles = () => {
     transcribedVideosMeta.map(m => m.video),
     [transcribedVideosMeta]
   );
+
+  const currentCarouselMeta = transcribedVideosMeta[carouselIndex] ?? null;
+  const currentVideo = currentCarouselMeta?.video ?? null;
+  const currentSubtitleSettings = currentVideo?.subtitleSettings ?? DEFAULT_SUBTITLE_SETTINGS;
+  const selectedStyle = currentSubtitleSettings.styleId;
+  const subtitlePositionY = currentSubtitleSettings.positionY;
+  const fontSizePct = currentSubtitleSettings.fontSizePct;
+  const useBold = currentSubtitleSettings.useBold;
+  const textAlign = currentSubtitleSettings.textAlign;
+  const maxLines = currentSubtitleSettings.maxLines;
+  const customPrimaryColor = currentSubtitleSettings.customPrimaryColor;
+  const customHighlightColor = currentSubtitleSettings.customHighlightColor;
+
+  const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
+
+  const effectiveColors = useMemo(() => ({
+    ...selectedStyleObj.colors,
+    primary: customPrimaryColor || selectedStyleObj.colors.primary,
+    highlight: customHighlightColor || selectedStyleObj.colors.highlight,
+  }), [selectedStyleObj, customPrimaryColor, customHighlightColor]);
+
+  useEffect(() => {
+    if (carouselIndex >= transcribedVideosMeta.length && transcribedVideosMeta.length > 0) {
+      setCarouselIndex(transcribedVideosMeta.length - 1);
+    }
+  }, [carouselIndex, transcribedVideosMeta.length]);
 
   // Word groups do vídeo atual no carrossel
   const wordsPerSubtitleGroup = maxLines === 1 ? 3 : maxLines === 3 ? 6 : 4;
