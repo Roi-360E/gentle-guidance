@@ -745,6 +745,18 @@ const AutoSubtitles = () => {
     const isFire = styleId === 'fire';
     const isMinimal = styleId === 'minimal';
     const isGreenBox = styleId === 'greenbox';
+    const isPixel = styleId === 'pixel';
+
+    if (isPixel) {
+      return {
+        WebkitTextStroke: 'none',
+        textShadow: '3px 3px 0 #000, -1px -1px 0 #000',
+        fontFamily: '"Courier New", "Courier", monospace',
+        letterSpacing: '0.08em',
+        imageRendering: 'pixelated',
+        paintOrder: 'stroke fill',
+      } as React.CSSProperties;
+    }
 
     if (isGreenBox) {
       return {
