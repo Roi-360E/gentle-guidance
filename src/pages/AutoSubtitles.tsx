@@ -1114,6 +1114,7 @@ const AutoSubtitles = () => {
                               textEffects={getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors })}
                               useBold={useBold}
                               textAlign={textAlign}
+                              maxLines={maxLines}
                             />
                           )}
                         </div>
