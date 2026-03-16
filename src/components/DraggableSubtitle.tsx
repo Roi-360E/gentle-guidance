@@ -44,6 +44,7 @@ export function DraggableSubtitle({
   useBold,
   textAlign = 'center',
   maxLines = 2,
+  styleId,
 }: DraggableSubtitleProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
