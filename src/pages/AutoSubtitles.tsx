@@ -244,11 +244,13 @@ const AutoSubtitles = () => {
   );
 
   // Word groups do vídeo atual no carrossel
+  const wordsPerSubtitleGroup = maxLines === 1 ? 3 : maxLines === 3 ? 6 : 4;
+
   const carouselWordGroups = useMemo(() => {
     const video = transcribedVideos[carouselIndex];
     if (!video?.transcription) return [];
-    return splitSegmentsIntoWordGroups(video.transcription.segments, 4, maxLines);
-  }, [transcribedVideos, carouselIndex, maxLines]);
+    return splitSegmentsIntoWordGroups(video.transcription.segments, wordsPerSubtitleGroup, maxLines);
+  }, [transcribedVideos, carouselIndex, wordsPerSubtitleGroup, maxLines]);
 
   // Word group ativo baseado no tempo do preview
   const activeWordGroup = useMemo((): WordGroup | null => {
