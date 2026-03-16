@@ -954,7 +954,7 @@ const AutoSubtitles = () => {
             </Button>
             {!allPreprocessed && (
               <p className="text-xs text-muted-foreground text-center">
-                Pré-processe todas as seções acima para habilitar a transcrição
+                Pré-processe ao menos uma seção acima para habilitar a transcrição
               </p>
             )}
           </div>
