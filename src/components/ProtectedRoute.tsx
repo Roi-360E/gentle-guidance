@@ -40,6 +40,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
           setIsBlocked(true);
           setHasSubscription(true);
         } else {
+          // pending_charge, active - all have access
           setHasSubscription(true);
         }
       } catch {

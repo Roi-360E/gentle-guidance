@@ -80,7 +80,6 @@ serve(async (req) => {
     // 1. Create or find Mercado Pago customer
     const email = payerEmail || userEmail;
     
-    // Search for existing customer
     const searchRes = await fetch(
       `https://api.mercadopago.com/v1/customers/search?email=${encodeURIComponent(email)}`,
       { headers: { "Authorization": `Bearer ${MP_ACCESS_TOKEN}` } }
@@ -92,7 +91,6 @@ serve(async (req) => {
     if (searchData.results?.length > 0) {
       customerId = searchData.results[0].id;
     } else {
-      // Create new customer
       const createRes = await fetch("https://api.mercadopago.com/v1/customers", {
         method: "POST",
         headers: {
@@ -137,19 +135,17 @@ serve(async (req) => {
     const savedCard = await saveCardRes.json();
     const cardId = savedCard.id;
 
-    // 3. Create subscription record with 7-day trial
-    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
+    // 3. Create subscription record - pending first use (NO trial, NO immediate charge)
     const { error: subError } = await adminClient
       .from("user_subscriptions")
       .insert({
         user_id: userId,
         selected_plan: selectedPlan,
-        status: "trial",
-        trial_ends_at: trialEndsAt,
+        status: "pending_charge",
+        trial_ends_at: new Date().toISOString(), // No trial
         mp_customer_id: customerId,
         mp_card_id: cardId,
-        next_charge_at: trialEndsAt,
+        next_charge_at: null, // Will be set after first use
         charge_attempts: 0,
       });
 
@@ -158,7 +154,7 @@ serve(async (req) => {
       return jsonResponse({ error: "Failed to create subscription" }, 500);
     }
 
-    // 4. Grant trial access - set user plan in video_usage
+    // 4. Grant access - set user plan in video_usage
     const monthYear = new Date().toISOString().slice(0, 7);
     const { data: existingUsage } = await adminClient
       .from("video_usage")
@@ -184,11 +180,10 @@ serve(async (req) => {
         });
     }
 
-    console.log(`[save-card] ✅ Trial started for user ${userId}, plan ${selectedPlan}, trial ends ${trialEndsAt}`);
+    console.log(`[save-card] ✅ Card saved for user ${userId}, plan ${selectedPlan}, pending first use charge`);
 
     return jsonResponse({
       success: true,
-      trialEndsAt,
       selectedPlan,
       cardLast4: savedCard.last_four_digits,
     });

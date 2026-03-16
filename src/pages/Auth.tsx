@@ -160,6 +160,10 @@ const Auth = () => {
           content_name: 'Signup',
           content_category: 'Registration',
         });
+        // Redirect to onboarding card step with selected plan
+        if (selectedPlan) {
+          navigate('/onboarding', { state: { selectedPlan }, replace: true });
+        }
       }
     }
     setLoading(false);

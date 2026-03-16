@@ -31,11 +31,11 @@ serve(async (req) => {
 
     const now = new Date().toISOString();
 
-    // Find subscriptions due for charging (trial ended or recurring due)
+    // Find subscriptions due for charging (pending_charge after first use, or recurring active)
     const { data: dueSubscriptions, error: fetchErr } = await supabase
       .from("user_subscriptions")
       .select("*")
-      .in("status", ["trial", "active"])
+      .in("status", ["pending_charge", "active"])
       .lte("next_charge_at", now)
       .not("mp_customer_id", "is", null)
       .not("mp_card_id", "is", null);
