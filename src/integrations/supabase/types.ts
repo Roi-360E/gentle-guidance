@@ -433,6 +433,51 @@ export type Database = {
         }
         Relationships: []
       }
+      user_subscriptions: {
+        Row: {
+          charge_attempts: number
+          created_at: string
+          id: string
+          last_charge_at: string | null
+          mp_card_id: string | null
+          mp_customer_id: string | null
+          next_charge_at: string | null
+          selected_plan: string
+          status: string
+          trial_ends_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          charge_attempts?: number
+          created_at?: string
+          id?: string
+          last_charge_at?: string | null
+          mp_card_id?: string | null
+          mp_customer_id?: string | null
+          next_charge_at?: string | null
+          selected_plan: string
+          status?: string
+          trial_ends_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          charge_attempts?: number
+          created_at?: string
+          id?: string
+          last_charge_at?: string | null
+          mp_card_id?: string | null
+          mp_customer_id?: string | null
+          next_charge_at?: string | null
+          selected_plan?: string
+          status?: string
+          trial_ends_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       utm_tracking: {
         Row: {
           captured_at: string
