@@ -210,7 +210,7 @@ export function DraggableSubtitle({
                         className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide transition-colors duration-75`}
                         style={{
                           color: isHighlighted ? colors.highlight : colors.primary,
-                          fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
+                          fontSize: `clamp(12px, ${fontSizePct * 1.2}cqw, 42px)`,
                           ...textEffects,
                           marginRight: isLastWordInLine ? '0' : '0.3em',
                           display: 'inline-block',
