@@ -237,10 +237,22 @@ const AutoSubtitles = () => {
   const [previewTime, setPreviewTime] = useState(0);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
 
-  // Lista flat de vídeos transcritos para o carrossel
+  // Lista flat de vídeos transcritos para o carrossel, com índices de seção/vídeo
+  const transcribedVideosMeta = useMemo(() => {
+    const result: { video: BatchVideo; si: number; vi: number }[] = [];
+    sections.forEach((section, si) => {
+      section.videos.forEach((v, vi) => {
+        if (v.transcription && v.transcription.segments.length > 0) {
+          result.push({ video: v, si, vi });
+        }
+      });
+    });
+    return result;
+  }, [sections]);
+
   const transcribedVideos = useMemo(() =>
-    allVideos.filter(v => v.transcription && v.transcription.segments.length > 0),
-    [allVideos]
+    transcribedVideosMeta.map(m => m.video),
+    [transcribedVideosMeta]
   );
 
   // Word groups do vídeo atual no carrossel
