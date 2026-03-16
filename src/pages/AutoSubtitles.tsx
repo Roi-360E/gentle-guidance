@@ -580,7 +580,7 @@ const AutoSubtitles = () => {
       setMainStep('style');
       toast.info('Processamento cancelado.');
     }
-  }, [sections, selectedStyle, fontSizePct, subtitlePositionY, updateVideo, effectiveColors, useBold]);
+  }, [sections, selectedStyle, fontSizePct, subtitlePositionY, updateVideo, effectiveColors, useBold, maxLines, textAlign, wordsPerSubtitleGroup]);
 
   /* ──── Cancelar processamento ──── */
   const handleCancel = useCallback(() => {

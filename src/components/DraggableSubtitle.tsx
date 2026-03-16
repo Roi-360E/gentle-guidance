@@ -162,8 +162,10 @@ export function DraggableSubtitle({
 
           {/* The subtitle text itself */}
           <span
-            className="inline-block max-w-[90%] select-none"
+            className="inline-block select-none"
             style={{
+              maxWidth: maxLines <= 1 ? 'none' : '90%',
+              whiteSpace: maxLines <= 1 ? 'nowrap' : 'normal',
               backgroundColor: colors.bg !== 'transparent' ? colors.bg : 'transparent',
               padding: colors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
               borderRadius: colors.bg !== 'transparent' ? '8px' : '0',
@@ -172,7 +174,6 @@ export function DraggableSubtitle({
             onTouchStart={handleDragStart}
           >
             {(() => {
-              // Split words into lines based on maxLines
               const lines: string[][] = [];
               if (maxLines <= 1) {
                 lines.push(words);
@@ -182,12 +183,21 @@ export function DraggableSubtitle({
                   lines.push(words.slice(i, i + perLine));
                 }
               }
+
               let wordIndex = 0;
               return lines.map((lineWords, li) => (
-                <span key={li} style={{ display: 'block', textAlign }}>
-                  {lineWords.map((word) => {
+                <span
+                  key={li}
+                  style={{
+                    display: 'block',
+                    textAlign,
+                    whiteSpace: maxLines <= 1 ? 'nowrap' : 'normal',
+                  }}
+                >
+                  {lineWords.map((word, wordInLineIndex) => {
                     const idx = wordIndex++;
                     const isHighlighted = idx === highlightIndex;
+                    const isLastWordInLine = wordInLineIndex === lineWords.length - 1;
                     return (
                       <span
                         key={idx}
@@ -196,7 +206,7 @@ export function DraggableSubtitle({
                           color: isHighlighted ? colors.highlight : colors.primary,
                           fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
                           ...textEffects,
-                          marginRight: idx < words.length - 1 ? '0.3em' : '0',
+                          marginRight: isLastWordInLine ? '0' : '0.3em',
                           display: 'inline-block',
                           transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
                           transition: 'transform 0.1s ease, color 0.1s ease',
