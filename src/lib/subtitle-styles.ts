@@ -119,29 +119,33 @@ export interface WordGroup {
 }
 
 /**
- * Max characters per line to ensure subtitles never exceed 2 lines.
+ * Max characters per line to ensure subtitles fit the screen.
  * Based on typical 1080px width with Inter Bold at ~5% font size.
  */
 const MAX_CHARS_PER_LINE = 20;
 
 /**
- * Format a group of words into at most 2 lines, splitting at the
- * midpoint when the total length exceeds MAX_CHARS_PER_LINE.
+ * Format a group of words into the specified number of lines,
+ * splitting evenly by word count when text exceeds MAX_CHARS_PER_LINE.
  */
-function formatTwoLines(words: string[]): string {
+function formatLines(words: string[], maxLines: number = 2): string {
   const full = words.join(' ');
-  if (full.length <= MAX_CHARS_PER_LINE) return full;
+  if (maxLines <= 1 || full.length <= MAX_CHARS_PER_LINE) return full;
 
-  // Split roughly in half by word count
-  const mid = Math.ceil(words.length / 2);
-  const line1 = words.slice(0, mid).join(' ');
-  const line2 = words.slice(mid).join(' ');
-  return line2 ? `${line1}\n${line2}` : line1;
+  // Split words evenly across the allowed number of lines
+  const linesCount = Math.min(maxLines, words.length);
+  const wordsPerLine = Math.ceil(words.length / linesCount);
+  const lines: string[] = [];
+  for (let i = 0; i < words.length; i += wordsPerLine) {
+    lines.push(words.slice(i, i + wordsPerLine).join(' '));
+  }
+  return lines.filter(Boolean).join('\n');
 }
 
 export function splitSegmentsIntoWordGroups(
   segments: TranscriptionSegment[],
-  wordsPerGroup: number = 3
+  wordsPerGroup: number = 3,
+  maxLines: number = 2,
 ): WordGroup[] {
   const groups: WordGroup[] = [];
 
