@@ -46,6 +46,7 @@ import {
   type ResolutionPreset,
 } from '@/lib/video-processor';
 import SubtitleRemovalSection from '@/components/SubtitleRemovalSection';
+import { DraggableSubtitle } from '@/components/DraggableSubtitle';
 
 /* ───────────── Types ───────────── */
 
