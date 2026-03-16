@@ -1185,8 +1185,8 @@ const AutoSubtitles = () => {
                               highlightIndex={activeWordGroup.highlightIndex}
                               positionY={subtitlePositionY}
                               fontSizePct={fontSizePct}
-                              onPositionChange={setSubtitlePositionY}
-                              onFontSizeChange={setFontSizePct}
+                              onPositionChange={(value) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { positionY: value })}
+                              onFontSizeChange={(value) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { fontSizePct: value })}
                               colors={effectiveColors}
                               textEffects={getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors })}
                               useBold={useBold}
