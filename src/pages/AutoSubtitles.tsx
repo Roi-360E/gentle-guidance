@@ -893,7 +893,7 @@ const AutoSubtitles = () => {
                 {section.videos.length > 0 && !sectionPreprocessed[si] && (
                   <Button
                     className="w-full rounded-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
-                    disabled={preprocessingSection !== null || sectionStarted[si]}
+                    disabled={sectionStarted[si]}
                     onClick={() => handlePreprocessSection(si)}
                   >
                     {preprocessingSection === section.label || sectionStarted[si] ? (
