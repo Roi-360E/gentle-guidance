@@ -94,7 +94,7 @@ export function buildDrawtextFilter(
   videoHeight: number,
   videoWidth: number,
 ): string {
-  const { segments, style, fontSizePct, position, textAlign = 'center', wordsPerGroup = 4 } = options;
+  const { segments, style, fontSizePct, position, textAlign = 'center', wordsPerGroup = 4, maxLines = 2 } = options;
 
   const fontSize = Math.round((fontSizePct / 100) * videoHeight);
   const borderW = Math.max(style.borderW, Math.round(fontSize * 0.06));
