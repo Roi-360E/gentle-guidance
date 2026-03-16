@@ -193,6 +193,7 @@ const AutoSubtitles = () => {
   const [subtitlePositionY, setSubtitlePositionY] = useState(85); // percentage from top (85% = bottom)
   const [fontSizePct, setFontSizePct] = useState(5);
   const [useBold, setUseBold] = useState(true);
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
   const [customHighlightColor, setCustomHighlightColor] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
