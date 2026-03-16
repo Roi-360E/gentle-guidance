@@ -111,7 +111,7 @@ export function buildDrawtextFilter(
     ? '(h-text_h)/2'
     : `h-text_h-${marginBottom}`;
 
-  const wordGroups = splitSegmentsIntoWordGroups(segments, wordsPerGroup);
+  const wordGroups = splitSegmentsIntoWordGroups(segments, wordsPerGroup, maxLines);
   const filters: string[] = [];
 
   // Common style params
