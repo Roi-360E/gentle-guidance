@@ -55,6 +55,17 @@ import { DraggableSubtitle } from '@/components/DraggableSubtitle';
 type VideoStatus = 'idle' | 'transcribing' | 'transcribed' | 'burning' | 'done' | 'error';
 
 /** Cada vídeo rastreado no batch */
+interface SubtitleSettings {
+  styleId: string;
+  positionY: number;
+  fontSizePct: number;
+  useBold: boolean;
+  textAlign: 'left' | 'center' | 'right';
+  maxLines: 1 | 2 | 3;
+  customPrimaryColor: string;
+  customHighlightColor: string;
+}
+
 interface BatchVideo {
   file: File;
   name: string;
@@ -66,6 +77,7 @@ interface BatchVideo {
   outputUrl: string | null;
   /** Dimensões do vídeo (detectadas no upload) */
   dimensions: { width: number; height: number } | null;
+  subtitleSettings: SubtitleSettings;
 }
 
 /** Seção do batch (Ganchos, Corpos, CTAs) */
@@ -79,6 +91,17 @@ interface BatchSection {
 
 /** Steps do fluxo principal */
 type MainStep = 'upload' | 'transcribing' | 'style' | 'burning' | 'done';
+
+const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
+  styleId: 'greenbox',
+  positionY: 85,
+  fontSizePct: 5,
+  useBold: true,
+  textAlign: 'center',
+  maxLines: 2,
+  customPrimaryColor: '',
+  customHighlightColor: '',
+};
 
 /* ───────────── Helpers ───────────── */
 
@@ -189,14 +212,6 @@ const AutoSubtitles = () => {
   ]);
 
   const [mainStep, setMainStep] = useState<MainStep>('upload');
-  const [selectedStyle, setSelectedStyle] = useState('greenbox');
-  const [subtitlePositionY, setSubtitlePositionY] = useState(85); // percentage from top (85% = bottom)
-  const [fontSizePct, setFontSizePct] = useState(5);
-  const [useBold, setUseBold] = useState(true);
-  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
-  const [maxLines, setMaxLines] = useState<1 | 2 | 3>(2);
-  const [customPrimaryColor, setCustomPrimaryColor] = useState('');
-  const [customHighlightColor, setCustomHighlightColor] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
   const [overallStatus, setOverallStatus] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -220,18 +235,6 @@ const AutoSubtitles = () => {
   const hasVideos = totalVideos > 0;
   const allPreprocessed = sectionPreprocessed.some(Boolean) && hasVideos;
 
-  const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
-
-  // Effective colors (custom overrides style defaults)
-  const effectiveColors = useMemo(() => {
-    if (!selectedStyleObj) return { primary: '#FFFFFF', highlight: '#FFD700', outline: '#000000', bg: 'transparent' };
-    return {
-      ...selectedStyleObj.colors,
-      primary: customPrimaryColor || selectedStyleObj.colors.primary,
-      highlight: customHighlightColor || selectedStyleObj.colors.highlight,
-    };
-  }, [selectedStyleObj, customPrimaryColor, customHighlightColor]);
-
   /* ──── Carrossel de preview na etapa de estilo ──── */
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [previewTime, setPreviewTime] = useState(0);
@@ -254,6 +257,32 @@ const AutoSubtitles = () => {
     transcribedVideosMeta.map(m => m.video),
     [transcribedVideosMeta]
   );
+
+  const currentCarouselMeta = transcribedVideosMeta[carouselIndex] ?? null;
+  const currentVideo = currentCarouselMeta?.video ?? null;
+  const currentSubtitleSettings = currentVideo?.subtitleSettings ?? DEFAULT_SUBTITLE_SETTINGS;
+  const selectedStyle = currentSubtitleSettings.styleId;
+  const subtitlePositionY = currentSubtitleSettings.positionY;
+  const fontSizePct = currentSubtitleSettings.fontSizePct;
+  const useBold = currentSubtitleSettings.useBold;
+  const textAlign = currentSubtitleSettings.textAlign;
+  const maxLines = currentSubtitleSettings.maxLines;
+  const customPrimaryColor = currentSubtitleSettings.customPrimaryColor;
+  const customHighlightColor = currentSubtitleSettings.customHighlightColor;
+
+  const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
+
+  const effectiveColors = useMemo(() => ({
+    ...selectedStyleObj.colors,
+    primary: customPrimaryColor || selectedStyleObj.colors.primary,
+    highlight: customHighlightColor || selectedStyleObj.colors.highlight,
+  }), [selectedStyleObj, customPrimaryColor, customHighlightColor]);
+
+  useEffect(() => {
+    if (carouselIndex >= transcribedVideosMeta.length && transcribedVideosMeta.length > 0) {
+      setCarouselIndex(transcribedVideosMeta.length - 1);
+    }
+  }, [carouselIndex, transcribedVideosMeta.length]);
 
   // Word groups do vídeo atual no carrossel
   const wordsPerSubtitleGroup = maxLines === 1 ? 3 : maxLines === 3 ? 6 : 4;
@@ -301,6 +330,7 @@ const AutoSubtitles = () => {
         transcription: null,
         outputUrl: null,
         dimensions: dims,
+        subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS },
       });
     }
 
@@ -399,6 +429,26 @@ const AutoSubtitles = () => {
       return updated;
     });
   }, []);
+
+  const updateVideoSubtitleSettings = useCallback(
+    (sectionIdx: number, videoIdx: number, patch: Partial<SubtitleSettings>) => {
+      setSections(prev => {
+        const updated = [...prev];
+        const videos = [...updated[sectionIdx].videos];
+        const currentVideo = videos[videoIdx];
+        videos[videoIdx] = {
+          ...currentVideo,
+          subtitleSettings: {
+            ...currentVideo.subtitleSettings,
+            ...patch,
+          },
+        };
+        updated[sectionIdx] = { ...updated[sectionIdx], videos };
+        return updated;
+      });
+    },
+    []
+  );
 
   /* ──── Callbacks para SubtitleRemovalSection ──── */
   const handleRemovalUpdateVideo = useCallback((sectionIdx: number, videoIdx: number, patch: Partial<BatchVideo>) => {
@@ -514,13 +564,11 @@ const AutoSubtitles = () => {
 
   /* ──── STEP 4: Burn legendas em batch ──── */
   const handleBurnAll = useCallback(async () => {
-    const style = SUBTITLE_STYLES.find(s => s.id === selectedStyle) || SUBTITLE_STYLES[0];
     setMainStep('burning');
     setIsProcessing(true);
     cancelRef.current = false;
     setOverallProgress(0);
 
-    // Filtrar apenas vídeos com transcrição bem-sucedida
     const videosToProcess: { si: number; vi: number; video: BatchVideo }[] = [];
     sections.forEach((sec, si) => {
       sec.videos.forEach((v, vi) => {
@@ -542,21 +590,29 @@ const AutoSubtitles = () => {
       });
 
       try {
+        const videoStyle = SUBTITLE_STYLES.find(s => s.id === video.subtitleSettings.styleId) || SUBTITLE_STYLES[0];
+        const videoColors = {
+          ...videoStyle.colors,
+          primary: video.subtitleSettings.customPrimaryColor || videoStyle.colors.primary,
+          highlight: video.subtitleSettings.customHighlightColor || videoStyle.colors.highlight,
+        };
+        const videoWordsPerGroup = video.subtitleSettings.maxLines === 1 ? 3 : video.subtitleSettings.maxLines === 3 ? 6 : 4;
+
         const burnOptions = {
           segments: video.transcription!.segments,
           style: {
-            fontColor: effectiveColors.primary,
-            highlightColor: effectiveColors.highlight,
-            borderColor: effectiveColors.outline,
-            bgColor: effectiveColors.bg,
-            borderW: selectedStyle === 'minimal' ? 2 : selectedStyle === 'neon' ? 7 : 5,
-            bold: useBold,
+            fontColor: videoColors.primary,
+            highlightColor: videoColors.highlight,
+            borderColor: videoColors.outline,
+            bgColor: videoColors.bg,
+            borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : 5,
+            bold: video.subtitleSettings.useBold,
           },
-          fontSizePct,
-          position: (subtitlePositionY <= 30 ? 'top' : subtitlePositionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
-          wordsPerGroup: wordsPerSubtitleGroup,
-          maxLines,
-          textAlign,
+          fontSizePct: video.subtitleSettings.fontSizePct,
+          position: (video.subtitleSettings.positionY <= 30 ? 'top' : video.subtitleSettings.positionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
+          wordsPerGroup: videoWordsPerGroup,
+          maxLines: video.subtitleSettings.maxLines,
+          textAlign: video.subtitleSettings.textAlign,
         };
 
         const outputBlob = await burnSubtitlesIntoVideo(video.file, burnOptions, (pct, status) => {
@@ -593,7 +649,7 @@ const AutoSubtitles = () => {
       setMainStep('style');
       toast.info('Processamento cancelado.');
     }
-  }, [sections, selectedStyle, fontSizePct, subtitlePositionY, updateVideo, effectiveColors, useBold, maxLines, textAlign, wordsPerSubtitleGroup]);
+  }, [sections, updateVideo]);
 
   /* ──── Cancelar processamento ──── */
   const handleCancel = useCallback(() => {
@@ -625,8 +681,8 @@ const AutoSubtitles = () => {
     setOverallStatus('');
     setIsProcessing(false);
     cancelRef.current = false;
-    setCustomPrimaryColor('');
-    setCustomHighlightColor('');
+    setCarouselIndex(0);
+    setPreviewTime(0);
   }, [allVideos]);
 
   /* ──── Edição manual da transcrição ──── */
@@ -1135,8 +1191,8 @@ const AutoSubtitles = () => {
                               highlightIndex={activeWordGroup.highlightIndex}
                               positionY={subtitlePositionY}
                               fontSizePct={fontSizePct}
-                              onPositionChange={setSubtitlePositionY}
-                              onFontSizeChange={setFontSizePct}
+                              onPositionChange={(value) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { positionY: value })}
+                              onFontSizeChange={(value) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { fontSizePct: value })}
                               colors={effectiveColors}
                               textEffects={getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors })}
                               useBold={useBold}
@@ -1206,7 +1262,11 @@ const AutoSubtitles = () => {
                   {SUBTITLE_STYLES.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => { setSelectedStyle(s.id); setCustomPrimaryColor(''); setCustomHighlightColor(''); }}
+                      onClick={() => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, {
+                        styleId: s.id,
+                        customPrimaryColor: '',
+                        customHighlightColor: '',
+                      })}
                       className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all ${
                         selectedStyle === s.id
                           ? 'border-primary bg-primary/10 scale-105'
@@ -1278,7 +1338,7 @@ const AutoSubtitles = () => {
                         variant={textAlign === value ? 'default' : 'outline'}
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => setTextAlign(value)}
+                        onClick={() => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { textAlign: value })}
                         title={label}
                       >
                         <Icon className="w-4 h-4" />
@@ -1300,7 +1360,7 @@ const AutoSubtitles = () => {
                         variant={maxLines === n ? 'default' : 'outline'}
                         size="sm"
                         className="h-8 px-3 text-xs"
-                        onClick={() => setMaxLines(n)}
+                        onClick={() => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { maxLines: n })}
                       >
                         {n} {n === 1 ? 'linha' : 'linhas'}
                       </Button>
@@ -1314,7 +1374,7 @@ const AutoSubtitles = () => {
                     <Bold className="w-4 h-4 text-foreground" />
                     <Label className="cursor-pointer">Texto em Negrito</Label>
                   </div>
-                  <Switch checked={useBold} onCheckedChange={setUseBold} />
+                  <Switch checked={useBold} onCheckedChange={(value) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { useBold: value })} />
                 </div>
 
                 {/* Cores personalizadas */}
@@ -1330,12 +1390,12 @@ const AutoSubtitles = () => {
                         <input
                           type="color"
                           value={effectiveColors.primary}
-                          onChange={(e) => setCustomPrimaryColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customPrimaryColor: e.target.value })}
                           className="w-10 h-10 rounded-lg border border-border cursor-pointer"
                         />
                         <Input
                           value={customPrimaryColor || selectedStyleObj?.colors.primary || ''}
-                          onChange={(e) => setCustomPrimaryColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customPrimaryColor: e.target.value })}
                           placeholder={selectedStyleObj?.colors.primary}
                           className="font-mono text-xs h-10"
                         />
@@ -1347,12 +1407,12 @@ const AutoSubtitles = () => {
                         <input
                           type="color"
                           value={effectiveColors.highlight}
-                          onChange={(e) => setCustomHighlightColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customHighlightColor: e.target.value })}
                           className="w-10 h-10 rounded-lg border border-border cursor-pointer"
                         />
                         <Input
                           value={customHighlightColor || selectedStyleObj?.colors.highlight || ''}
-                          onChange={(e) => setCustomHighlightColor(e.target.value)}
+                          onChange={(e) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { customHighlightColor: e.target.value })}
                           placeholder={selectedStyleObj?.colors.highlight}
                           className="font-mono text-xs h-10"
                         />
