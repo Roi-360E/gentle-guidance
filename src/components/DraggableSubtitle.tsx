@@ -216,6 +216,9 @@ export function DraggableSubtitle({
                           display: 'inline-block',
                           fontFamily: "'Nunito', 'Arial Rounded MT Bold', 'Arial Black', sans-serif",
                           transition: 'color 0.08s ease',
+                          ...(colors.bg === 'transparent' ? {
+                            textShadow: '2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000',
+                          } : {}),
                         }}
                       >
                         {word.toUpperCase()}
