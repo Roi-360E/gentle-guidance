@@ -1304,30 +1304,18 @@ const AutoSubtitles = () => {
                   </div>
                 </div>
 
-                {/* Posição & Tamanho */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Posição</Label>
-                    <Select value={subtitlePosition} onValueChange={(v) => setSubtitlePosition(v as any)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bottom">Embaixo</SelectItem>
-                        <SelectItem value="center">Centro</SelectItem>
-                        <SelectItem value="top">Topo</SelectItem>
-                      </SelectContent>
-                    </Select>
+                {/* Posição & Tamanho — controlados arrastando a legenda no preview */}
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Move className="w-4 h-4 text-primary" />
+                    <Label className="text-sm font-semibold">Posição e Tamanho</Label>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Tamanho da Fonte</Label>
-                    <Select value={String(fontSizePct)} onValueChange={(v) => setFontSizePct(Number(v))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3">Pequeno (3%)</SelectItem>
-                        <SelectItem value="5">Médio (5%)</SelectItem>
-                        <SelectItem value="7">Grande (7%)</SelectItem>
-                        <SelectItem value="9">Extra Grande (9%)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Arraste a legenda no preview acima para reposicionar. Use as alças nos cantos para redimensionar.
+                  </p>
+                  <div className="flex gap-4 text-xs font-mono text-muted-foreground">
+                    <span>Posição: {Math.round(subtitlePositionY)}%</span>
+                    <span>Fonte: {fontSizePct}%</span>
                   </div>
                 </div>
 
