@@ -59,7 +59,6 @@ export async function extractAudioAsFile(videoFile: File): Promise<File> {
     '-i', inputName,
     '-ar', '16000',
     '-ac', '1',
-    '-t', '120',
     '-f', 'wav',
     '-y', outputName,
   ]);

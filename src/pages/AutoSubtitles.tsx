@@ -237,10 +237,22 @@ const AutoSubtitles = () => {
   const [previewTime, setPreviewTime] = useState(0);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
 
-  // Lista flat de vídeos transcritos para o carrossel
+  // Lista flat de vídeos transcritos para o carrossel, com índices de seção/vídeo
+  const transcribedVideosMeta = useMemo(() => {
+    const result: { video: BatchVideo; si: number; vi: number }[] = [];
+    sections.forEach((section, si) => {
+      section.videos.forEach((v, vi) => {
+        if (v.transcription && v.transcription.segments.length > 0) {
+          result.push({ video: v, si, vi });
+        }
+      });
+    });
+    return result;
+  }, [sections]);
+
   const transcribedVideos = useMemo(() =>
-    allVideos.filter(v => v.transcription && v.transcription.segments.length > 0),
-    [allVideos]
+    transcribedVideosMeta.map(m => m.video),
+    [transcribedVideosMeta]
   );
 
   // Word groups do vídeo atual no carrossel
@@ -1155,54 +1167,29 @@ const AutoSubtitles = () => {
                     >
                       Próximo <ChevronRight className="w-4 h-4" />
                     </Button>
-                  </div>
+                   </div>
+
+                  {/* Editor de transcrição do vídeo atual */}
+                  {(() => {
+                    const meta = transcribedVideosMeta[carouselIndex];
+                    if (!meta?.video.transcription) return null;
+                    return (
+                      <div className="space-y-2 pt-2 border-t border-border">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Pencil className="w-3 h-3" /> Editar legenda deste vídeo
+                        </Label>
+                        <Textarea
+                          className="min-h-[80px] text-sm font-mono bg-muted/30 border-border"
+                          value={meta.video.transcription.segments.map(s => s.text).join('\n')}
+                          onChange={(e) => handleUpdateTranscriptionText(meta.si, meta.vi, e.target.value)}
+                          placeholder="Uma linha por segmento de legenda..."
+                        />
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             )}
-
-            {/* ── Editor de Transcrição ── */}
-            <Card className="border-border bg-card">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Pencil className="w-5 h-5 text-primary" /> Editar Legendas
-                </CardTitle>
-                <CardDescription className="text-muted-foreground">
-                  Corrija a transcrição gerada pela IA. Cada linha será um segmento de legenda.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="max-h-[400px] overflow-y-auto space-y-4 pr-1">
-                  {sections.map((section, si) => {
-                    const vidsWithTranscription = section.videos
-                      .map((v, vi) => ({ v, vi }))
-                      .filter(({ v }) => v.transcription && v.transcription.segments.length > 0);
-                    if (vidsWithTranscription.length === 0) return null;
-                    return (
-                      <div key={si} className="space-y-3">
-                        <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${section.accentColor}`} />
-                          {section.label}
-                        </h4>
-                        {vidsWithTranscription.map(({ v, vi }) => (
-                          <div key={vi} className="space-y-1.5">
-                            <Label className="text-xs text-foreground flex items-center gap-1.5">
-                              <Film className="w-3 h-3" />
-                              {v.name}
-                            </Label>
-                            <Textarea
-                              className="min-h-[80px] text-sm font-mono bg-muted/30 border-border"
-                              value={v.transcription!.segments.map(s => s.text).join('\n')}
-                              onChange={(e) => handleUpdateTranscriptionText(si, vi, e.target.value)}
-                              placeholder="Uma linha por segmento de legenda..."
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
 
             {/* ── Estilo das Legendas ── */}
             <Card className="border-border bg-card">
