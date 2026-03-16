@@ -16,6 +16,7 @@ interface DraggableSubtitleProps {
   textEffects?: React.CSSProperties;
   useBold: boolean;
   textAlign?: 'left' | 'center' | 'right';
+  maxLines?: number;
 }
 
 export function DraggableSubtitle({
@@ -29,6 +30,7 @@ export function DraggableSubtitle({
   textEffects = {},
   useBold,
   textAlign = 'center',
+  maxLines = 2,
 }: DraggableSubtitleProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -169,26 +171,44 @@ export function DraggableSubtitle({
             onMouseDown={handleDragStart}
             onTouchStart={handleDragStart}
           >
-            {words.map((word, i) => {
-              const isHighlighted = i === highlightIndex;
-              return (
-                <span
-                  key={i}
-                  className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide transition-colors duration-75`}
-                  style={{
-                    color: isHighlighted ? colors.highlight : colors.primary,
-                    fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
-                    ...textEffects,
-                    marginRight: i < words.length - 1 ? '0.3em' : '0',
-                    display: 'inline-block',
-                    transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
-                    transition: 'transform 0.1s ease, color 0.1s ease',
-                  }}
-                >
-                  {word.toUpperCase()}
+            {(() => {
+              // Split words into lines based on maxLines
+              const lines: string[][] = [];
+              if (maxLines <= 1) {
+                lines.push(words);
+              } else {
+                const perLine = Math.ceil(words.length / maxLines);
+                for (let i = 0; i < words.length; i += perLine) {
+                  lines.push(words.slice(i, i + perLine));
+                }
+              }
+              let wordIndex = 0;
+              return lines.map((lineWords, li) => (
+                <span key={li} style={{ display: 'block', textAlign }}>
+                  {lineWords.map((word) => {
+                    const idx = wordIndex++;
+                    const isHighlighted = idx === highlightIndex;
+                    return (
+                      <span
+                        key={idx}
+                        className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide transition-colors duration-75`}
+                        style={{
+                          color: isHighlighted ? colors.highlight : colors.primary,
+                          fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
+                          ...textEffects,
+                          marginRight: idx < words.length - 1 ? '0.3em' : '0',
+                          display: 'inline-block',
+                          transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
+                          transition: 'transform 0.1s ease, color 0.1s ease',
+                        }}
+                      >
+                        {word.toUpperCase()}
+                      </span>
+                    );
+                  })}
                 </span>
-              );
-            })}
+              ));
+            })()}
           </span>
 
           {/* Size indicator while resizing */}
