@@ -220,7 +220,7 @@ export async function burnSubtitlesIntoVideo(
   console.log('[SubtitleBurner] Video:', videoWidth, 'x', videoHeight, 'fontSizePct:', options.fontSizePct);
 
   const filterStr = buildDrawtextFilter(options, fontFile, videoHeight, videoWidth);
-  const wordGroups = splitSegmentsIntoWordGroups(options.segments, options.wordsPerGroup || 4);
+  const wordGroups = splitSegmentsIntoWordGroups(options.segments, options.wordsPerGroup || 4, options.maxLines || 2);
   console.log('[SubtitleBurner] Word groups:', wordGroups.length, 'Filter length:', filterStr.length);
 
   let duration = 0;
