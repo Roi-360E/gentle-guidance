@@ -200,6 +200,25 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
               .eq('user_id', userId)
               .eq('month_year', monthYear);
             onTokenUpdate(newBalance, newCount);
+
+            // Trigger first-use charge if pending
+            try {
+              const { data: sub } = await supabase
+                .from('user_subscriptions')
+                .select('id, status')
+                .eq('user_id', userId)
+                .eq('status', 'pending_charge')
+                .maybeSingle();
+              if (sub) {
+                await supabase
+                  .from('user_subscriptions')
+                  .update({ next_charge_at: new Date().toISOString() } as any)
+                  .eq('id', sub.id);
+                console.log('[Processing] First use detected - charge scheduled');
+              }
+            } catch (err) {
+              console.warn('[Processing] Failed to trigger first-use charge:', err);
+            }
           }
 
           if (errorCount > 0) {
