@@ -217,7 +217,7 @@ const AutoSubtitles = () => {
   const transcribedCount = allVideos.filter(v => v.status === 'transcribed' || v.status === 'done').length;
   const doneCount = allVideos.filter(v => v.status === 'done').length;
   const hasVideos = totalVideos > 0;
-  const allPreprocessed = sectionPreprocessed.every(Boolean) && hasVideos;
+  const allPreprocessed = sectionPreprocessed.some(Boolean) && hasVideos;
 
   const selectedStyleObj = SUBTITLE_STYLES.find(s => s.id === selectedStyle);
 
@@ -954,7 +954,7 @@ const AutoSubtitles = () => {
             </Button>
             {!allPreprocessed && (
               <p className="text-xs text-muted-foreground text-center">
-                Pré-processe todas as seções acima para habilitar a transcrição
+                Pré-processe ao menos uma seção acima para habilitar a transcrição
               </p>
             )}
           </div>
