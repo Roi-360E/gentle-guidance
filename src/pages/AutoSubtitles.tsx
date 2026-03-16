@@ -1096,49 +1096,19 @@ const AutoSubtitles = () => {
                             style={{ display: 'block' }}
                             onTimeUpdate={(e) => setPreviewTime(e.currentTarget.currentTime)}
                           />
-                          {/* Overlay de legenda sincronizada */}
+                          {/* Overlay de legenda arrastável estilo CapCut */}
                           {activeWordGroup && (
-                            <div
-                              className={`absolute inset-x-0 pointer-events-none px-[5%] text-center ${
-                                subtitlePosition === 'top' ? 'top-[8%]'
-                                : subtitlePosition === 'center' ? 'top-1/2 -translate-y-1/2'
-                                : 'bottom-[8%]'
-                              }`}
-                            >
-                              <span
-                                className="inline-block max-w-[90%]"
-                                style={{
-                                  backgroundColor: effectiveColors.bg !== 'transparent'
-                                    ? effectiveColors.bg : 'transparent',
-                                  padding: effectiveColors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
-                                  borderRadius: effectiveColors.bg !== 'transparent' ? '8px' : '0',
-                                }}
-                              >
-                                {activeWordGroup.words.map((word, i) => {
-                                  const isHighlighted = i === activeWordGroup.highlightIndex;
-                                  const effects = getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors });
-                                  return (
-                                    <span
-                                      key={i}
-                                      className={`${useBold ? 'font-black' : 'font-semibold'} uppercase tracking-wide transition-colors duration-75`}
-                                      style={{
-                                        color: isHighlighted
-                                          ? effectiveColors.highlight
-                                          : effectiveColors.primary,
-                                        fontSize: `clamp(14px, ${fontSizePct * 0.6}vw, 42px)`,
-                                        ...effects,
-                                        marginRight: i < activeWordGroup.words.length - 1 ? '0.3em' : '0',
-                                        display: 'inline-block',
-                                        transform: isHighlighted ? 'scale(1.05)' : 'scale(1)',
-                                        transition: 'transform 0.1s ease, color 0.1s ease',
-                                      }}
-                                    >
-                                      {word.toUpperCase()}
-                                    </span>
-                                  );
-                                })}
-                              </span>
-                            </div>
+                            <DraggableSubtitle
+                              words={activeWordGroup.words}
+                              highlightIndex={activeWordGroup.highlightIndex}
+                              positionY={subtitlePositionY}
+                              fontSizePct={fontSizePct}
+                              onPositionChange={setSubtitlePositionY}
+                              onFontSizeChange={setFontSizePct}
+                              colors={effectiveColors}
+                              textEffects={getTextEffects(selectedStyle, { ...selectedStyleObj.colors, ...effectiveColors })}
+                              useBold={useBold}
+                            />
                           )}
                         </div>
                       </div>
