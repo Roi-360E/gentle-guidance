@@ -330,6 +330,7 @@ const AutoSubtitles = () => {
         transcription: null,
         outputUrl: null,
         dimensions: dims,
+        subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS },
       });
     }
 
