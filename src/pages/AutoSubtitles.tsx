@@ -671,10 +671,22 @@ const AutoSubtitles = () => {
   }, []);
 
   /* ──── Efeito de estilo para preview ──── */
-  const getTextEffects = useCallback((styleId: string, colors: typeof SUBTITLE_STYLES[0]['colors']) => {
+  const getTextEffects = useCallback((styleId: string, colors: typeof SUBTITLE_STYLES[0]['colors']): React.CSSProperties => {
     const isNeon = styleId === 'neon';
     const isFire = styleId === 'fire';
     const isMinimal = styleId === 'minimal';
+    const isGreenBox = styleId === 'greenbox';
+
+    if (isGreenBox) {
+      return {
+        WebkitTextStroke: 'none',
+        textShadow: 'none',
+        fontFamily: '"Arial Rounded MT Bold", "Nunito", "Varela Round", sans-serif',
+        letterSpacing: '0.02em',
+        paintOrder: 'stroke fill',
+      } as React.CSSProperties;
+    }
+
     return {
       WebkitTextStroke: isMinimal ? 'none' : `${isNeon ? 3 : 2}px ${colors.outline}`,
       textShadow: isNeon

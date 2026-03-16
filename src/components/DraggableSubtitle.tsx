@@ -183,8 +183,8 @@ export function DraggableSubtitle({
               maxWidth: maxLines <= 1 ? 'none' : '90%',
               whiteSpace: maxLines <= 1 ? 'nowrap' : 'normal',
               backgroundColor: colors.bg !== 'transparent' ? colors.bg : 'transparent',
-              padding: colors.bg !== 'transparent' ? '4px 14px' : '2px 4px',
-              borderRadius: colors.bg !== 'transparent' ? '8px' : '0',
+              padding: colors.bg !== 'transparent' ? '6px 18px' : '2px 4px',
+              borderRadius: colors.bg !== 'transparent' ? '12px' : '0',
             }}
             onMouseDown={handleDragStart}
             onTouchStart={handleDragStart}
