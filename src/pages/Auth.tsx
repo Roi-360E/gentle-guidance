@@ -285,8 +285,6 @@ const Auth = () => {
               </p>
             </div>
           )}
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {view === 'signup' && (
