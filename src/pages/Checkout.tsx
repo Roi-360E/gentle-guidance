@@ -396,7 +396,7 @@ export default function Checkout() {
         <div className="text-center space-y-4">
           <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
           <p className="text-foreground text-lg font-semibold">Plano não encontrado</p>
-          <Button onClick={() => navigate('/plans')}>Ver Planos Disponíveis</Button>
+          <Button onClick={() => navigate('/auth')}>Escolher um Plano</Button>
         </div>
       </div>
     );
