@@ -654,7 +654,7 @@ const Index = () => {
 
 
         {/* CTA banner */}
-        {(hasShortsReels || isAdmin) && (
+        {isAdmin && (
           <div className="flex justify-center pb-8">
             <Button
               className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
