@@ -802,7 +802,7 @@ export function ScriptChatFloat() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || isLoading || !user) return;
+    if (!input.trim() || isLoading || !user || !hasChatAccess) return;
 
     let convId = activeConversation;
 
