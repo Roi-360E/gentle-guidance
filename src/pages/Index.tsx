@@ -107,6 +107,7 @@ const Index = () => {
         setPlanName(planData.name);
         setHasAutoSubtitles((planData as any).has_auto_subtitles === true);
         setHasVoiceRewrite((planData as any).has_voice_rewrite === true);
+        setHasShortsReels((planData as any).has_shorts_reels === true);
       }
       // Check for active testimonial access (skip for admin to allow plan testing)
       if (user.email !== 'matheuslaurindo900@gmail.com') {
