@@ -855,7 +855,7 @@ export default function AdminPlans() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Tokens</Label>
+                        <Label className="text-xs">Tokens <span className="text-muted-foreground font-normal">(1 token = 1 vídeo)</span></Label>
                         <Input
                           type="number"
                           min="0"
