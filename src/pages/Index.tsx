@@ -355,21 +355,18 @@ const Index = () => {
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            {hasAutoSubtitles && (
-              <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/auto-subtitles'); setMobileMenuOpen(false); }}>
-                <Type className="w-4 h-4" /> Legendas Automáticas
-              </Button>
-            )}
-            {hasVoiceRewrite && (
-              <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/voice-rewrite'); setMobileMenuOpen(false); }}>
-                <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
-              </Button>
-            )}
-            {hasShortsReels && (
-              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/shorts-reels'); setMobileMenuOpen(false); }}>
-                🚀 Novas funcionalidades
-              </Button>
-            )}
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasAutoSubtitles) { navigate('/auto-subtitles'); } else { setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' }); } setMobileMenuOpen(false); }}>
+              <Type className="w-4 h-4" /> Legendas Automáticas
+              {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasVoiceRewrite) { navigate('/voice-rewrite'); } else { setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' }); } setMobileMenuOpen(false); }}>
+              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+              {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { if (hasShortsReels) { navigate('/shorts-reels'); } else { setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' }); } setMobileMenuOpen(false); }}>
+              🚀 Novas funcionalidades
+              {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
                 <LogOut className="w-4 h-4" /> Sair
