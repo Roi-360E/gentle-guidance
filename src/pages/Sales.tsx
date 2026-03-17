@@ -372,7 +372,7 @@ export default function Sales() {
             <Button
               size="lg"
               className="w-full rounded-full text-base gap-2 py-6"
-              onClick={() => navigate('/auth')}
+              onClick={() => navigate('/auth?plano=professional')}
             >
               <Zap className="w-5 h-5" /> QUERO O ESCALAX COM DESCONTO DE LANÇAMENTO
             </Button>
