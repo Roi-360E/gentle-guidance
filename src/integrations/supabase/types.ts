@@ -300,6 +300,7 @@ export type Database = {
           features: Json
           has_ai_chat: boolean
           has_auto_subtitles: boolean
+          has_shorts_reels: boolean
           has_voice_rewrite: boolean
           icon: string
           id: string
@@ -319,6 +320,7 @@ export type Database = {
           features?: Json
           has_ai_chat?: boolean
           has_auto_subtitles?: boolean
+          has_shorts_reels?: boolean
           has_voice_rewrite?: boolean
           icon?: string
           id?: string
@@ -338,6 +340,7 @@ export type Database = {
           features?: Json
           has_ai_chat?: boolean
           has_auto_subtitles?: boolean
+          has_shorts_reels?: boolean
           has_voice_rewrite?: boolean
           icon?: string
           id?: string
