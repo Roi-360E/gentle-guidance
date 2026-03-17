@@ -325,6 +325,7 @@ const ShortsReels = () => {
         }}
         onMouseDown={onCanvasMouseDown}
         onMouseMove={onMouseMove}
+        onWheel={onWheel}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
       >
