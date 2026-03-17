@@ -589,7 +589,7 @@ function CreationBlockNode({
               value={prompt}
               onChange={(e) => onUpdateData(node.id, "prompt", e.target.value)}
               placeholder="Descreva o criativo que deseja gerar..."
-              className="min-h-[80px] text-sm bg-gray-50 border-gray-200 resize-none"
+              className="min-h-[80px] text-sm bg-gray-50 border-gray-200 resize-none text-gray-900 placeholder:text-gray-400"
             />
           </div>
 
