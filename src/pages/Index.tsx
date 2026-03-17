@@ -233,7 +233,6 @@ const Index = () => {
     if (!hasEnoughTokens(currentPlan, tokenBalance, cost.total)) {
       toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Reduza as combinações ou entre em contato com o suporte.`);
       return;
-      return;
     }
 
     // Track StartTrial on first processing
