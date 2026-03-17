@@ -11,6 +11,8 @@ import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { FacebookPixelProvider } from "@/components/FacebookPixelProvider";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import PlansPage from "./pages/PlansPage";
+import SignupPage from "./pages/SignupPage";
 import SubtitleEditor from "./pages/SubtitleEditor";
 import Plans from "./pages/Plans";
 import Downloads from "./pages/Downloads";
