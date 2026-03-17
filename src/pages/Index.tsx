@@ -231,8 +231,8 @@ const Index = () => {
 
     const cost = calculateTokenCost(totalCombinations, settings);
     if (!hasEnoughTokens(currentPlan, tokenBalance, cost.total)) {
-      toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Faça upgrade ou reduza as combinações.`);
-      navigate('/plans');
+      toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Reduza as combinações ou entre em contato com o suporte.`);
+      return;
       return;
     }
 
