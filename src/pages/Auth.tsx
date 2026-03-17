@@ -37,6 +37,9 @@ interface PlanData {
 const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
 const Auth = () => {
+  const [searchParams] = useSearchParams();
+  const planFromUrl = searchParams.get('plano');
+
   // 'login' | 'plans' | 'signup'
   const [view, setView] = useState<'login' | 'plans' | 'signup'>('login');
   const [email, setEmail] = useState('');
@@ -52,6 +55,33 @@ const Auth = () => {
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanData | null>(null);
+
+  // Auto-select plan from URL param
+  useEffect(() => {
+    if (planFromUrl) {
+      setPlansLoading(true);
+      supabase
+        .from('subscription_plans' as any)
+        .select('*')
+        .eq('is_active', true)
+        .eq('plan_key', planFromUrl)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            const plan: PlanData = {
+              ...data as any,
+              features: Array.isArray((data as any).features) ? (data as any).features : JSON.parse((data as any).features || '[]'),
+            };
+            setSelectedPlan(plan);
+            setView('signup');
+          } else {
+            // Plan not found, show plans view
+            setView('plans');
+          }
+          setPlansLoading(false);
+        });
+    }
+  }, [planFromUrl]);
 
   // Load plans when switching to plans view
   useEffect(() => {
