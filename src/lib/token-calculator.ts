@@ -31,6 +31,6 @@ export function hasEnoughTokens(
   tokenBalance: number,
   cost: number
 ): boolean {
-  if (plan === 'unlimited') return true;
+  if (plan === 'unlimited' || plan === 'enterprise') return true;
   return tokenBalance >= cost;
 }
