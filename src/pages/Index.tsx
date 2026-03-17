@@ -289,6 +289,9 @@ const Index = () => {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
+              <Coins className="w-4 h-4" /> Planos
+            </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Home className="w-4 h-4" /> Home
             </Button>
@@ -329,6 +332,9 @@ const Index = () => {
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-border bg-background px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200">
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/plans'); setMobileMenuOpen(false); }}>
+              <Coins className="w-4 h-4" /> Planos
+            </Button>
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setMobileMenuOpen(false)}>
               <Home className="w-4 h-4" /> Home
             </Button>
@@ -409,16 +415,26 @@ const Index = () => {
               </p>
             </div>
           </div>
-          {isAdmin && (
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full border-primary/40 text-primary"
+                onClick={() => navigate('/admin/plans')}
+              >
+                Painel Admin
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
-              className="rounded-full border-primary/40 text-primary"
-              onClick={() => navigate('/admin/plans')}
+              className="rounded-full border-accent/40 text-accent-foreground"
+              onClick={() => navigate('/plans')}
             >
-              Painel Admin
+              <Zap className="w-3.5 h-3.5 mr-1" /> Upgrade
             </Button>
-          )}
+          </div>
         </div>
 
         {/* Video Format Selector */}
