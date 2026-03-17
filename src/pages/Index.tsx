@@ -292,9 +292,11 @@ const Index = () => {
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Home className="w-4 h-4" /> Home
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
-              <Zap className="w-4 h-4" /> Planos
-            </Button>
+            {isAdmin && (
+              <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/admin/plans')}>
+                <Zap className="w-4 h-4" /> Painel Admin
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/downloads')}>
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
