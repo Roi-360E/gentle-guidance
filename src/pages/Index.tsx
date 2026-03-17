@@ -289,7 +289,9 @@ const Index = () => {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
+              <Coins className="w-4 h-4" /> Planos
+            </Button>
               <Home className="w-4 h-4" /> Home
             </Button>
             {isAdmin && (
