@@ -100,15 +100,21 @@ const Index = () => {
       const planKey = data?.plan || 'free';
       const { data: planData } = await supabase
         .from('subscription_plans')
-        .select('name, has_auto_subtitles, has_voice_rewrite, has_shorts_reels')
+        .select('name, has_ai_chat, has_auto_subtitles, has_voice_rewrite, has_shorts_reels')
         .eq('plan_key', planKey)
         .eq('is_active', true)
         .maybeSingle();
       if (planData) {
         setPlanName(planData.name);
+        setHasAiChat((planData as any).has_ai_chat === true);
         setHasAutoSubtitles((planData as any).has_auto_subtitles === true);
         setHasVoiceRewrite((planData as any).has_voice_rewrite === true);
         setHasShortsReels((planData as any).has_shorts_reels === true);
+      } else {
+        setHasAiChat(false);
+        setHasAutoSubtitles(false);
+        setHasVoiceRewrite(false);
+        setHasShortsReels(false);
       }
       // Check for active testimonial access (skip for admin to allow plan testing)
       if (user.email !== 'matheuslaurindo900@gmail.com') {
