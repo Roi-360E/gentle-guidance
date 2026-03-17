@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft, Plus, Trash2, Play, Image, Upload, Link2,
   GripVertical, Sparkles, Video, Home, Lock, X, Move,
-  ZoomIn, ZoomOut, Maximize2
+  ZoomIn, ZoomOut, Maximize2, Download
 } from "lucide-react";
 
 /* ─── Types ─── */
