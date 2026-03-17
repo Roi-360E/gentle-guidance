@@ -46,8 +46,10 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // Legacy accounts may not have a subscription row yet.
+        // Only block access when there is an explicit blocked status.
         if (!data) {
-          setHasSubscription(false);
+          setHasSubscription(true);
         } else if (data.status === 'blocked') {
           setIsBlocked(true);
           setHasSubscription(true);
