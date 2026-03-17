@@ -314,21 +314,18 @@ const Index = () => {
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            {hasAutoSubtitles && (
-              <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/auto-subtitles')}>
-                <Type className="w-4 h-4" /> Legendas Auto
-              </Button>
-            )}
-            {hasVoiceRewrite && (
-              <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/voice-rewrite')}>
-                <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
-              </Button>
-            )}
-            {hasShortsReels && (
-              <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/shorts-reels')}>
-                🚀 Novidades
-              </Button>
-            )}
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasAutoSubtitles ? navigate('/auto-subtitles') : setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' })}>
+              <Type className="w-4 h-4" /> Legendas Auto
+              {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasVoiceRewrite ? navigate('/voice-rewrite') : setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' })}>
+              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+              {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => hasShortsReels ? navigate('/shorts-reels') : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}>
+              🚀 Novidades
+              {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair
             </Button>
