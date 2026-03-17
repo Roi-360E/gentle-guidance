@@ -675,6 +675,7 @@ export default function AdminPlans() {
           has_ai_chat: plan.has_ai_chat,
           has_auto_subtitles: plan.has_auto_subtitles,
           has_voice_rewrite: plan.has_voice_rewrite,
+          has_shorts_reels: plan.has_shorts_reels,
         };
 
         if (plan.id) {
