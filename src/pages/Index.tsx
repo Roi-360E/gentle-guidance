@@ -660,18 +660,23 @@ const Index = () => {
 
 
         {/* CTA banner */}
-        {hasShortsReels && (
-          <div className="flex justify-center pb-8">
-            <Button
-              className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
-              onClick={() => navigate("/shorts-reels")}
-            >
-              🚀 Novas funcionalidades
-            </Button>
-          </div>
-        )}
+        <div className="flex justify-center pb-8">
+          <Button
+            className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
+            onClick={() => hasShortsReels ? navigate("/shorts-reels") : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}
+          >
+            🚀 Novas funcionalidades
+            {!hasShortsReels && <Lock className="w-4 h-4 ml-2" />}
+          </Button>
+        </div>
       </main>
-      {hasAiChat && <ScriptChatFloat />}
+      <ScriptChatFloat />
+      <FeatureUpsellDialog
+        open={!!upsellFeature}
+        onOpenChange={(open) => !open && setUpsellFeature(null)}
+        featureKey={upsellFeature?.key || 'has_shorts_reels'}
+        featureName={upsellFeature?.name || ''}
+      />
       <NewUserWelcomePopup userId={user?.id} currentPlan={currentPlan} tokenBalance={tokenBalance} />
     </div>
   );
