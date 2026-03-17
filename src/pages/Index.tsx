@@ -80,6 +80,7 @@ const Index = () => {
   const [hooksStarted, setHooksStarted] = useState(false);
   const [bodiesStarted, setBodiesStarted] = useState(false);
   const [ctasStarted, setCtasStarted] = useState(false);
+  const [upsellFeature, setUpsellFeature] = useState<{ key: 'has_ai_chat' | 'has_auto_subtitles' | 'has_voice_rewrite' | 'has_shorts_reels'; name: string } | null>(null);
 
   // Load user plan data and profile name
   useEffect(() => {
