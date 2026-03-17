@@ -224,7 +224,14 @@ const ShortsReels = () => {
   }, []);
 
   const onCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    // Allow panning from canvas bg, SVG layer, or any non-interactive area
+    // Ctrl+click anywhere = pan mode
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      isPanning.current = true;
+      panStart.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+    // Normal click on empty canvas area = pan
     const tag = (e.target as HTMLElement).tagName.toLowerCase();
     const isCanvasBg = e.target === canvasRef.current || (e.target as HTMLElement).classList.contains("canvas-bg");
     const isSvgArea = tag === "svg" || tag === "path" || tag === "circle" || tag === "g";
