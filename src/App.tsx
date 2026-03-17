@@ -43,6 +43,7 @@ const App = () => (
           <ProcessingProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
               <Route path="/vendas" element={<Sales />} />
