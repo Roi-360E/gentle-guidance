@@ -152,6 +152,17 @@ const AutoSubtitles = () => {
       }
 
       setIsAccessLoading(true);
+
+      // Admin always has access
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (isAdmin) {
+        if (!isMounted) return;
+        setHasAccess(true);
+        setAllowedPlanNames([]);
+        setIsAccessLoading(false);
+        return;
+      }
+
       const monthYear = new Date().toISOString().slice(0, 7);
 
       const [usageRes, enabledPlansRes] = await Promise.all([
