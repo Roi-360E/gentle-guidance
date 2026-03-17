@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Home, Sparkles } from 'lucide-react';
+import { CheckCircle2, Home, Sparkles, Crown, Zap } from 'lucide-react';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,6 +12,8 @@ const TEST_PLANS = [
   { name: 'Plano Pro', value: 47.00, key: 'pro' },
   { name: 'Plano Premium', value: 97.00, key: 'premium' },
 ];
+
+const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
 async function fireCAPI(plan: { name: string; value: number; key: string }, userId?: string) {
   try {
@@ -24,11 +26,8 @@ async function fireCAPI(plan: { name: string; value: number; key: string }, user
         event_source_url: window.location.href,
       },
     });
-    if (error) {
-      console.warn('[ThankYou] CAPI edge function error:', error);
-    } else {
-      console.log('[ThankYou] CAPI Purchase sent via server for', plan.name, data);
-    }
+    if (error) console.warn('[ThankYou] CAPI edge function error:', error);
+    else console.log('[ThankYou] CAPI Purchase sent via server for', plan.name, data);
   } catch (e) {
     console.warn('[ThankYou] CAPI error:', e);
   }
@@ -43,6 +42,41 @@ export default function ThankYou() {
   const isTest = searchParams.get('test') === '1';
   const isReal = searchParams.get('real') === '1';
 
+  const [purchasedPlan, setPurchasedPlan] = useState<{
+    name: string; key: string; value: number; method: string; icon?: string; color?: string;
+  } | null>(null);
+
+  // Load plan info
+  useEffect(() => {
+    const planKey = localStorage.getItem('checkout_plan_key') || '';
+    const planName = localStorage.getItem('checkout_plan_name') || '';
+    const planValue = parseFloat(localStorage.getItem('checkout_plan_value') || '0');
+    const method = localStorage.getItem('checkout_method') || 'Cartão';
+
+    if (planKey) {
+      // Fetch icon/color from DB
+      supabase
+        .from('subscription_plans' as any)
+        .select('icon, color, name')
+        .eq('plan_key', planKey)
+        .single()
+        .then(({ data }) => {
+          const d = data as any;
+          setPurchasedPlan({
+            name: d?.name || planName,
+            key: planKey,
+            value: planValue,
+            method,
+            icon: d?.icon,
+            color: d?.color,
+          });
+        });
+    } else if (!isTest && !isReal) {
+      setPurchasedPlan({ name: 'Seu Plano', key: '', value: 0, method });
+    }
+  }, [isTest, isReal]);
+
+  // Fire pixel events
   useEffect(() => {
     if (pixelFired.current) return;
 
@@ -52,7 +86,6 @@ export default function ThankYou() {
     let method: string;
 
     if (isReal) {
-      // Disparo REAL de um único evento Purchase (sem test_event_code)
       planName = 'Plano Starter';
       planValue = 38.00;
       planKey = 'starter';
@@ -71,35 +104,21 @@ export default function ThankYou() {
 
     const fireEvent = () => {
       pixelFired.current = true;
-      console.log('[ThankYou] Disparando Purchase', { planName, planValue, planKey, method, isTest, isReal });
-
-      // Browser-side fbq
       trackPixelEvent('Purchase', {
-        content_name: planName,
-        content_category: method,
-        value: planValue,
-        currency: 'BRL',
-        content_ids: [planKey],
-        content_type: 'product',
+        content_name: planName, content_category: method,
+        value: planValue, currency: 'BRL', content_ids: [planKey], content_type: 'product',
       }, user?.id);
 
-      // CAPI direct call for reliability
       fireCAPI({ name: planName, value: planValue, key: planKey }, user?.id);
 
-      // If test mode, fire all plans to seed multiple events
       if (isTest) {
         TEST_PLANS.forEach((p, i) => {
           setTimeout(() => {
             trackPixelEvent('Purchase', {
-              content_name: p.name,
-              content_category: 'Teste',
-              value: p.value,
-              currency: 'BRL',
-              content_ids: [p.key],
-              content_type: 'product',
+              content_name: p.name, content_category: 'Teste',
+              value: p.value, currency: 'BRL', content_ids: [p.key], content_type: 'product',
             }, user?.id);
             fireCAPI(p, user?.id);
-            console.log(`[ThankYou] Test Purchase fired: ${p.name} R$${p.value}`);
           }, (i + 1) * 1000);
         });
       }
@@ -127,6 +146,8 @@ export default function ThankYou() {
     }
   }, [user?.id, isTest, isReal]);
 
+  const PlanIcon = purchasedPlan?.icon ? (ICON_MAP[purchasedPlan.icon] || Sparkles) : Sparkles;
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <motion.div
@@ -149,25 +170,51 @@ export default function ThankYou() {
             Pagamento Confirmado! 🎉
           </h1>
           <p className="text-muted-foreground text-lg">
-            Obrigado pela sua compra! Seu plano já está ativo e você pode começar a usar todas as funcionalidades agora.
+            Obrigado pela sua compra! Seu plano já está ativo.
           </p>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-muted/50 rounded-xl p-6 space-y-3"
-        >
-          <Sparkles className="w-8 h-8 text-primary mx-auto" />
-          <p className="text-sm text-muted-foreground">
-            {isReal
-              ? '✅ Evento Purchase REAL disparado: Plano Pro R$47,00 via Browser + CAPI.'
-              : isTest
-              ? 'Modo teste: eventos Purchase disparados para todos os planos (Starter R$27, Pro R$47, Premium R$97) via Browser + CAPI.'
-              : 'Seu plano foi ativado automaticamente. Aproveite todos os recursos disponíveis!'}
-          </p>
-        </motion.div>
+        {/* Purchased plan card */}
+        {purchasedPlan && !isTest && !isReal && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="rounded-2xl border border-primary/30 bg-primary/5 p-6 space-y-4"
+          >
+            <div className="flex items-center justify-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                <PlanIcon className="w-6 h-6 text-primary" />
+              </div>
+              <div className="text-left">
+                <p className="text-lg font-bold text-foreground">{purchasedPlan.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  R$ {purchasedPlan.value.toFixed(2).replace('.', ',')} / mês
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Plano ativado com sucesso</span>
+            </div>
+          </motion.div>
+        )}
+
+        {(isTest || isReal) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-muted/50 rounded-xl p-6 space-y-3"
+          >
+            <Sparkles className="w-8 h-8 text-primary mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              {isReal
+                ? '✅ Evento Purchase REAL disparado: Plano Pro R$47,00 via Browser + CAPI.'
+                : 'Modo teste: eventos Purchase disparados para todos os planos via Browser + CAPI.'}
+            </p>
+          </motion.div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -180,7 +227,7 @@ export default function ThankYou() {
             className="w-full gap-2 text-lg py-6"
           >
             <Home className="w-5 h-5" />
-            Ir para o início
+            Acessar o Aplicativo
           </Button>
         </motion.div>
       </motion.div>
