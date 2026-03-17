@@ -29,8 +29,7 @@ import ThankYou from "./pages/ThankYou";
 import ShortsReels from "./pages/ShortsReels";
 import Onboarding from "./pages/Onboarding";
 
-const Checkout = lazy(() => import("./pages/Checkout"));
-
+// Checkout is now integrated into SignupPage at /cadastro/:plano
 const queryClient = new QueryClient();
 
 const App = () => (
