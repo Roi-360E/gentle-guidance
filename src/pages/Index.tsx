@@ -67,6 +67,7 @@ const Index = () => {
   const [planName, setPlanName] = useState<string>('Gratuito');
   const [hasAutoSubtitles, setHasAutoSubtitles] = useState(false);
   const [hasVoiceRewrite, setHasVoiceRewrite] = useState(false);
+  const [hasShortsReels, setHasShortsReels] = useState(false);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
