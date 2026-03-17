@@ -73,9 +73,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  // If user has no subscription, redirect to auth to pick a plan and pay
+  // If user has no subscription, redirect to plans to pick a plan and pay
   if (hasSubscription === false && location.pathname !== '/onboarding') {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/plans" replace />;
   }
 
   // If user is blocked, show blocked message
