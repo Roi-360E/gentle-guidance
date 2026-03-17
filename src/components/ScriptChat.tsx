@@ -134,30 +134,17 @@ export function ScriptChatFloat() {
     if (!user) return;
 
     const checkChatAccess = async () => {
-      // Admin always has access
-      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
-      if (isAdmin) { setHasChatAccess(true); return; }
-
       const monthYear = new Date().toISOString().slice(0, 7);
 
-      const [usageRes, profileRes] = await Promise.all([
-        supabase
-          .from('video_usage')
-          .select('plan')
-          .eq('user_id', user.id)
-          .eq('month_year', monthYear)
-          .maybeSingle(),
-        supabase
-          .from('profiles')
-          .select('has_ai_chat')
-          .eq('user_id', user.id)
-          .maybeSingle(),
-      ]);
+      const { data: usageData } = await supabase
+        .from('video_usage')
+        .select('plan')
+        .eq('user_id', user.id)
+        .eq('month_year', monthYear)
+        .maybeSingle();
 
-      const currentPlanKey = usageRes.data?.plan || 'free';
+      const currentPlanKey = usageData?.plan || 'free';
       setPlan(currentPlanKey);
-
-      const profileHasChat = profileRes.data?.has_ai_chat === true;
 
       const { data: planData } = await supabase
         .from('subscription_plans')
@@ -166,10 +153,9 @@ export function ScriptChatFloat() {
         .eq('is_active', true)
         .maybeSingle();
 
-      const planHasChat = (planData as any)?.has_ai_chat === true;
-
-      setHasChatAccess(profileHasChat || planHasChat);
+      setHasChatAccess((planData as any)?.has_ai_chat === true);
     };
+
     checkChatAccess();
   }, [user]);
 

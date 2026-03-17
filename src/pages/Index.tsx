@@ -675,7 +675,7 @@ const Index = () => {
           </div>
         )}
       </main>
-      <ScriptChatFloat />
+      {hasAiChat && <ScriptChatFloat />}
       <NewUserWelcomePopup userId={user?.id} currentPlan={currentPlan} tokenBalance={tokenBalance} />
     </div>
   );
