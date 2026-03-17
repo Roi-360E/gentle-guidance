@@ -98,7 +98,7 @@ const Index = () => {
       const planKey = data?.plan || 'free';
       const { data: planData } = await supabase
         .from('subscription_plans')
-        .select('name, has_auto_subtitles, has_voice_rewrite')
+        .select('name, has_auto_subtitles, has_voice_rewrite, has_shorts_reels')
         .eq('plan_key', planKey)
         .eq('is_active', true)
         .maybeSingle();

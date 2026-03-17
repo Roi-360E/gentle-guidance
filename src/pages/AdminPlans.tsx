@@ -932,8 +932,17 @@ export default function AdminPlans() {
                           checked={plan.has_voice_rewrite}
                           onCheckedChange={v => updatePlan(index, 'has_voice_rewrite', v)}
                         />
-                        <Label className="text-xs flex items-center gap-1">
+                         <Label className="text-xs flex items-center gap-1">
                           Voice Rewrite
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={plan.has_shorts_reels}
+                          onCheckedChange={v => updatePlan(index, 'has_shorts_reels', v)}
+                        />
+                        <Label className="text-xs flex items-center gap-1">
+                          🚀 Novas Funcionalidades
                         </Label>
                       </div>
                     </div>
