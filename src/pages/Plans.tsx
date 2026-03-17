@@ -93,7 +93,7 @@ export default function Plans() {
       toast.error('Faça login para continuar.');
       return;
     }
-    navigate(`/checkout?plan=${planKey}`);
+    navigate(`/cadastro/${planKey}`);
   };
 
   if (plansLoading) {
