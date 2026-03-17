@@ -155,7 +155,7 @@ const Auth = () => {
             .update({ cpf_hash: cpfHashed, phone: phoneDigits } as any)
             .eq('user_id', newUser.id);
         }
-        toast.success('Conta criada! Verifique seu email para confirmar.');
+        toast.success('Conta criada! Agora siga para o pagamento para ativar seu plano.');
         trackPixelEvent('Lead', {
           content_name: 'Signup',
           content_category: 'Registration',
