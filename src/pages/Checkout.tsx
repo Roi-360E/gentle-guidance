@@ -425,8 +425,8 @@ export default function Checkout() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/plans')} className="shrink-0">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Planos
+          <Button variant="ghost" size="sm" onClick={() => navigate('/auth')} className="shrink-0">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
           </Button>
           <div className="flex items-center gap-2 ml-auto">
             <Lock className="w-4 h-4 text-primary" />
