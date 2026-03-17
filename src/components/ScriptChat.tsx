@@ -592,7 +592,7 @@ export function ScriptChatFloat() {
   };
 
   const sendAudioMessage = async (text: string, audioUrl: string) => {
-    if (!text.trim() || isLoading || !user) return;
+    if (!text.trim() || isLoading || !user || !hasChatAccess) return;
 
     let convId = activeConversation;
 
