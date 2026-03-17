@@ -224,11 +224,28 @@ const ShortsReels = () => {
   }, []);
 
   const onCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.target === canvasRef.current || (e.target as HTMLElement).classList.contains("canvas-bg")) {
+    // Allow panning from canvas bg, SVG layer, or any non-interactive area
+    const tag = (e.target as HTMLElement).tagName.toLowerCase();
+    const isCanvasBg = e.target === canvasRef.current || (e.target as HTMLElement).classList.contains("canvas-bg");
+    const isSvgArea = tag === "svg" || tag === "path" || tag === "circle" || tag === "g";
+    if (isCanvasBg || isSvgArea) {
       isPanning.current = true;
       panStart.current = { x: e.clientX, y: e.clientY };
     }
   }, []);
+
+  /* Mouse wheel to pan (shift+wheel = horizontal, wheel = vertical, ctrl+wheel = zoom) */
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      setZoom((z) => Math.min(2, Math.max(0.3, z - e.deltaY * 0.002)));
+    } else {
+      setPan((p) => ({
+        x: p.x - e.deltaX / zoom,
+        y: p.y - e.deltaY / zoom,
+      }));
+    }
+  }, [zoom]);
 
   /* ─── Get node center for connection lines ─── */
   const getNodeCenter = (node: CanvasNode) => {
@@ -308,6 +325,7 @@ const ShortsReels = () => {
         }}
         onMouseDown={onCanvasMouseDown}
         onMouseMove={onMouseMove}
+        onWheel={onWheel}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
       >
