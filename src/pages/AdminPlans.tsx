@@ -188,6 +188,7 @@ export default function AdminPlans() {
         has_ai_chat: p.has_ai_chat ?? false,
         has_auto_subtitles: p.has_auto_subtitles ?? false,
         has_voice_rewrite: p.has_voice_rewrite ?? false,
+        has_shorts_reels: p.has_shorts_reels ?? false,
       })));
     }
     setLoading(false);
