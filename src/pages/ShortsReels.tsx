@@ -1,27 +1,34 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  ArrowLeft, Plus, Trash2, Play, Image, Upload, Link2,
-  GripVertical, Sparkles, Video, Home, Lock, X, Move,
-  ZoomIn, ZoomOut, Maximize2, Download
+  ArrowLeft, Plus, Trash2, Play, Upload, Link2,
+  GripVertical, Sparkles, Video, Home, X,
+  ZoomIn, ZoomOut, Maximize2, Download, Layers
 } from "lucide-react";
 
 /* ─── Types ─── */
+interface NodeData {
+  label?: string;
+  imageUrl?: string;
+  file?: File;
+  prompt?: string;
+  model?: string;
+  aspect?: string;
+  generating?: boolean;
+  videoReady?: boolean;
+}
+
 interface CanvasNode {
   id: string;
   type: "image" | "creation-block" | "preview";
   x: number;
   y: number;
-  data: {
-    label?: string;
-    imageUrl?: string;
-    file?: File;
-  };
+  data: NodeData;
+  parentBlockId?: string; // for preview nodes, links back to creation block
 }
 
 interface CanvasConnection {
@@ -55,22 +62,7 @@ const ShortsReels = () => {
   }, [user, navigate]);
 
   /* Canvas state */
-  const [nodes, setNodes] = useState<CanvasNode[]>([
-    {
-      id: "creation-block",
-      type: "creation-block",
-      x: 400,
-      y: 200,
-      data: { label: "Bloco de Criação" },
-    },
-    {
-      id: "preview-block",
-      type: "preview",
-      x: 850,
-      y: 200,
-      data: { label: "Preview" },
-    },
-  ]);
+  const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [connections, setConnections] = useState<CanvasConnection[]>([]);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
 
@@ -84,25 +76,75 @@ const ShortsReels = () => {
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
 
-  /* Prompt state */
-  const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("Rosto para vídeo (Alta qualidade)");
-  const [aspect, setAspect] = useState("9:16 (Vertical)");
-
   /* ─── Add image node ─── */
   const addImageNode = useCallback(() => {
     const id = newId();
     setNodes((prev) => [
       ...prev,
-      {
-        id,
-        type: "image",
-        x: 80 + Math.random() * 120,
-        y: 120 + Math.random() * 200,
-        data: { label: "Imagem", imageUrl: "" },
-      },
+      { id, type: "image", x: 80 + Math.random() * 120, y: 120 + Math.random() * 200, data: { label: "Imagem", imageUrl: "" } },
     ]);
   }, []);
+
+  /* ─── Add creation block ─── */
+  const addCreationBlock = useCallback(() => {
+    const id = newId();
+    const blockCount = nodes.filter(n => n.type === "creation-block").length;
+    setNodes((prev) => [
+      ...prev,
+      {
+        id,
+        type: "creation-block",
+        x: 400 + blockCount * 50,
+        y: 200 + blockCount * 40,
+        data: {
+          label: `Bloco de Criação ${blockCount + 1}`,
+          prompt: "",
+          model: "Rosto para vídeo (Alta qualidade)",
+          aspect: "9:16 (Vertical)",
+        },
+      },
+    ]);
+  }, [nodes]);
+
+  /* ─── Generate preview (no credits consumed) ─── */
+  const handleGenerate = useCallback((blockId: string) => {
+    // Mark block as generating
+    setNodes((prev) =>
+      prev.map((n) => n.id === blockId ? { ...n, data: { ...n.data, generating: true } } : n)
+    );
+
+    // Simulate generation delay
+    setTimeout(() => {
+      const block = nodes.find(n => n.id === blockId);
+      if (!block) return;
+
+      const previewId = newId();
+      setNodes((prev) => {
+        // Stop generating state
+        const updated = prev.map((n) =>
+          n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n
+        );
+        // Add preview node to the right of the block
+        return [
+          ...updated,
+          {
+            id: previewId,
+            type: "preview" as const,
+            x: block.x + 380,
+            y: block.y,
+            data: { label: "Preview", videoReady: true },
+            parentBlockId: blockId,
+          },
+        ];
+      });
+
+      // Auto-connect block → preview
+      setConnections((prev) => [
+        ...prev,
+        { id: `conn-${Date.now()}`, fromId: blockId, toId: previewId },
+      ]);
+    }, 1500);
+  }, [nodes]);
 
   /* ─── Upload image to node ─── */
   const handleImageUpload = useCallback((nodeId: string, file: File) => {
@@ -116,8 +158,17 @@ const ShortsReels = () => {
 
   /* ─── Remove node ─── */
   const removeNode = useCallback((nodeId: string) => {
-    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+    setNodes((prev) => prev.filter((n) => n.id !== nodeId && n.parentBlockId !== nodeId));
     setConnections((prev) => prev.filter((c) => c.fromId !== nodeId && c.toId !== nodeId));
+  }, []);
+
+  /* ─── Update node data ─── */
+  const updateNodeData = useCallback((nodeId: string, key: string, value: string) => {
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === nodeId ? { ...n, data: { ...n.data, [key]: value } } : n
+      )
+    );
   }, []);
 
   /* ─── Connections ─── */
@@ -203,6 +254,10 @@ const ShortsReels = () => {
             <Plus className="h-4 w-4" />
             Adicionar Imagem
           </Button>
+          <Button variant="outline" size="sm" className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={addCreationBlock}>
+            <Layers className="h-4 w-4" />
+            Bloco de Criação
+          </Button>
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom((z) => Math.max(0.3, z - 0.1))}>
               <ZoomOut className="h-3.5 w-3.5" />
@@ -221,13 +276,33 @@ const ShortsReels = () => {
         </div>
       </header>
 
+      {/* Empty state */}
+      {nodes.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none" style={{ top: 56 }}>
+          <div className="text-center pointer-events-auto">
+            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Layers className="h-8 w-8 text-blue-400" />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-700 mb-2">Canvas vazio</h2>
+            <p className="text-sm text-gray-500 mb-4 max-w-xs">Comece adicionando imagens e blocos de criação para gerar seus criativos</p>
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" size="sm" className="gap-2" onClick={addImageNode}>
+                <Plus className="h-4 w-4" /> Imagem
+              </Button>
+              <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={addCreationBlock}>
+                <Layers className="h-4 w-4" /> Bloco de Criação
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Canvas ─── */}
       <div
         ref={canvasRef}
         className="flex-1 relative cursor-grab active:cursor-grabbing canvas-bg"
         style={{
-          backgroundImage:
-            "radial-gradient(circle, #e5e7eb 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(circle, #e5e7eb 1px, transparent 1px)",
           backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
           backgroundPosition: `${pan.x * zoom}px ${pan.y * zoom}px`,
         }}
@@ -259,7 +334,6 @@ const ShortsReels = () => {
                   fill="none"
                   strokeLinecap="round"
                 />
-                {/* Arrow */}
                 <circle cx={bx} cy={by} r="5" fill="#3b82f6" />
               </g>
             );
@@ -287,6 +361,7 @@ const ShortsReels = () => {
               );
             }
             if (node.type === "creation-block") {
+              const imageCount = connections.filter((c) => c.toId === node.id).length;
               return (
                 <CreationBlockNode
                   key={node.id}
@@ -295,13 +370,10 @@ const ShortsReels = () => {
                   onConnect={startConnection}
                   isConnecting={connectingFrom !== null}
                   isConnectingFrom={connectingFrom === node.id}
-                  prompt={prompt}
-                  setPrompt={setPrompt}
-                  model={model}
-                  setModel={setModel}
-                  aspect={aspect}
-                  setAspect={setAspect}
-                  imageCount={connections.filter((c) => c.toId === node.id).length}
+                  imageCount={imageCount}
+                  onGenerate={handleGenerate}
+                  onRemove={removeNode}
+                  onUpdateData={updateNodeData}
                 />
               );
             }
@@ -314,6 +386,7 @@ const ShortsReels = () => {
                   onConnect={startConnection}
                   isConnecting={connectingFrom !== null}
                   isConnectingFrom={connectingFrom === node.id}
+                  onRemove={removeNode}
                 />
               );
             }
@@ -328,16 +401,6 @@ const ShortsReels = () => {
           </div>
         )}
       </div>
-
-      {/* ESC to cancel connecting */}
-      {connectingFrom && (
-        <div
-          className="fixed inset-0 z-0"
-          onKeyDown={(e) => e.key === "Escape" && setConnectingFrom(null)}
-          tabIndex={0}
-          style={{ pointerEvents: "none" }}
-        />
-      )}
     </div>
   );
 };
@@ -364,7 +427,6 @@ function ImageNode({ node, onMouseDown, onUpload, onRemove, onConnect, isConnect
       onMouseDown={(e) => onMouseDown(e, node.id)}
     >
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow">
-        {/* Drag handle */}
         <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100 cursor-move">
           <div className="flex items-center gap-1.5">
             <GripVertical className="h-3.5 w-3.5 text-gray-400" />
@@ -379,8 +441,6 @@ function ImageNode({ node, onMouseDown, onUpload, onRemove, onConnect, isConnect
             </button>
           </div>
         </div>
-
-        {/* Image area */}
         <div
           className="w-full aspect-square bg-gray-100 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors"
           onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
@@ -394,8 +454,6 @@ function ImageNode({ node, onMouseDown, onUpload, onRemove, onConnect, isConnect
             </div>
           )}
         </div>
-
-        {/* Connection port */}
         {isConnecting && !isConnectingFrom && (
           <button
             onClick={(e) => { e.stopPropagation(); onConnect(node.id); }}
@@ -428,44 +486,46 @@ interface CreationBlockProps {
   onConnect: (nodeId: string) => void;
   isConnecting: boolean;
   isConnectingFrom: boolean;
-  prompt: string;
-  setPrompt: (v: string) => void;
-  model: string;
-  setModel: (v: string) => void;
-  aspect: string;
-  setAspect: (v: string) => void;
   imageCount: number;
+  onGenerate: (blockId: string) => void;
+  onRemove: (nodeId: string) => void;
+  onUpdateData: (nodeId: string, key: string, value: string) => void;
 }
 
 function CreationBlockNode({
   node, onMouseDown, onConnect, isConnecting, isConnectingFrom,
-  prompt, setPrompt, model, setModel, aspect, setAspect, imageCount,
+  imageCount, onGenerate, onRemove, onUpdateData,
 }: CreationBlockProps) {
+  const { prompt = "", model = "Rosto para vídeo (Alta qualidade)", aspect = "9:16 (Vertical)", generating } = node.data;
+
   return (
     <div
-      className={`absolute select-none ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2 rounded-2xl" : ""}`}
+      className={`absolute select-none group ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2 rounded-2xl" : ""}`}
       style={{ left: node.x, top: node.y, width: 320 }}
       onMouseDown={(e) => onMouseDown(e, node.id)}
     >
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100 cursor-move">
           <div className="flex items-center gap-2">
             <GripVertical className="h-4 w-4 text-gray-400" />
-            <span className="text-sm font-semibold text-gray-800">Bloco de criação</span>
+            <span className="text-sm font-semibold text-gray-800">{node.data.label || "Bloco de Criação"}</span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onConnect(node.id); }} className="p-1 rounded hover:bg-blue-100" title="Conectar">
-            <Link2 className="h-4 w-4 text-blue-500" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={(e) => { e.stopPropagation(); onConnect(node.id); }} className="p-1 rounded hover:bg-blue-100" title="Conectar">
+              <Link2 className="h-4 w-4 text-blue-500" />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">
+              <Trash2 className="h-4 w-4 text-red-400" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-4" onMouseDown={(e) => e.stopPropagation()}>
-          {/* Model select */}
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Modelo</label>
             <select
               value={model}
-              onChange={(e) => setModel(e.target.value)}
+              onChange={(e) => onUpdateData(node.id, "model", e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
             >
               <option>Rosto para vídeo (Alta qualidade)</option>
@@ -474,18 +534,16 @@ function CreationBlockNode({
             </select>
           </div>
 
-          {/* Connected images count */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
             Conecte até 5 imagens de referência
             <span className="float-right font-bold">{imageCount}/5</span>
           </div>
 
-          {/* Aspect ratio */}
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Aspecto</label>
             <select
               value={aspect}
-              onChange={(e) => setAspect(e.target.value)}
+              onChange={(e) => onUpdateData(node.id, "aspect", e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
             >
               <option>9:16 (Vertical)</option>
@@ -494,25 +552,35 @@ function CreationBlockNode({
             </select>
           </div>
 
-          {/* Prompt */}
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Prompt</label>
             <Textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Faça ela recomendar meu produto, falando em português, dê é muito bom para combater a insônia e mostrar o produto"
+              onChange={(e) => onUpdateData(node.id, "prompt", e.target.value)}
+              placeholder="Descreva o criativo que deseja gerar..."
               className="min-h-[80px] text-sm bg-gray-50 border-gray-200 resize-none"
             />
           </div>
 
-          {/* Generate button */}
-          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl h-11 gap-2">
-            <Sparkles className="h-4 w-4" />
-            Criar Criativo (65 créditos)
+          <Button
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl h-11 gap-2 disabled:opacity-60"
+            onClick={(e) => { e.stopPropagation(); onGenerate(node.id); }}
+            disabled={!!generating}
+          >
+            {generating ? (
+              <>
+                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Gerando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Criar Criativo
+              </>
+            )}
           </Button>
         </div>
 
-        {/* Connection ports */}
         {isConnecting && !isConnectingFrom && (
           <button
             onClick={(e) => { e.stopPropagation(); onConnect(node.id); }}
@@ -535,36 +603,36 @@ interface PreviewNodeProps {
   onConnect: (nodeId: string) => void;
   isConnecting: boolean;
   isConnectingFrom: boolean;
+  onRemove: (nodeId: string) => void;
 }
 
-function PreviewNode({ node, onMouseDown, onConnect, isConnecting, isConnectingFrom }: PreviewNodeProps) {
+function PreviewNode({ node, onMouseDown, onConnect, isConnecting, isConnectingFrom, onRemove }: PreviewNodeProps) {
   return (
     <div
-      className={`absolute select-none ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2 rounded-2xl" : ""}`}
+      className={`absolute select-none group ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2 rounded-2xl" : ""}`}
       style={{ left: node.x, top: node.y, width: 280 }}
       onMouseDown={(e) => onMouseDown(e, node.id)}
     >
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100 cursor-move">
           <div className="flex items-center gap-2">
             <GripVertical className="h-4 w-4 text-gray-400" />
             <span className="text-sm font-semibold text-gray-800">Preview</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">completed</span>
-            <span>45 créditos</span>
+          <div className="flex items-center gap-2">
+            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">pronto</span>
+            <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">
+              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+            </button>
           </div>
         </div>
 
-        {/* Preview area */}
         <div className="p-4">
           <div className="w-full aspect-[9/16] bg-gray-900 rounded-xl flex items-center justify-center relative overflow-hidden">
             <div className="text-center">
               <Video className="h-10 w-10 text-gray-600 mx-auto mb-2" />
-              <span className="text-xs text-gray-500">Vídeo gerado aparece aqui</span>
+              <span className="text-xs text-gray-500">Vídeo gerado (simulado)</span>
             </div>
-            {/* Play button overlay */}
             <button className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
               <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
                 <Play className="h-6 w-6 text-gray-900 ml-1" />
@@ -578,7 +646,6 @@ function PreviewNode({ node, onMouseDown, onConnect, isConnecting, isConnectingF
           </Button>
         </div>
 
-        {/* Connection port */}
         {isConnecting && !isConnectingFrom && (
           <button
             onClick={(e) => { e.stopPropagation(); onConnect(node.id); }}
