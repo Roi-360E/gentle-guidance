@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft, Video, Scissors, Image, LayoutGrid, Sparkles,
   Send, User, Lock, Wand2, Upload, FileText, Zap, Home,
@@ -72,8 +73,29 @@ const ShortsReels = () => {
   const [referenceImages, setReferenceImages] = useState<File[]>([]);
   const [guideStep, setGuideStep] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [accessChecked, setAccessChecked] = useState(false);
+
+  // Check if user has access via plan or admin role
+  useEffect(() => {
+    if (!user) return;
+    const checkAccess = async () => {
+      // Check admin
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (isAdmin) { setAccessChecked(true); return; }
+      // Check plan feature
+      const monthYear = new Date().toISOString().substring(0, 7);
+      const { data: usage } = await supabase.from('video_usage').select('plan').eq('user_id', user.id).eq('month_year', monthYear).single();
+      const planKey = usage?.plan || 'free';
+      const { data: planData } = await supabase.from('subscription_plans').select('has_shorts_reels').eq('plan_key', planKey).eq('is_active', true).maybeSingle();
+      if ((planData as any)?.has_shorts_reels) { setAccessChecked(true); return; }
+      navigate('/');
+    };
+    checkAccess();
+  }, [user, navigate]);
 
   const userName = user?.email?.split("@")[0] || "Usuário";
+
+  if (!accessChecked) return null;
 
   const handleGenerate = async () => {
     setIsGenerating(true);
