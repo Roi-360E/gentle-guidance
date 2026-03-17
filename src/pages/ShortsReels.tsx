@@ -187,6 +187,12 @@ const ShortsReels = () => {
   /* ─── Drag handlers ─── */
   const onNodeMouseDown = useCallback(
     (e: React.MouseEvent, nodeId: string) => {
+      // Ctrl+click = pan mode, don't start node drag
+      if (e.ctrlKey || e.metaKey) {
+        isPanning.current = true;
+        panStart.current = { x: e.clientX, y: e.clientY };
+        return;
+      }
       e.stopPropagation();
       const node = nodes.find((n) => n.id === nodeId);
       if (!node) return;
