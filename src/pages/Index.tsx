@@ -21,8 +21,9 @@ import {
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens } from '@/lib/token-calculator';
-import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Mic } from 'lucide-react';
+import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Mic, Lock } from 'lucide-react';
 import { ScriptChatFloat } from '@/components/ScriptChat';
+import { FeatureUpsellDialog } from '@/components/FeatureUpsellDialog';
 import { InstagramConnect } from '@/components/InstagramConnect';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
@@ -79,6 +80,7 @@ const Index = () => {
   const [hooksStarted, setHooksStarted] = useState(false);
   const [bodiesStarted, setBodiesStarted] = useState(false);
   const [ctasStarted, setCtasStarted] = useState(false);
+  const [upsellFeature, setUpsellFeature] = useState<{ key: 'has_ai_chat' | 'has_auto_subtitles' | 'has_voice_rewrite' | 'has_shorts_reels'; name: string } | null>(null);
 
   // Load user plan data and profile name
   useEffect(() => {
@@ -312,21 +314,18 @@ const Index = () => {
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            {hasAutoSubtitles && (
-              <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/auto-subtitles')}>
-                <Type className="w-4 h-4" /> Legendas Auto
-              </Button>
-            )}
-            {hasVoiceRewrite && (
-              <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/voice-rewrite')}>
-                <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
-              </Button>
-            )}
-            {hasShortsReels && (
-              <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/shorts-reels')}>
-                🚀 Novidades
-              </Button>
-            )}
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasAutoSubtitles ? navigate('/auto-subtitles') : setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' })}>
+              <Type className="w-4 h-4" /> Legendas Auto
+              {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasVoiceRewrite ? navigate('/voice-rewrite') : setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' })}>
+              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+              {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => hasShortsReels ? navigate('/shorts-reels') : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}>
+              🚀 Novidades
+              {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
               <LogOut className="w-4 h-4" /> Sair
             </Button>
@@ -356,21 +355,18 @@ const Index = () => {
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            {hasAutoSubtitles && (
-              <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/auto-subtitles'); setMobileMenuOpen(false); }}>
-                <Type className="w-4 h-4" /> Legendas Automáticas
-              </Button>
-            )}
-            {hasVoiceRewrite && (
-              <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/voice-rewrite'); setMobileMenuOpen(false); }}>
-                <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
-              </Button>
-            )}
-            {hasShortsReels && (
-              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/shorts-reels'); setMobileMenuOpen(false); }}>
-                🚀 Novas funcionalidades
-              </Button>
-            )}
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasAutoSubtitles) { navigate('/auto-subtitles'); } else { setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' }); } setMobileMenuOpen(false); }}>
+              <Type className="w-4 h-4" /> Legendas Automáticas
+              {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasVoiceRewrite) { navigate('/voice-rewrite'); } else { setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' }); } setMobileMenuOpen(false); }}>
+              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+              {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { if (hasShortsReels) { navigate('/shorts-reels'); } else { setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' }); } setMobileMenuOpen(false); }}>
+              🚀 Novas funcionalidades
+              {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
                 <LogOut className="w-4 h-4" /> Sair
@@ -664,18 +660,23 @@ const Index = () => {
 
 
         {/* CTA banner */}
-        {hasShortsReels && (
-          <div className="flex justify-center pb-8">
-            <Button
-              className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
-              onClick={() => navigate("/shorts-reels")}
-            >
-              🚀 Novas funcionalidades
-            </Button>
-          </div>
-        )}
+        <div className="flex justify-center pb-8">
+          <Button
+            className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
+            onClick={() => hasShortsReels ? navigate("/shorts-reels") : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}
+          >
+            🚀 Novas funcionalidades
+            {!hasShortsReels && <Lock className="w-4 h-4 ml-2" />}
+          </Button>
+        </div>
       </main>
-      {hasAiChat && <ScriptChatFloat />}
+      <ScriptChatFloat />
+      <FeatureUpsellDialog
+        open={!!upsellFeature}
+        onOpenChange={(open) => !open && setUpsellFeature(null)}
+        featureKey={upsellFeature?.key || 'has_shorts_reels'}
+        featureName={upsellFeature?.name || ''}
+      />
       <NewUserWelcomePopup userId={user?.id} currentPlan={currentPlan} tokenBalance={tokenBalance} />
     </div>
   );
