@@ -19,6 +19,20 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
     const checkSub = async () => {
       try {
+        // Admins skip subscription check
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        if (roleData) {
+          setHasSubscription(true);
+          setCheckingSubscription(false);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('user_subscriptions')
           .select('status')
@@ -27,20 +41,17 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
         if (error) {
           console.error('Error checking subscription:', error);
-          // If table doesn't exist yet or error, allow access (graceful fallback)
           setHasSubscription(true);
           setCheckingSubscription(false);
           return;
         }
 
         if (!data) {
-          // No subscription = needs onboarding
           setHasSubscription(false);
         } else if (data.status === 'blocked') {
           setIsBlocked(true);
           setHasSubscription(true);
         } else {
-          // pending_charge, active - all have access
           setHasSubscription(true);
         }
       } catch {
