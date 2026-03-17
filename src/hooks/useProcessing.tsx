@@ -189,7 +189,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
           }
 
           // Debit tokens
-          if (doneCount > 0 && currentPlan !== 'enterprise') {
+          if (doneCount > 0 && currentPlan !== 'enterprise' && currentPlan !== 'unlimited') {
             const actualCost = calculateTokenCost(doneCount, settings);
             const newBalance = Math.max(0, tokenBalance - actualCost.total);
             const newCount = videoCount + doneCount;
