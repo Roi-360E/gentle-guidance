@@ -292,6 +292,7 @@ const Index = () => {
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
               <Coins className="w-4 h-4" /> Planos
             </Button>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Home className="w-4 h-4" /> Home
             </Button>
             {isAdmin && (
