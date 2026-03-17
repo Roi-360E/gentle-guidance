@@ -131,6 +131,10 @@ const VoiceRewrite = () => {
   useEffect(() => {
     if (!user) return;
     const checkAccess = async () => {
+      // Admin always has access
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (isAdmin) { setHasAccess(true); return; }
+
       const monthYear = new Date().toISOString().substring(0, 7);
       const { data } = await supabase
         .from('video_usage')
