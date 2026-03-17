@@ -1,9 +1,9 @@
-import { lazy, Suspense } from "react";
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProcessingProvider } from "@/hooks/useProcessing";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -29,8 +29,7 @@ import ThankYou from "./pages/ThankYou";
 import ShortsReels from "./pages/ShortsReels";
 import Onboarding from "./pages/Onboarding";
 
-const Checkout = lazy(() => import("./pages/Checkout"));
-
+// Checkout is now integrated into SignupPage at /cadastro/:plano
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -56,7 +55,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
-              <Route path="/checkout" element={<Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><span className="animate-spin text-primary">⏳</span></div>}><Checkout /></Suspense>} />
+              <Route path="/checkout" element={<Navigate to="/planos" replace />} />
               <Route path="/admin/plans" element={<ProtectedRoute><AdminPlans /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
               <Route path="/auto-subtitles" element={<ProtectedRoute><AutoSubtitles /></ProtectedRoute>} />
