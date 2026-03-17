@@ -409,14 +409,16 @@ const Index = () => {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full border-primary/40 text-primary"
-            onClick={() => navigate('/plans')}
-          >
-            {currentPlan === 'free' ? 'Fazer Upgrade' : 'Gerenciar Plano'}
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full border-primary/40 text-primary"
+              onClick={() => navigate('/admin/plans')}
+            >
+              Painel Admin
+            </Button>
+          )}
         </div>
 
         {/* Video Format Selector */}
