@@ -1,0 +1,1 @@
+ALTER TABLE public.subscription_plans ADD COLUMN has_shorts_reels boolean NOT NULL DEFAULT false;

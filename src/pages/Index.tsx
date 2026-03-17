@@ -67,6 +67,7 @@ const Index = () => {
   const [planName, setPlanName] = useState<string>('Gratuito');
   const [hasAutoSubtitles, setHasAutoSubtitles] = useState(false);
   const [hasVoiceRewrite, setHasVoiceRewrite] = useState(false);
+  const [hasShortsReels, setHasShortsReels] = useState(false);
   const [preprocessingSection, setPreprocessingSection] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -98,7 +99,7 @@ const Index = () => {
       const planKey = data?.plan || 'free';
       const { data: planData } = await supabase
         .from('subscription_plans')
-        .select('name, has_auto_subtitles, has_voice_rewrite')
+        .select('name, has_auto_subtitles, has_voice_rewrite, has_shorts_reels')
         .eq('plan_key', planKey)
         .eq('is_active', true)
         .maybeSingle();
@@ -106,6 +107,7 @@ const Index = () => {
         setPlanName(planData.name);
         setHasAutoSubtitles((planData as any).has_auto_subtitles === true);
         setHasVoiceRewrite((planData as any).has_voice_rewrite === true);
+        setHasShortsReels((planData as any).has_shorts_reels === true);
       }
       // Check for active testimonial access (skip for admin to allow plan testing)
       if (user.email !== 'matheuslaurindo900@gmail.com') {
@@ -312,7 +314,7 @@ const Index = () => {
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
             )}
-            {isAdmin && (
+            {(hasShortsReels || isAdmin) && (
               <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/shorts-reels')}>
                 🚀 Novidades
               </Button>
@@ -354,7 +356,7 @@ const Index = () => {
                 <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               </Button>
             )}
-            {isAdmin && (
+            {(hasShortsReels || isAdmin) && (
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/shorts-reels'); setMobileMenuOpen(false); }}>
                 🚀 Novas funcionalidades
               </Button>
@@ -652,7 +654,7 @@ const Index = () => {
 
 
         {/* CTA banner */}
-        {isAdmin && (
+        {(hasShortsReels || isAdmin) && (
           <div className="flex justify-center pb-8">
             <Button
               className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
