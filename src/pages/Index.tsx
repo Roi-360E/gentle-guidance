@@ -332,9 +332,11 @@ const Index = () => {
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setMobileMenuOpen(false)}>
               <Home className="w-4 h-4" /> Home
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/plans'); setMobileMenuOpen(false); }}>
-              <Zap className="w-4 h-4" /> Planos
-            </Button>
+            {isAdmin && (
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/admin/plans'); setMobileMenuOpen(false); }}>
+                <Zap className="w-4 h-4" /> Painel Admin
+              </Button>
+            )}
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/downloads'); setMobileMenuOpen(false); }}>
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
