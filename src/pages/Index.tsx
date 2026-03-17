@@ -409,16 +409,26 @@ const Index = () => {
               </p>
             </div>
           </div>
-          {isAdmin && (
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full border-primary/40 text-primary"
+                onClick={() => navigate('/admin/plans')}
+              >
+                Painel Admin
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
-              className="rounded-full border-primary/40 text-primary"
-              onClick={() => navigate('/admin/plans')}
+              className="rounded-full border-accent/40 text-accent-foreground"
+              onClick={() => navigate('/plans')}
             >
-              Painel Admin
+              <Zap className="w-3.5 h-3.5 mr-1" /> Upgrade
             </Button>
-          )}
+          </div>
         </div>
 
         {/* Video Format Selector */}
