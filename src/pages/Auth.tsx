@@ -160,9 +160,9 @@ const Auth = () => {
           content_name: 'Signup',
           content_category: 'Registration',
         });
-        // Redirect to onboarding card step with selected plan
+        // Redirect to native checkout with selected plan
         if (selectedPlan) {
-          navigate('/onboarding', { state: { selectedPlan }, replace: true });
+          navigate(`/checkout?plan=${selectedPlan.plan_key}`, { replace: true });
         }
       }
     }
