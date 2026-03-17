@@ -472,7 +472,11 @@ export function ScriptChatFloat() {
   const isPaid = hasChatAccess;
 
   const createConversation = async () => {
-    if (!user) return;
+    if (!user || !hasChatAccess) {
+      toast.error('Chat IA indisponível no seu plano atual.');
+      return;
+    }
+
     const { data, error } = await supabase
       .from('conversations')
       .insert({ user_id: user.id, title: 'Novo Roteiro' })
