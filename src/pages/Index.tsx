@@ -23,6 +23,7 @@ import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import { calculateTokenCost, hasEnoughTokens } from '@/lib/token-calculator';
 import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Mic } from 'lucide-react';
 import { ScriptChatFloat } from '@/components/ScriptChat';
+import { FeatureUpsellDialog } from '@/components/FeatureUpsellDialog';
 import { InstagramConnect } from '@/components/InstagramConnect';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
