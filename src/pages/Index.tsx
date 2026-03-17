@@ -65,6 +65,7 @@ const Index = () => {
   const [videoFormat, setVideoFormat] = useState<VideoFormat>('9:16');
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [planName, setPlanName] = useState<string>('Gratuito');
+  const [hasAiChat, setHasAiChat] = useState(false);
   const [hasAutoSubtitles, setHasAutoSubtitles] = useState(false);
   const [hasVoiceRewrite, setHasVoiceRewrite] = useState(false);
   const [hasShortsReels, setHasShortsReels] = useState(false);
