@@ -11,6 +11,8 @@ import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { FacebookPixelProvider } from "@/components/FacebookPixelProvider";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import PlansPage from "./pages/PlansPage";
+import SignupPage from "./pages/SignupPage";
 import SubtitleEditor from "./pages/SubtitleEditor";
 import Plans from "./pages/Plans";
 import Downloads from "./pages/Downloads";
@@ -43,6 +45,8 @@ const App = () => (
           <ProcessingProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/planos" element={<PlansPage />} />
+              <Route path="/cadastro/:plano" element={<SignupPage />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
