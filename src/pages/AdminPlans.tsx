@@ -730,7 +730,7 @@ export default function AdminPlans() {
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/plans')} className="shrink-0 px-2 sm:px-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="shrink-0 px-2 sm:px-3">
               <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">Voltar</span>
             </Button>
             <div className="min-w-0">

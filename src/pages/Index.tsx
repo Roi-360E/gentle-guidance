@@ -231,8 +231,8 @@ const Index = () => {
 
     const cost = calculateTokenCost(totalCombinations, settings);
     if (!hasEnoughTokens(currentPlan, tokenBalance, cost.total)) {
-      toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Faça upgrade ou reduza as combinações.`);
-      navigate('/plans');
+      toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Reduza as combinações ou entre em contato com o suporte.`);
+      return;
       return;
     }
 
@@ -292,9 +292,11 @@ const Index = () => {
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
               <Home className="w-4 h-4" /> Home
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
-              <Zap className="w-4 h-4" /> Planos
-            </Button>
+            {isAdmin && (
+              <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/admin/plans')}>
+                <Zap className="w-4 h-4" /> Painel Admin
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/downloads')}>
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
@@ -330,9 +332,11 @@ const Index = () => {
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setMobileMenuOpen(false)}>
               <Home className="w-4 h-4" /> Home
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/plans'); setMobileMenuOpen(false); }}>
-              <Zap className="w-4 h-4" /> Planos
-            </Button>
+            {isAdmin && (
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/admin/plans'); setMobileMenuOpen(false); }}>
+                <Zap className="w-4 h-4" /> Painel Admin
+              </Button>
+            )}
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/downloads'); setMobileMenuOpen(false); }}>
               <Download className="w-4 h-4" /> Meus Downloads
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
@@ -405,14 +409,16 @@ const Index = () => {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full border-primary/40 text-primary"
-            onClick={() => navigate('/plans')}
-          >
-            {currentPlan === 'free' ? 'Fazer Upgrade' : 'Gerenciar Plano'}
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full border-primary/40 text-primary"
+              onClick={() => navigate('/admin/plans')}
+            >
+              Painel Admin
+            </Button>
+          )}
         </div>
 
         {/* Video Format Selector */}
