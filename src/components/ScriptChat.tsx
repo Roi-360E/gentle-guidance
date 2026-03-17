@@ -132,28 +132,33 @@ export function ScriptChatFloat() {
   // Load plan and check chat access dynamically
   useEffect(() => {
     if (!user) return;
-    const monthYear = new Date().toISOString().slice(0, 7);
 
-    Promise.all([
-      supabase
-        .from('video_usage')
-        .select('plan')
-        .eq('user_id', user.id)
-        .eq('month_year', monthYear)
-        .maybeSingle(),
-      supabase
-        .from('profiles')
-        .select('has_ai_chat')
-        .eq('user_id', user.id)
-        .maybeSingle(),
-    ]).then(async ([usageRes, profileRes]) => {
+    const checkChatAccess = async () => {
+      // Admin always has access
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (isAdmin) { setHasChatAccess(true); return; }
+
+      const monthYear = new Date().toISOString().slice(0, 7);
+
+      const [usageRes, profileRes] = await Promise.all([
+        supabase
+          .from('video_usage')
+          .select('plan')
+          .eq('user_id', user.id)
+          .eq('month_year', monthYear)
+          .maybeSingle(),
+        supabase
+          .from('profiles')
+          .select('has_ai_chat')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ]);
+
       const currentPlanKey = usageRes.data?.plan || 'free';
       setPlan(currentPlanKey);
 
-      // Check if user has individual override
       const profileHasChat = profileRes.data?.has_ai_chat === true;
 
-      // Check if the plan itself has chat enabled
       const { data: planData } = await supabase
         .from('subscription_plans')
         .select('has_ai_chat')
@@ -164,7 +169,8 @@ export function ScriptChatFloat() {
       const planHasChat = (planData as any)?.has_ai_chat === true;
 
       setHasChatAccess(profileHasChat || planHasChat);
-    });
+    };
+    checkChatAccess();
   }, [user]);
 
   // Load conversations
