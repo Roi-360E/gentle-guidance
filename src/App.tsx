@@ -20,6 +20,7 @@ import AutoSubtitles from "./pages/AutoSubtitles";
 import InstagramCallback from "./pages/InstagramCallback";
 import ViralFlux from "./pages/ViralFlux";
 import ResetPassword from "./pages/ResetPassword";
+import ForgotPassword from "./pages/ForgotPassword";
 import AdminPlans from "./pages/AdminPlans";
 import VoiceRewrite from "./pages/VoiceRewrite";
 import ThankYou from "./pages/ThankYou";
