@@ -378,20 +378,7 @@ const Auth = () => {
             <div className="mt-3 text-center">
               <button
                 type="button"
-                onClick={async () => {
-                  if (!email) {
-                    toast.error('Digite seu email primeiro.');
-                    return;
-                  }
-                  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/reset-password`,
-                  });
-                  if (error) {
-                    toast.error(error.message);
-                  } else {
-                    toast.success('Email de recuperação enviado! Verifique sua caixa de entrada.');
-                  }
-                }}
+                onClick={() => navigate('/forgot-password')}
                 className="text-sm text-muted-foreground hover:text-primary hover:underline"
               >
                 Esqueceu sua senha?

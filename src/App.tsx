@@ -20,6 +20,7 @@ import AutoSubtitles from "./pages/AutoSubtitles";
 import InstagramCallback from "./pages/InstagramCallback";
 import ViralFlux from "./pages/ViralFlux";
 import ResetPassword from "./pages/ResetPassword";
+import ForgotPassword from "./pages/ForgotPassword";
 import AdminPlans from "./pages/AdminPlans";
 import VoiceRewrite from "./pages/VoiceRewrite";
 import ThankYou from "./pages/ThankYou";
@@ -42,6 +43,7 @@ const App = () => (
           <ProcessingProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
               <Route path="/vendas" element={<Sales />} />
