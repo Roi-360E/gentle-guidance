@@ -34,6 +34,7 @@ interface Plan {
   has_ai_chat: boolean;
   has_auto_subtitles: boolean;
   has_voice_rewrite: boolean;
+  has_shorts_reels: boolean;
 }
 
 interface UserRow {
