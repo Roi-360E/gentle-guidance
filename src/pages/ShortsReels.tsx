@@ -75,14 +75,10 @@ const ShortsReels = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [accessChecked, setAccessChecked] = useState(false);
 
-  // Check if user has access via plan or admin role
+  // Check if user has access via plan feature only
   useEffect(() => {
     if (!user) return;
     const checkAccess = async () => {
-      // Check admin
-      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
-      if (isAdmin) { setAccessChecked(true); return; }
-      // Check plan feature
       const monthYear = new Date().toISOString().substring(0, 7);
       const { data: usage } = await supabase.from('video_usage').select('plan').eq('user_id', user.id).eq('month_year', monthYear).single();
       const planKey = usage?.plan || 'free';
