@@ -170,6 +170,7 @@ export default function AdminPlans() {
           loadDomainFiles();
           loadRecoveryLeads();
           loadAgentPrompt();
+          loadVideoApiConfig();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
