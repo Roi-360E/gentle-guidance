@@ -89,7 +89,7 @@ async function getAllApiKeys(): Promise<ApiKeyRow[]> {
   return keysData || [];
 }
 
-async function markKeyFailed(keyId: string, error: string) {
+async function markKeyFailed(keyId: string, error: string, isCreditsExhausted = false) {
   if (keyId === "legacy") return;
   const supabase = getSupabaseAdmin();
   const { data: existing } = await supabase
@@ -98,10 +98,44 @@ async function markKeyFailed(keyId: string, error: string) {
     .eq("id", keyId)
     .single();
   const newCount = (existing?.fail_count || 0) + 1;
+
+  // Auto-disable key if credits are exhausted or too many failures (5+)
+  const shouldDisable = isCreditsExhausted || newCount >= 5;
+  const updatePayload: Record<string, any> = {
+    fail_count: newCount,
+    last_error: isCreditsExhausted ? `⚠️ CRÉDITOS ESGOTADOS: ${error}` : error,
+    last_used_at: new Date().toISOString(),
+  };
+  if (shouldDisable) {
+    updatePayload.is_enabled = false;
+    console.log(`[Auto-disable] Key ${keyId} disabled: ${isCreditsExhausted ? 'credits exhausted' : 'too many failures'}`);
+  }
+
   await supabase
     .from("video_api_keys")
-    .update({ fail_count: newCount, last_error: error, last_used_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", keyId);
+}
+
+/**
+ * Detects if an HTTP error response indicates credit/quota exhaustion.
+ */
+function isCreditsError(status: number, body: string): boolean {
+  if (status === 402 || status === 403) return true;
+  if (status === 429) {
+    const lower = body.toLowerCase();
+    if (lower.includes("quota") || lower.includes("limit") || lower.includes("credit") || lower.includes("balance") || lower.includes("exceeded")) {
+      return true;
+    }
+  }
+  const lower = body.toLowerCase();
+  return (
+    lower.includes("insufficient") ||
+    lower.includes("no credits") ||
+    lower.includes("quota exceeded") ||
+    lower.includes("balance") ||
+    lower.includes("payment required")
+  );
 }
 
 async function markKeyUsed(keyId: string) {
