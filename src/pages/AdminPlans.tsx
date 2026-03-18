@@ -145,6 +145,10 @@ export default function AdminPlans() {
   const [videoApiLoaded, setVideoApiLoaded] = useState(false);
   const [addingKey, setAddingKey] = useState(false);
 
+  // Proxy API key state
+  const [proxyApiKey, setProxyApiKey] = useState('');
+  const [proxyApiKeySaving, setProxyApiKeySaving] = useState(false);
+
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
