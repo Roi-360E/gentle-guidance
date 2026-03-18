@@ -484,58 +484,77 @@ export default function AdminPlans() {
   };
 
   const loadVideoApiConfig = async () => {
-    const { data } = await supabase
+    // Load active provider
+    const { data: settingsData } = await supabase
       .from('admin_settings' as any)
       .select('key, value')
-      .in('key', ['video_connector_1_provider', 'video_connector_1_key', 'video_connector_2_provider', 'video_connector_2_key', 'video_connector_3_provider', 'video_connector_3_key', 'video_active_connector']);
-    if (data) {
-      (data as any[]).forEach((row: any) => {
-        if (row.key === 'video_connector_1_provider') setConnector1Provider(row.value || '');
-        if (row.key === 'video_connector_1_key') setConnector1Key(row.value || '');
-        if (row.key === 'video_connector_2_provider') setConnector2Provider(row.value || '');
-        if (row.key === 'video_connector_2_key') setConnector2Key(row.value || '');
-        if (row.key === 'video_connector_3_provider') setConnector3Provider(row.value || '');
-        if (row.key === 'video_connector_3_key') setConnector3Key(row.value || '');
-        if (row.key === 'video_active_connector') setActiveConnector((row.value || '1') as '1' | '2' | '3');
-      });
+      .eq('key', 'video_active_provider');
+    if (settingsData && (settingsData as any[]).length > 0) {
+      setActiveProvider((settingsData as any[])[0].value || 'lovable_ai');
     }
+    // Load key pool
+    const { data: keysData } = await supabase
+      .from('video_api_keys' as any)
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (keysData) setApiKeyPool(keysData as any[]);
     setVideoApiLoaded(true);
   };
 
-  const saveVideoApiConfig = async () => {
+  const saveActiveProvider = async () => {
     setVideoApiSaving(true);
     const now = new Date().toISOString();
-    
-    const upsert = async (key: string, value: string) => {
-      const { data: existing } = await supabase
-        .from('admin_settings' as any)
-        .select('key')
-        .eq('key', key)
-        .maybeSingle();
-      if (existing) {
-        return supabase.from('admin_settings' as any).update({ value, updated_at: now } as any).eq('key', key);
-      } else {
-        return supabase.from('admin_settings' as any).insert({ key, value, updated_at: now } as any);
-      }
-    };
-
-    const results = await Promise.all([
-      upsert('video_connector_1_provider', connector1Provider),
-      upsert('video_connector_1_key', connector1Key),
-      upsert('video_connector_2_provider', connector2Provider),
-      upsert('video_connector_2_key', connector2Key),
-      upsert('video_connector_3_provider', connector3Provider),
-      upsert('video_connector_3_key', connector3Key),
-      upsert('video_active_connector', activeConnector),
-    ]);
-
-    const hasError = results.some(r => r.error);
-    if (hasError) {
-      toast.error('Erro ao salvar configuração.');
+    const { data: existing } = await supabase
+      .from('admin_settings' as any)
+      .select('key')
+      .eq('key', 'video_active_provider')
+      .maybeSingle();
+    if (existing) {
+      await supabase.from('admin_settings' as any).update({ value: activeProvider, updated_at: now } as any).eq('key', 'video_active_provider');
     } else {
-      toast.success('Conectores de vídeo salvos com sucesso!');
+      await supabase.from('admin_settings' as any).insert({ key: 'video_active_provider', value: activeProvider, updated_at: now } as any);
     }
+    toast.success('Provedor ativo salvo!');
     setVideoApiSaving(false);
+  };
+
+  const addApiKey = async () => {
+    if (!newKeyProvider || !newKeyValue) {
+      toast.error('Selecione o provedor e insira a chave.');
+      return;
+    }
+    setAddingKey(true);
+    const { error } = await supabase.from('video_api_keys' as any).insert({
+      provider: newKeyProvider,
+      api_key: newKeyValue,
+      label: newKeyLabel || `Chave ${apiKeyPool.filter(k => k.provider === newKeyProvider).length + 1}`,
+    } as any);
+    if (error) {
+      toast.error('Erro ao adicionar chave.');
+    } else {
+      toast.success('Chave adicionada ao pool!');
+      setNewKeyValue('');
+      setNewKeyLabel('');
+      await loadVideoApiConfig();
+    }
+    setAddingKey(false);
+  };
+
+  const removeApiKey = async (id: string) => {
+    await supabase.from('video_api_keys' as any).delete().eq('id', id);
+    setApiKeyPool(prev => prev.filter(k => k.id !== id));
+    toast.success('Chave removida.');
+  };
+
+  const toggleApiKey = async (id: string, enabled: boolean) => {
+    await supabase.from('video_api_keys' as any).update({ is_enabled: enabled } as any).eq('id', id);
+    setApiKeyPool(prev => prev.map(k => k.id === id ? { ...k, is_enabled: enabled } : k));
+  };
+
+  const resetKeyFailures = async (id: string) => {
+    await supabase.from('video_api_keys' as any).update({ fail_count: 0, last_error: null } as any).eq('id', id);
+    setApiKeyPool(prev => prev.map(k => k.id === id ? { ...k, fail_count: 0, last_error: null } : k));
+    toast.success('Contador de falhas resetado.');
   };
 
 
