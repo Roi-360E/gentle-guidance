@@ -172,7 +172,7 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string,
           duration: 5,
           ratio: aspect?.includes("16:9") ? "16:9" : "9:16",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Runway error:", res.status, await res.text());
