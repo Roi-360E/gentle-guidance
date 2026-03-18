@@ -145,6 +145,10 @@ export default function AdminPlans() {
   const [videoApiLoaded, setVideoApiLoaded] = useState(false);
   const [addingKey, setAddingKey] = useState(false);
 
+  // Proxy API key state
+  const [proxyApiKey, setProxyApiKey] = useState('');
+  const [proxyApiKeySaving, setProxyApiKeySaving] = useState(false);
+
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -490,7 +494,29 @@ export default function AdminPlans() {
       .select('*')
       .order('created_at', { ascending: true });
     if (keysData) setApiKeyPool(keysData as any[]);
+
+    // Load proxy key
+    const { data: proxyData } = await supabase
+      .from('admin_settings' as any)
+      .select('value')
+      .eq('key', 'proxy_api_key')
+      .maybeSingle();
+    if (proxyData) setProxyApiKey((proxyData as any).value || '');
+
     setVideoApiLoaded(true);
+  };
+
+  const saveProxyApiKey = async () => {
+    setProxyApiKeySaving(true);
+    const { error } = await supabase
+      .from('admin_settings' as any)
+      .upsert({ key: 'proxy_api_key', value: proxyApiKey } as any, { onConflict: 'key' });
+    if (error) {
+      toast.error('Erro ao salvar chave de proxy.');
+    } else {
+      toast.success('Chave de proxy salva com sucesso!');
+    }
+    setProxyApiKeySaving(false);
   };
 
   const addApiKey = async () => {
@@ -1800,6 +1826,43 @@ export default function AdminPlans() {
                 <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
                   ✅ <strong>Fallback:</strong> Lovable AI gera imagens automaticamente se nenhuma chave externa funcionar.
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Proxy API Key Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary" />
+                  Chave de API de Proxy
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">🌐 Proxy para requisições externas</p>
+                  <p>Configure uma chave de API de proxy (ex: ScraperAPI, BrightData, SmartProxy) para rotear requisições externas através de um serviço de proxy, evitando bloqueios e rate limits.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="proxy-key">API Key do Proxy</Label>
+                  <Input
+                    id="proxy-key"
+                    type="password"
+                    placeholder="Cole aqui sua chave de API do proxy"
+                    value={proxyApiKey}
+                    onChange={e => setProxyApiKey(e.target.value)}
+                    className="font-mono text-xs"
+                  />
+                </div>
+                <Button onClick={saveProxyApiKey} disabled={proxyApiKeySaving} className="gap-2">
+                  {proxyApiKeySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Salvar Chave de Proxy
+                </Button>
+                {proxyApiKey && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                    Chave configurada: {proxyApiKey.slice(0, 8)}...{proxyApiKey.slice(-4)}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
