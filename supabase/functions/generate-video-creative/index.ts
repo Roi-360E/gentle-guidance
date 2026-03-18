@@ -187,9 +187,10 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string,
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+        const pollRes = await proxiedFetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}`, "X-Runway-Version": "2024-11-06" },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.status === "SUCCEEDED") {
           videoUrl = pollData.output?.[0];
