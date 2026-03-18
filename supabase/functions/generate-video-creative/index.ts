@@ -563,9 +563,9 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Get video API config from admin settings
-    const videoConfig = await getVideoApiConfig();
-    console.log(`Video provider: ${videoConfig.provider}`);
+    // Get video API keys pool with failover
+    const videoPool = await getVideoApiKeysPool();
+    console.log(`Video provider: ${videoPool.provider}, keys in pool: ${videoPool.keys.length}`);
 
     const isUGC = model?.toLowerCase().includes("ugc");
 
