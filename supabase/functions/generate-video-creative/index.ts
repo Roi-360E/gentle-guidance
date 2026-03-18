@@ -372,7 +372,11 @@ async function generateWithLuma(scenes: any[], apiKey: string, aspect: string, p
       }, proxyKey);
 
       if (!res.ok) {
-        console.error("Luma error:", res.status, await res.text());
+        const errBody = await res.text();
+        console.error("Luma error:", res.status, errBody);
+        if (isCreditsError(res.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: Luma ${res.status} - ${errBody.slice(0, 100)}`);
+        }
         results.push(null);
         continue;
       }
