@@ -1811,7 +1811,7 @@ export default function AdminPlans() {
                 {videoApiLoaded && videoApiKey && videoApiProvider !== 'lovable_ai' && (
                   <div className="flex items-center gap-2 text-sm text-primary">
                     <CheckCircle2 className="w-4 h-4" />
-                    API configurada: <strong>{videoApiProvider === 'minimax' ? 'Minimax' : videoApiProvider === 'runway' ? 'Runway' : videoApiProvider === 'kling' ? 'Kling AI' : 'Pika'}</strong>
+                    API configurada: <strong>{{ minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse' }[videoApiProvider] || videoApiProvider}</strong>
                   </div>
                 )}
               </CardContent>

@@ -613,6 +613,18 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
     } else if (videoConfig.provider === "kling") {
       sceneMedia = await generateWithKling(scenes, videoConfig.apiKey);
       mediaType = "video";
+    } else if (videoConfig.provider === "luma") {
+      sceneMedia = await generateWithLuma(scenes, videoConfig.apiKey, aspect);
+      mediaType = "video";
+    } else if (videoConfig.provider === "stability") {
+      sceneMedia = await generateWithStability(scenes, videoConfig.apiKey);
+      mediaType = "video";
+    } else if (videoConfig.provider === "heygen") {
+      sceneMedia = await generateWithHeygen(scenes, videoConfig.apiKey);
+      mediaType = "video";
+    } else if (videoConfig.provider === "pixverse") {
+      sceneMedia = await generateWithPixverse(scenes, videoConfig.apiKey);
+      mediaType = "video";
     } else {
       // Fallback to Lovable AI images
       sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
