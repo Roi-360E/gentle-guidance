@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair, Copy, BarChart3, Globe, CheckCircle2, AlertCircle, Pencil, Phone } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, GripVertical, Users, CreditCard, Search, MessageSquare, Coins, ShieldBan, ShieldCheck, Crosshair, Copy, BarChart3, Globe, CheckCircle2, AlertCircle, Pencil, Phone, Video } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
@@ -125,6 +125,12 @@ export default function AdminPlans() {
   };
 
   // Domain verification state
+  // Video API connector state
+  const [videoApiProvider, setVideoApiProvider] = useState('minimax');
+  const [videoApiKey, setVideoApiKey] = useState('');
+  const [videoApiSaving, setVideoApiSaving] = useState(false);
+  const [videoApiLoaded, setVideoApiLoaded] = useState(false);
+
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -164,6 +170,7 @@ export default function AdminPlans() {
           loadDomainFiles();
           loadRecoveryLeads();
           loadAgentPrompt();
+          loadVideoApiConfig();
         } else {
           toast.error('Acesso negado. Apenas administradores.');
           navigate('/');
@@ -462,8 +469,53 @@ export default function AdminPlans() {
     setAgentPromptSaving(false);
   };
 
-  const generateRecoveryMessage = async (lead: RecoveryLead) => {
-    setGeneratingMessageFor(lead.user_id);
+  const loadVideoApiConfig = async () => {
+    const { data } = await supabase
+      .from('admin_settings' as any)
+      .select('key, value')
+      .in('key', ['video_api_provider', 'video_api_key']);
+    if (data) {
+      (data as any[]).forEach((row: any) => {
+        if (row.key === 'video_api_provider') setVideoApiProvider(row.value || 'minimax');
+        if (row.key === 'video_api_key') setVideoApiKey(row.value || '');
+      });
+    }
+    setVideoApiLoaded(true);
+  };
+
+  const saveVideoApiConfig = async () => {
+    setVideoApiSaving(true);
+    const now = new Date().toISOString();
+    
+    // Upsert both settings
+    const upsert = async (key: string, value: string) => {
+      const { data: existing } = await supabase
+        .from('admin_settings' as any)
+        .select('key')
+        .eq('key', key)
+        .maybeSingle();
+      if (existing) {
+        return supabase.from('admin_settings' as any).update({ value, updated_at: now } as any).eq('key', key);
+      } else {
+        return supabase.from('admin_settings' as any).insert({ key, value, updated_at: now } as any);
+      }
+    };
+
+    const [r1, r2] = await Promise.all([
+      upsert('video_api_provider', videoApiProvider),
+      upsert('video_api_key', videoApiKey),
+    ]);
+
+    if (r1.error || r2.error) {
+      toast.error('Erro ao salvar: ' + (r1.error?.message || r2.error?.message));
+    } else {
+      toast.success('API de vídeo configurada com sucesso!');
+    }
+    setVideoApiSaving(false);
+  };
+
+
+    const generateRecoveryMessage = async (lead: RecoveryLead) => {
     try {
       const { data, error } = await supabase.functions.invoke('recovery-message', {
         body: {
@@ -759,7 +811,7 @@ export default function AdminPlans() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs defaultValue="plans" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="plans" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Planos</span>
             </TabsTrigger>
@@ -774,6 +826,9 @@ export default function AdminPlans() {
             </TabsTrigger>
             <TabsTrigger value="funnel" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Funil</span>
+            </TabsTrigger>
+            <TabsTrigger value="videoapi" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Vídeo IA</span>
             </TabsTrigger>
             <TabsTrigger value="domain" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Domínio</span>
@@ -1606,6 +1661,129 @@ export default function AdminPlans() {
             <p className="text-xs text-muted-foreground text-center">
               📊 Todos os eventos do Pixel (browser + server) são registrados automaticamente. As taxas de conversão mostram a % em relação ao evento anterior no funil.
             </p>
+          </TabsContent>
+
+          {/* ===== VIDEO API CONNECTOR TAB ===== */}
+          <TabsContent value="videoapi" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="w-5 h-5 text-primary" />
+                  Conector de API — Geração de Vídeo com IA
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">📋 Configure o provedor de geração de vídeo:</p>
+                  <p>Selecione qual API será usada para gerar vídeos no criador de criativos. Você pode trocar a qualquer momento sem alterar o código.</p>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Provedor de Vídeo</Label>
+                  <Select value={videoApiProvider} onValueChange={setVideoApiProvider}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o provedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="minimax">Minimax (Hailuo) — Melhor custo-benefício</SelectItem>
+                      <SelectItem value="runway">Runway — Plano ilimitado disponível</SelectItem>
+                      <SelectItem value="kling">Kling AI — Melhor qualidade facial</SelectItem>
+                      <SelectItem value="pika">Pika — Efeitos estilizados</SelectItem>
+                      <SelectItem value="lovable_ai">Lovable AI — Apenas imagens (sem custo extra)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {videoApiProvider !== 'lovable_ai' && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">API Key do {videoApiProvider === 'minimax' ? 'Minimax' : videoApiProvider === 'runway' ? 'Runway' : videoApiProvider === 'kling' ? 'Kling AI' : 'Pika'}</Label>
+                    <Input
+                      type="password"
+                      placeholder="Cole sua API Key aqui"
+                      value={videoApiKey}
+                      onChange={e => setVideoApiKey(e.target.value)}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {videoApiProvider === 'minimax' && 'Crie sua conta em minimaxi.com e gere uma API Key no painel.'}
+                      {videoApiProvider === 'runway' && 'Crie sua conta em runway.ml e gere uma API Key no painel. 125 créditos grátis.'}
+                      {videoApiProvider === 'kling' && 'Crie sua conta em klingai.com e gere uma API Key.'}
+                      {videoApiProvider === 'pika' && 'Crie sua conta em pika.art e gere uma API Key.'}
+                    </p>
+                  </div>
+                )}
+
+                {videoApiProvider === 'lovable_ai' && (
+                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
+                    <p className="text-sm font-medium">✅ Lovable AI (Padrão)</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Gera roteiros + imagens de cenas usando IA. Não gera vídeos com movimento real. Sem custo extra de API externa.
+                    </p>
+                  </div>
+                )}
+
+                {/* Provider comparison table */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Comparativo de provedores</Label>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Provedor</TableHead>
+                          <TableHead>Duração/clipe</TableHead>
+                          <TableHead>Custo/clipe</TableHead>
+                          <TableHead>Ilimitado?</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow className={videoApiProvider === 'minimax' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Minimax</TableCell>
+                          <TableCell>6s</TableCell>
+                          <TableCell>~$0.03</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'runway' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Runway</TableCell>
+                          <TableCell>16s</TableCell>
+                          <TableCell>~$0.20</TableCell>
+                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$95/mês</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'kling' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Kling AI</TableCell>
+                          <TableCell>10s</TableCell>
+                          <TableCell>~$0.08</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'pika' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Pika</TableCell>
+                          <TableCell>4s</TableCell>
+                          <TableCell>~$0.10</TableCell>
+                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$58/mês</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'lovable_ai' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Lovable AI</TableCell>
+                          <TableCell>—</TableCell>
+                          <TableCell>Incluído</TableCell>
+                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">Imagens only</Badge></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                <Button onClick={saveVideoApiConfig} disabled={videoApiSaving} className="w-full gap-2">
+                  {videoApiSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Salvar Configuração de Vídeo
+                </Button>
+
+                {videoApiLoaded && videoApiKey && videoApiProvider !== 'lovable_ai' && (
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <CheckCircle2 className="w-4 h-4" />
+                    API configurada: <strong>{videoApiProvider === 'minimax' ? 'Minimax' : videoApiProvider === 'runway' ? 'Runway' : videoApiProvider === 'kling' ? 'Kling AI' : 'Pika'}</strong>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
            {/* ===== DOMAIN VERIFICATION TAB ===== */}

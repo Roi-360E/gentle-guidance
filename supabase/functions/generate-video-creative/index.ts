@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,219 @@ const UGC_ASPECTS = [
   "Duração ideal entre 15-60 segundos",
 ];
 
+async function getVideoApiConfig() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data } = await supabase
+    .from("admin_settings")
+    .select("key, value")
+    .in("key", ["video_api_provider", "video_api_key"]);
+
+  const config: Record<string, string> = {};
+  (data || []).forEach((row: any) => {
+    config[row.key] = row.value;
+  });
+
+  return {
+    provider: config["video_api_provider"] || "lovable_ai",
+    apiKey: config["video_api_key"] || "",
+  };
+}
+
+async function generateWithLovableAI(
+  scenes: any[],
+  aspect: string,
+  LOVABLE_API_KEY: string
+) {
+  const aspectMap: Record<string, string> = {
+    "9:16 (Vertical)": "vertical 9:16 aspect ratio, portrait mode",
+    "16:9 (Horizontal)": "horizontal 16:9 aspect ratio, landscape mode",
+    "1:1 (Feed)": "square 1:1 aspect ratio",
+  };
+  const aspectSuffix = aspectMap[aspect] || "vertical 9:16 aspect ratio";
+
+  const imagePromises = scenes.slice(0, 4).map(async (scene: any, idx: number) => {
+    const imgPrompt = scene.image_prompt || scene.description || `Scene ${idx + 1}`;
+    const fullPrompt = `${imgPrompt}, ${aspectSuffix}, high quality, professional social media ad, cinematic lighting, vibrant colors`;
+
+    try {
+      const imgResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3.1-flash-image-preview",
+          messages: [{ role: "user", content: fullPrompt }],
+          modalities: ["image", "text"],
+        }),
+      });
+
+      if (!imgResponse.ok) return null;
+      const imgData = await imgResponse.json();
+      return imgData.choices?.[0]?.message?.images?.[0]?.image_url?.url || null;
+    } catch {
+      return null;
+    }
+  });
+
+  return Promise.all(imagePromises);
+}
+
+async function generateWithRunway(scenes: any[], apiKey: string, aspect: string) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      // Runway Gen-3 Alpha Turbo API
+      const res = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "X-Runway-Version": "2024-11-06",
+        },
+        body: JSON.stringify({
+          model: "gen3a_turbo",
+          promptText: scene.image_prompt || scene.description || "cinematic video scene",
+          duration: 5,
+          ratio: aspect?.includes("16:9") ? "16:9" : "9:16",
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Runway error:", res.status, await res.text());
+        results.push(null);
+        continue;
+      }
+
+      const data = await res.json();
+      // Runway returns a task ID - poll for result
+      const taskId = data.id;
+      let videoUrl: string | null = null;
+
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+          headers: { Authorization: `Bearer ${apiKey}`, "X-Runway-Version": "2024-11-06" },
+        });
+        const pollData = await pollRes.json();
+        if (pollData.status === "SUCCEEDED") {
+          videoUrl = pollData.output?.[0];
+          break;
+        }
+        if (pollData.status === "FAILED") break;
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("Runway gen error:", err);
+      results.push(null);
+    }
+  }
+  return results;
+}
+
+async function generateWithMinimax(scenes: any[], apiKey: string) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      const res = await fetch("https://api.minimaxi.chat/v1/video_generation", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "video-01",
+          prompt: scene.image_prompt || scene.description || "cinematic video scene",
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Minimax error:", res.status, await res.text());
+        results.push(null);
+        continue;
+      }
+
+      const data = await res.json();
+      const taskId = data.task_id;
+      let videoUrl: string | null = null;
+
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await fetch(`https://api.minimaxi.chat/v1/query/video_generation?task_id=${taskId}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        const pollData = await pollRes.json();
+        if (pollData.status === "Success") {
+          videoUrl = pollData.file_id ? `https://api.minimaxi.chat/v1/files/retrieve?file_id=${pollData.file_id}` : null;
+          break;
+        }
+        if (pollData.status === "Fail") break;
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("Minimax gen error:", err);
+      results.push(null);
+    }
+  }
+  return results;
+}
+
+async function generateWithKling(scenes: any[], apiKey: string) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      const res = await fetch("https://api.klingai.com/v1/videos/text2video", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model_name: "kling-v1",
+          prompt: scene.image_prompt || scene.description || "cinematic video scene",
+          duration: "5",
+          aspect_ratio: "9:16",
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Kling error:", res.status, await res.text());
+        results.push(null);
+        continue;
+      }
+
+      const data = await res.json();
+      const taskId = data.data?.task_id;
+      let videoUrl: string | null = null;
+
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await fetch(`https://api.klingai.com/v1/videos/text2video/${taskId}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        const pollData = await pollRes.json();
+        if (pollData.data?.task_status === "succeed") {
+          videoUrl = pollData.data?.task_result?.videos?.[0]?.url;
+          break;
+        }
+        if (pollData.data?.task_status === "failed") break;
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("Kling gen error:", err);
+      results.push(null);
+    }
+  }
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -37,9 +251,13 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Get video API config from admin settings
+    const videoConfig = await getVideoApiConfig();
+    console.log(`Video provider: ${videoConfig.provider}`);
+
     const isUGC = model?.toLowerCase().includes("ugc");
 
-    // Step 1: Generate the script/creative plan
+    // Step 1: Generate the script/creative plan (always uses Lovable AI)
     let systemPrompt = `Você é um diretor criativo especialista em produção de vídeos para redes sociais. 
 Sua tarefa é gerar um roteiro detalhado e direção criativa completa para um vídeo baseado nas imagens e prompt fornecidos.
 
@@ -56,7 +274,7 @@ Retorne um JSON com a seguinte estrutura:
       "description": "Descrição visual detalhada da cena",
       "text_overlay": "Texto que aparece na tela",
       "transition": "Tipo de transição",
-      "image_prompt": "Prompt detalhado em inglês para gerar a imagem desta cena. Descreva a composição visual, cores, estilo e elementos de forma clara e específica."
+      "image_prompt": "Prompt detalhado em inglês para gerar a imagem/vídeo desta cena."
     }
   ],
   "music_suggestion": "Sugestão de música/áudio",
@@ -64,17 +282,13 @@ Retorne um JSON com a seguinte estrutura:
   "creative_notes": "Notas criativas adicionais"
 }
 
-IMPORTANTE: Cada cena DEVE ter um campo "image_prompt" em inglês descrevendo visualmente a cena para geração de imagem por IA. Limite a 3-5 cenas para otimizar a geração.`;
+IMPORTANTE: Cada cena DEVE ter um campo "image_prompt" em inglês. Limite a 3-5 cenas.`;
 
     if (isUGC) {
       systemPrompt += `\n\nEste é um criativo no estilo UGC (User Generated Content). 
-Aplique TODOS os seguintes aspectos essenciais de um UGC profissional:
+Aplique TODOS os seguintes aspectos essenciais:
 
 ${UGC_ASPECTS.map((a, i) => `${i + 1}. ${a}`).join("\n")}
-
-O vídeo deve parecer autêntico e orgânico, como se fosse feito por um usuário real, 
-mas com qualidade profissional de produção. Inclua no roteiro instruções específicas 
-para cada um desses aspectos.
 
 Para os image_prompts, use estilo: "smartphone selfie style, natural lighting, casual authentic setting, UGC content creator style"`;
     }
@@ -87,23 +301,20 @@ ${imageDescriptions?.length ? `\nImagens conectadas (${imageDescriptions.length}
 Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no máximo 4 cenas.`;
 
     console.log("Step 1: Generating script...");
-    const scriptResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-        }),
-      }
-    );
+    const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+      }),
+    });
 
     if (!scriptResponse.ok) {
       if (scriptResponse.status === 429) {
@@ -145,68 +356,49 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
       creative.ugc_aspects = UGC_ASPECTS;
     }
 
-    // Step 2: Generate images for each scene
+    // Step 2: Generate visuals based on provider
     const scenes = creative.scenes || [];
-    const aspectMap: Record<string, string> = {
-      "9:16 (Vertical)": "vertical 9:16 aspect ratio, portrait mode",
-      "16:9 (Horizontal)": "horizontal 16:9 aspect ratio, landscape mode",
-      "1:1 (Feed)": "square 1:1 aspect ratio",
-    };
-    const aspectSuffix = aspectMap[aspect] || "vertical 9:16 aspect ratio";
+    let sceneMedia: (string | null)[] = [];
+    let mediaType: "image" | "video" = "image";
 
-    console.log(`Step 2: Generating ${scenes.length} scene images...`);
-    
-    const imagePromises = scenes.slice(0, 4).map(async (scene: any, idx: number) => {
-      const imgPrompt = scene.image_prompt || scene.description || `Scene ${idx + 1} of a social media ad video`;
-      const fullPrompt = `${imgPrompt}, ${aspectSuffix}, high quality, professional social media ad, cinematic lighting, vibrant colors`;
+    console.log(`Step 2: Generating ${scenes.length} scenes with ${videoConfig.provider}...`);
 
-      try {
-        console.log(`Generating image for scene ${idx + 1}...`);
-        const imgResponse = await fetch(
-          "https://ai.gateway.lovable.dev/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-3.1-flash-image-preview",
-              messages: [
-                { role: "user", content: fullPrompt },
-              ],
-              modalities: ["image", "text"],
-            }),
-          }
-        );
+    if (videoConfig.provider === "lovable_ai" || !videoConfig.apiKey) {
+      // Default: generate images with Lovable AI
+      sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
+      mediaType = "image";
+    } else if (videoConfig.provider === "runway") {
+      sceneMedia = await generateWithRunway(scenes, videoConfig.apiKey, aspect);
+      mediaType = "video";
+    } else if (videoConfig.provider === "minimax") {
+      sceneMedia = await generateWithMinimax(scenes, videoConfig.apiKey);
+      mediaType = "video";
+    } else if (videoConfig.provider === "kling") {
+      sceneMedia = await generateWithKling(scenes, videoConfig.apiKey);
+      mediaType = "video";
+    } else {
+      // Fallback to Lovable AI images
+      sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
+      mediaType = "image";
+    }
 
-        if (!imgResponse.ok) {
-          console.error(`Image gen failed for scene ${idx + 1}: ${imgResponse.status}`);
-          return null;
-        }
-
-        const imgData = await imgResponse.json();
-        const imageUrl = imgData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-        return imageUrl || null;
-      } catch (err) {
-        console.error(`Image gen error for scene ${idx + 1}:`, err);
-        return null;
-      }
-    });
-
-    const sceneImages = await Promise.all(imagePromises);
-    
-    // Attach images to scenes
+    // Attach media to scenes
     scenes.forEach((scene: any, idx: number) => {
-      if (idx < sceneImages.length && sceneImages[idx]) {
-        scene.generated_image = sceneImages[idx];
+      if (idx < sceneMedia.length && sceneMedia[idx]) {
+        if (mediaType === "video") {
+          scene.generated_video = sceneMedia[idx];
+        } else {
+          scene.generated_image = sceneMedia[idx];
+        }
       }
     });
 
     creative.scenes = scenes;
-    creative.has_generated_images = sceneImages.some(img => img !== null);
+    creative.media_type = mediaType;
+    creative.provider = videoConfig.provider;
+    creative.has_generated_images = sceneMedia.some((m) => m !== null);
 
-    console.log(`Done! Generated ${sceneImages.filter(Boolean).length}/${scenes.length} images.`);
+    console.log(`Done! Generated ${sceneMedia.filter(Boolean).length}/${scenes.length} media items via ${videoConfig.provider}.`);
 
     return new Response(JSON.stringify({ creative }), {
       status: 200,
