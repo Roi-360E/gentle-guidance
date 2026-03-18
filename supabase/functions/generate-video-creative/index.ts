@@ -308,11 +308,11 @@ async function generateWithKling(scenes: any[], apiKey: string, proxyKey: string
   return results;
 }
 
-async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
+async function generateWithLuma(scenes: any[], apiKey: string, aspect: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.lumalabs.ai/dream-machine/v1/generations", {
+      const res = await proxiedFetch("https://api.lumalabs.ai/dream-machine/v1/generations", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -323,7 +323,7 @@ async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
           aspect_ratio: aspect?.includes("16:9") ? "16:9" : "9:16",
           loop: false,
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Luma error:", res.status, await res.text());
@@ -337,9 +337,10 @@ async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.lumalabs.ai/dream-machine/v1/generations/${genId}`, {
+        const pollRes = await proxiedFetch(`https://api.lumalabs.ai/dream-machine/v1/generations/${genId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}` },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.state === "completed") {
           videoUrl = pollData.assets?.video;
