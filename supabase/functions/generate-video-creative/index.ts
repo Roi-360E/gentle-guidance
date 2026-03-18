@@ -779,8 +779,9 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
           }
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
-          await markKeyFailed(keyRow.id, errMsg);
-          console.log(`[${keyRow.provider}] Key "${keyRow.label || keyRow.id}" failed: ${errMsg}, trying next...`);
+          const creditsDepleted = errMsg.includes("CREDITS_EXHAUSTED");
+          await markKeyFailed(keyRow.id, errMsg, creditsDepleted);
+          console.log(`[${keyRow.provider}] Key "${keyRow.label || keyRow.id}" ${creditsDepleted ? '⚠️ CREDITS EXHAUSTED (auto-disabled)' : 'failed'}: ${errMsg}, trying next...`);
         }
       }
 
