@@ -40,61 +40,18 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
-async function getVideoApiKeysPool(): Promise<{ provider: string; keys: ApiKeyRow[] }> {
+async function getAllApiKeys(): Promise<ApiKeyRow[]> {
   const supabase = getSupabaseAdmin();
 
-  // Get active provider from admin_settings
-  const { data: settingsData } = await supabase
-    .from("admin_settings")
-    .select("key, value")
-    .in("key", [
-      "video_active_provider",
-      // Legacy fallback keys
-      "video_connector_1_provider", "video_connector_1_key",
-      "video_active_connector",
-      "video_api_provider", "video_api_key",
-    ]);
-
-  const config: Record<string, string> = {};
-  (settingsData || []).forEach((row: any) => {
-    config[row.key] = row.value;
-  });
-
-  // New system: active provider from admin_settings
-  let activeProvider = config["video_active_provider"] || "";
-
-  // Legacy fallback
-  if (!activeProvider) {
-    const activeSlot = config["video_active_connector"] || "1";
-    activeProvider = config[`video_connector_${activeSlot}_provider`] || config["video_api_provider"] || "lovable_ai";
-  }
-
-  if (activeProvider === "lovable_ai" || !activeProvider) {
-    return { provider: "lovable_ai", keys: [] };
-  }
-
-  // Fetch all enabled keys for this provider, sorted by least failures
+  // Fetch ALL enabled keys across ALL providers, sorted by least failures
   const { data: keysData } = await supabase
     .from("video_api_keys")
     .select("id, provider, api_key, label, is_enabled, fail_count")
-    .eq("provider", activeProvider)
     .eq("is_enabled", true)
     .order("fail_count", { ascending: true })
     .order("last_used_at", { ascending: true, nullsFirst: true });
 
-  // Legacy fallback: if no keys in pool, check old connector slots
-  if (!keysData || keysData.length === 0) {
-    const activeSlot = config["video_active_connector"] || "1";
-    const legacyKey = config[`video_connector_${activeSlot}_key`] || config["video_api_key"] || "";
-    if (legacyKey) {
-      return {
-        provider: activeProvider,
-        keys: [{ id: "legacy", provider: activeProvider, api_key: legacyKey, label: "Legacy", is_enabled: true, fail_count: 0 }],
-      };
-    }
-  }
-
-  return { provider: activeProvider, keys: keysData || [] };
+  return keysData || [];
 }
 
 async function markKeyFailed(keyId: string, error: string) {
