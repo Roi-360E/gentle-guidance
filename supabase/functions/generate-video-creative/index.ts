@@ -559,9 +559,10 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Get ALL enabled API keys across ALL providers
-    const allKeys = await getAllApiKeys();
+    // Get ALL enabled API keys and proxy config
+    const [allKeys, proxyKey] = await Promise.all([getAllApiKeys(), getProxyApiKey()]);
     console.log(`Total keys in pool: ${allKeys.length} across providers: ${[...new Set(allKeys.map(k => k.provider))].join(', ') || 'none'}`);
+    if (proxyKey) console.log("[Proxy] Proxy API key configured — requests will be routed with rotating IPs");
 
     const isUGC = model?.toLowerCase().includes("ugc");
 
