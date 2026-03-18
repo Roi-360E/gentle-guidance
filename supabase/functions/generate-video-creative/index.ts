@@ -40,10 +40,45 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
+async function getProxyApiKey(): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from("admin_settings")
+    .select("value")
+    .eq("key", "proxy_api_key")
+    .single();
+  return data?.value || null;
+}
+
+/**
+ * Proxied fetch: if a proxy API key is configured (ScraperAPI-style),
+ * routes the request through the proxy with rotating IPs.
+ * Each call gets a different IP, making each API key appear as a different app.
+ */
+async function proxiedFetch(
+  url: string,
+  options: RequestInit,
+  proxyKey: string | null
+): Promise<Response> {
+  if (!proxyKey) {
+    return fetch(url, options);
+  }
+
+  // ScraperAPI-style proxy: route through proxy URL with rotating session
+  const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const proxyUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(url)}&session_number=${sessionId}&render=false`;
+
+  console.log(`[Proxy] Routing through proxy with session ${sessionId}`);
+  return fetch(proxyUrl, {
+    method: options.method || "GET",
+    headers: options.headers,
+    body: options.body,
+  });
+}
+
 async function getAllApiKeys(): Promise<ApiKeyRow[]> {
   const supabase = getSupabaseAdmin();
 
-  // Fetch ALL enabled keys across ALL providers, sorted by least failures
   const { data: keysData } = await supabase
     .from("video_api_keys")
     .select("id, provider, api_key, label, is_enabled, fail_count")
@@ -119,12 +154,12 @@ async function generateWithLovableAI(
   return Promise.all(imagePromises);
 }
 
-async function generateWithRunway(scenes: any[], apiKey: string, aspect: string) {
+async function generateWithRunway(scenes: any[], apiKey: string, aspect: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
       // Runway Gen-3 Alpha Turbo API
-      const res = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+      const res = await proxiedFetch("https://api.dev.runwayml.com/v1/image_to_video", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -137,7 +172,7 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string)
           duration: 5,
           ratio: aspect?.includes("16:9") ? "16:9" : "9:16",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Runway error:", res.status, await res.text());
@@ -152,9 +187,10 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string)
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+        const pollRes = await proxiedFetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}`, "X-Runway-Version": "2024-11-06" },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.status === "SUCCEEDED") {
           videoUrl = pollData.output?.[0];
@@ -172,11 +208,11 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string)
   return results;
 }
 
-async function generateWithMinimax(scenes: any[], apiKey: string) {
+async function generateWithMinimax(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.minimaxi.chat/v1/video_generation", {
+      const res = await proxiedFetch("https://api.minimaxi.chat/v1/video_generation", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -186,7 +222,7 @@ async function generateWithMinimax(scenes: any[], apiKey: string) {
           model: "video-01",
           prompt: scene.image_prompt || scene.description || "cinematic video scene",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Minimax error:", res.status, await res.text());
@@ -200,9 +236,10 @@ async function generateWithMinimax(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.minimaxi.chat/v1/query/video_generation?task_id=${taskId}`, {
+        const pollRes = await proxiedFetch(`https://api.minimaxi.chat/v1/query/video_generation?task_id=${taskId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}` },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.status === "Success") {
           videoUrl = pollData.file_id ? `https://api.minimaxi.chat/v1/files/retrieve?file_id=${pollData.file_id}` : null;
@@ -220,11 +257,11 @@ async function generateWithMinimax(scenes: any[], apiKey: string) {
   return results;
 }
 
-async function generateWithKling(scenes: any[], apiKey: string) {
+async function generateWithKling(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.klingai.com/v1/videos/text2video", {
+      const res = await proxiedFetch("https://api.klingai.com/v1/videos/text2video", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -236,7 +273,7 @@ async function generateWithKling(scenes: any[], apiKey: string) {
           duration: "5",
           aspect_ratio: "9:16",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Kling error:", res.status, await res.text());
@@ -250,9 +287,10 @@ async function generateWithKling(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.klingai.com/v1/videos/text2video/${taskId}`, {
+        const pollRes = await proxiedFetch(`https://api.klingai.com/v1/videos/text2video/${taskId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}` },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.data?.task_status === "succeed") {
           videoUrl = pollData.data?.task_result?.videos?.[0]?.url;
@@ -270,11 +308,11 @@ async function generateWithKling(scenes: any[], apiKey: string) {
   return results;
 }
 
-async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
+async function generateWithLuma(scenes: any[], apiKey: string, aspect: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.lumalabs.ai/dream-machine/v1/generations", {
+      const res = await proxiedFetch("https://api.lumalabs.ai/dream-machine/v1/generations", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -285,7 +323,7 @@ async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
           aspect_ratio: aspect?.includes("16:9") ? "16:9" : "9:16",
           loop: false,
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Luma error:", res.status, await res.text());
@@ -299,9 +337,10 @@ async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.lumalabs.ai/dream-machine/v1/generations/${genId}`, {
+        const pollRes = await proxiedFetch(`https://api.lumalabs.ai/dream-machine/v1/generations/${genId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}` },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.state === "completed") {
           videoUrl = pollData.assets?.video;
@@ -319,12 +358,11 @@ async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
   return results;
 }
 
-async function generateWithStability(scenes: any[], apiKey: string) {
+async function generateWithStability(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      // First generate an image, then convert to video with Stable Video Diffusion
-      const imgRes = await fetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
+      const imgRes = await proxiedFetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -337,7 +375,7 @@ async function generateWithStability(scenes: any[], apiKey: string) {
           fd.append("aspect_ratio", "9:16");
           return fd;
         })(),
-      });
+      }, proxyKey);
 
       if (!imgRes.ok) {
         console.error("Stability img error:", imgRes.status, await imgRes.text());
@@ -349,24 +387,22 @@ async function generateWithStability(scenes: any[], apiKey: string) {
       const imageBase64 = imgData.image;
       if (!imageBase64) { results.push(null); continue; }
 
-      // Convert image to video
       const vidFormData = new FormData();
       const imageBlob = new Blob([Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0))], { type: "image/png" });
       vidFormData.append("image", imageBlob, "scene.png");
       vidFormData.append("cfg_scale", "2.5");
       vidFormData.append("motion_bucket_id", "127");
 
-      const vidRes = await fetch("https://api.stability.ai/v2beta/image-to-video", {
+      const vidRes = await proxiedFetch("https://api.stability.ai/v2beta/image-to-video", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
         },
         body: vidFormData,
-      });
+      }, proxyKey);
 
       if (!vidRes.ok) {
         console.error("Stability vid error:", vidRes.status, await vidRes.text());
-        // Fallback: return the image
         results.push(`data:image/png;base64,${imageBase64}`);
         continue;
       }
@@ -377,9 +413,10 @@ async function generateWithStability(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.stability.ai/v2beta/image-to-video/result/${generationId}`, {
+        const pollRes = await proxiedFetch(`https://api.stability.ai/v2beta/image-to-video/result/${generationId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
-        });
+        }, proxyKey);
         if (pollRes.status === 200) {
           const pollData = await pollRes.json();
           videoUrl = pollData.video ? `data:video/mp4;base64,${pollData.video}` : null;
@@ -397,11 +434,11 @@ async function generateWithStability(scenes: any[], apiKey: string) {
   return results;
 }
 
-async function generateWithHeygen(scenes: any[], apiKey: string) {
+async function generateWithHeygen(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.heygen.com/v2/video/generate", {
+      const res = await proxiedFetch("https://api.heygen.com/v2/video/generate", {
         method: "POST",
         headers: {
           "X-Api-Key": apiKey,
@@ -422,7 +459,7 @@ async function generateWithHeygen(scenes: any[], apiKey: string) {
           }],
           dimension: { width: 1080, height: 1920 },
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("HeyGen error:", res.status, await res.text());
@@ -436,9 +473,10 @@ async function generateWithHeygen(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${videoId}`, {
+        const pollRes = await proxiedFetch(`https://api.heygen.com/v1/video_status.get?video_id=${videoId}`, {
+          method: "GET",
           headers: { "X-Api-Key": apiKey },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.data?.status === "completed") {
           videoUrl = pollData.data?.video_url;
@@ -456,11 +494,11 @@ async function generateWithHeygen(scenes: any[], apiKey: string) {
   return results;
 }
 
-async function generateWithPixverse(scenes: any[], apiKey: string) {
+async function generateWithPixverse(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://app-api.pixverse.ai/openapi/v2/video/text/generate", {
+      const res = await proxiedFetch("https://app-api.pixverse.ai/openapi/v2/video/text/generate", {
         method: "POST",
         headers: {
           "Api-Key": apiKey,
@@ -473,7 +511,7 @@ async function generateWithPixverse(scenes: any[], apiKey: string) {
           aspect_ratio: "9:16",
           model: "v3.5",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("PixVerse error:", res.status, await res.text());
@@ -487,15 +525,16 @@ async function generateWithPixverse(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://app-api.pixverse.ai/openapi/v2/video/result/${taskId}`, {
+        const pollRes = await proxiedFetch(`https://app-api.pixverse.ai/openapi/v2/video/result/${taskId}`, {
+          method: "GET",
           headers: { "Api-Key": apiKey },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.Resp?.status === 1) {
           videoUrl = pollData.Resp?.url;
           break;
         }
-        if (pollData.Resp?.status === 3) break; // failed
+        if (pollData.Resp?.status === 3) break;
       }
 
       results.push(videoUrl);
@@ -520,9 +559,10 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Get ALL enabled API keys across ALL providers
-    const allKeys = await getAllApiKeys();
+    // Get ALL enabled API keys and proxy config
+    const [allKeys, proxyKey] = await Promise.all([getAllApiKeys(), getProxyApiKey()]);
     console.log(`Total keys in pool: ${allKeys.length} across providers: ${[...new Set(allKeys.map(k => k.provider))].join(', ') || 'none'}`);
+    if (proxyKey) console.log("[Proxy] Proxy API key configured — requests will be routed with rotating IPs");
 
     const isUGC = model?.toLowerCase().includes("ugc");
 
@@ -632,14 +672,14 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
     let usedKeyId = "";
     let usedProvider = "lovable_ai";
 
-    const generateFn: Record<string, (s: any[], k: string, a?: string) => Promise<(string | null)[]>> = {
-      runway: (s, k) => generateWithRunway(s, k, aspect),
-      minimax: (s, k) => generateWithMinimax(s, k),
-      kling: (s, k) => generateWithKling(s, k),
-      luma: (s, k) => generateWithLuma(s, k, aspect),
-      stability: (s, k) => generateWithStability(s, k),
-      heygen: (s, k) => generateWithHeygen(s, k),
-      pixverse: (s, k) => generateWithPixverse(s, k),
+    const generateFn: Record<string, (s: any[], k: string) => Promise<(string | null)[]>> = {
+      runway: (s, k) => generateWithRunway(s, k, aspect, proxyKey),
+      minimax: (s, k) => generateWithMinimax(s, k, proxyKey),
+      kling: (s, k) => generateWithKling(s, k, proxyKey),
+      luma: (s, k) => generateWithLuma(s, k, aspect, proxyKey),
+      stability: (s, k) => generateWithStability(s, k, proxyKey),
+      heygen: (s, k) => generateWithHeygen(s, k, proxyKey),
+      pixverse: (s, k) => generateWithPixverse(s, k, proxyKey),
     };
 
     console.log(`Step 2: Generating ${scenes.length} scenes, trying ${allKeys.length} keys...`);
