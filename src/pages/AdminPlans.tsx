@@ -494,7 +494,29 @@ export default function AdminPlans() {
       .select('*')
       .order('created_at', { ascending: true });
     if (keysData) setApiKeyPool(keysData as any[]);
+
+    // Load proxy key
+    const { data: proxyData } = await supabase
+      .from('admin_settings' as any)
+      .select('value')
+      .eq('key', 'proxy_api_key')
+      .maybeSingle();
+    if (proxyData) setProxyApiKey((proxyData as any).value || '');
+
     setVideoApiLoaded(true);
+  };
+
+  const saveProxyApiKey = async () => {
+    setProxyApiKeySaving(true);
+    const { error } = await supabase
+      .from('admin_settings' as any)
+      .upsert({ key: 'proxy_api_key', value: proxyApiKey } as any, { onConflict: 'key' });
+    if (error) {
+      toast.error('Erro ao salvar chave de proxy.');
+    } else {
+      toast.success('Chave de proxy salva com sucesso!');
+    }
+    setProxyApiKeySaving(false);
   };
 
   const addApiKey = async () => {
