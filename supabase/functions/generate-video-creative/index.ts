@@ -612,56 +612,102 @@ async function generateWithImagineArt(scenes: any[], apiKey: string, aspect: str
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const formData = new FormData();
-      formData.append("prompt", scene.image_prompt || scene.description || "cinematic video scene");
-      formData.append("style_id", "11002"); // realistic style
-      formData.append("aspect_ratio", aspect?.includes("16:9") ? "16:9" : "9:16");
+      const prompt = scene.image_prompt || scene.description || "cinematic video scene";
 
+      // --- Try Endpoint 1: text-to-video ---
+      const formData = new FormData();
+      formData.append("prompt", prompt);
+      formData.append("style", "kling-1.0-pro");
+
+      console.log("[ImagineArt] Trying text-to-video...");
       const res = await proxiedFetch("https://api.vyro.ai/v2/video/text-to-video", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: { Authorization: `Bearer ${apiKey}` },
         body: formData,
       }, proxyKey);
 
       if (!res.ok) {
         const errBody = await res.text();
-        console.error("ImagineArt error:", res.status, errBody);
+        console.error("ImagineArt text-to-video error:", res.status, errBody);
         if (isCreditsError(res.status, errBody)) {
           throw new Error(`CREDITS_EXHAUSTED: ImagineArt ${res.status} - ${errBody.slice(0, 100)}`);
         }
-        results.push(null);
+
+        // --- Fallback: Endpoint 3 — image generation ---
+        console.log("[ImagineArt] text-to-video failed, trying image generation...");
+        const imgFormData = new FormData();
+        imgFormData.append("prompt", prompt);
+        imgFormData.append("style", "realistic");
+        imgFormData.append("aspect_ratio", aspect?.includes("16:9") ? "16:9" : aspect?.includes("1:1") ? "1:1" : "9:16");
+        imgFormData.append("seed", String(Math.floor(Math.random() * 1000)));
+
+        const imgRes = await proxiedFetch("https://api.vyro.ai/v2/image/generations", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: imgFormData,
+        }, proxyKey);
+
+        if (!imgRes.ok) {
+          const imgErrBody = await imgRes.text();
+          console.error("ImagineArt image gen error:", imgRes.status, imgErrBody);
+          if (isCreditsError(imgRes.status, imgErrBody)) {
+            throw new Error(`CREDITS_EXHAUSTED: ImagineArt ${imgRes.status} - ${imgErrBody.slice(0, 100)}`);
+          }
+          results.push(null);
+          continue;
+        }
+
+        // Image endpoint returns binary image data
+        const imgBlob = await imgRes.blob();
+        const imgArrayBuf = await imgBlob.arrayBuffer();
+        const imgBase64 = btoa(String.fromCharCode(...new Uint8Array(imgArrayBuf)));
+        const mimeType = imgRes.headers.get("content-type") || "image/png";
+        results.push(`data:${mimeType};base64,${imgBase64}`);
         continue;
       }
 
-      const data = await res.json();
-      const videoId = data.data?.id || data.id;
-      if (!videoId) { results.push(null); continue; }
+      // text-to-video succeeded — poll or extract video URL
+      const contentType = res.headers.get("content-type") || "";
 
-      let videoUrl: string | null = null;
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        const videoId = data.data?.id || data.id;
 
-      // Poll status endpoint (video generation takes 10-15 min)
-      for (let i = 0; i < 180; i++) {
-        await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await proxiedFetch(`https://api.vyro.ai/v2/video/status/${videoId}`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${apiKey}` },
-        }, proxyKey);
-
-        if (!pollRes.ok) continue;
-
-        const pollData = await pollRes.json();
-        const videoStatus = pollData.video?.status || pollData.status;
-
-        if (videoStatus === "COMPLETED" || pollData.status === "success") {
-          videoUrl = pollData.video?.url || pollData.video?.download_url || null;
-          break;
+        if (!videoId) {
+          // Response may contain direct video URL
+          const directUrl = data.video?.url || data.url || data.video_url;
+          if (directUrl) { results.push(directUrl); continue; }
+          results.push(null);
+          continue;
         }
-        if (videoStatus === "FAILED" || videoStatus === "ERROR") break;
-      }
 
-      results.push(videoUrl);
+        // Poll for completion
+        let videoUrl: string | null = null;
+        for (let i = 0; i < 180; i++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const pollRes = await proxiedFetch(`https://api.vyro.ai/v2/video/status/${videoId}`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${apiKey}` },
+          }, proxyKey);
+
+          if (!pollRes.ok) continue;
+          const pollData = await pollRes.json();
+          const videoStatus = pollData.video?.status || pollData.status;
+
+          if (videoStatus === "COMPLETED" || videoStatus === "success") {
+            videoUrl = pollData.video?.url || pollData.video?.download_url || pollData.url || null;
+            break;
+          }
+          if (videoStatus === "FAILED" || videoStatus === "ERROR") break;
+        }
+        results.push(videoUrl);
+      } else {
+        // Binary video response
+        const vidBlob = await res.blob();
+        const vidArrayBuf = await vidBlob.arrayBuffer();
+        const vidBase64 = btoa(String.fromCharCode(...new Uint8Array(vidArrayBuf)));
+        results.push(`data:video/mp4;base64,${vidBase64}`);
+      }
     } catch (err) {
       console.error("ImagineArt gen error:", err);
       if (err instanceof Error && err.message.includes("CREDITS_EXHAUSTED")) throw err;
