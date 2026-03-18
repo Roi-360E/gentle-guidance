@@ -521,26 +521,39 @@ export default function AdminPlans() {
     setProxyApiKeySaving(false);
   };
 
-  const addApiKey = async () => {
+  const addApiKey = () => {
     if (!newKeyProvider || !newKeyValue) {
       toast.error('Selecione o provedor e insira a chave.');
       return;
     }
-    setAddingKey(true);
-    const { error } = await supabase.from('video_api_keys' as any).insert({
-      provider: newKeyProvider,
-      api_key: newKeyValue,
-      label: newKeyLabel || `Chave ${apiKeyPool.filter(k => k.provider === newKeyProvider).length + 1}`,
-    } as any);
+    const label = newKeyLabel || `Chave ${apiKeyPool.filter(k => k.provider === newKeyProvider).length + pendingKeys.filter(k => k.provider === newKeyProvider).length + 1}`;
+    setPendingKeys(prev => [...prev, { provider: newKeyProvider, api_key: newKeyValue, label }]);
+    setNewKeyValue('');
+    setNewKeyLabel('');
+    toast.success('Chave adicionada à lista. Clique em "Salvar Chaves" para confirmar.');
+  };
+
+  const removePendingKey = (index: number) => {
+    setPendingKeys(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const savePendingKeys = async () => {
+    if (pendingKeys.length === 0) {
+      toast.error('Nenhuma chave pendente para salvar.');
+      return;
+    }
+    setSavingPendingKeys(true);
+    const { error } = await supabase.from('video_api_keys' as any).insert(
+      pendingKeys.map(k => ({ provider: k.provider, api_key: k.api_key, label: k.label })) as any
+    );
     if (error) {
-      toast.error('Erro ao adicionar chave.');
+      toast.error('Erro ao salvar chaves.');
     } else {
-      toast.success('Chave adicionada ao pool!');
-      setNewKeyValue('');
-      setNewKeyLabel('');
+      toast.success(`${pendingKeys.length} chave(s) salva(s) com sucesso!`);
+      setPendingKeys([]);
       await loadVideoApiConfig();
     }
-    setAddingKey(false);
+    setSavingPendingKeys(false);
   };
 
   const removeApiKey = async (id: string) => {
