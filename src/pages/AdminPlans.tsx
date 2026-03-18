@@ -1713,6 +1713,10 @@ export default function AdminPlans() {
                       {videoApiProvider === 'runway' && 'Crie sua conta em runway.ml e gere uma API Key no painel. 125 créditos grátis.'}
                       {videoApiProvider === 'kling' && 'Crie sua conta em klingai.com e gere uma API Key.'}
                       {videoApiProvider === 'pika' && 'Crie sua conta em pika.art e gere uma API Key.'}
+                      {videoApiProvider === 'luma' && 'Crie sua conta em lumalabs.ai e gere uma API Key no painel de desenvolvedor.'}
+                      {videoApiProvider === 'stability' && 'Crie sua conta em platform.stability.ai e gere uma API Key.'}
+                      {videoApiProvider === 'heygen' && 'Crie sua conta em heygen.com e gere uma API Key em Settings > API.'}
+                      {videoApiProvider === 'pixverse' && 'Crie sua conta em pixverse.ai e gere uma API Key no painel.'}
                     </p>
                   </div>
                 )}
