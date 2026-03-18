@@ -516,7 +516,11 @@ async function generateWithHeygen(scenes: any[], apiKey: string, proxyKey: strin
       }, proxyKey);
 
       if (!res.ok) {
-        console.error("HeyGen error:", res.status, await res.text());
+        const errBody = await res.text();
+        console.error("HeyGen error:", res.status, errBody);
+        if (isCreditsError(res.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: HeyGen ${res.status} - ${errBody.slice(0, 100)}`);
+        }
         results.push(null);
         continue;
       }
