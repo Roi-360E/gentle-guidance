@@ -238,6 +238,243 @@ async function generateWithKling(scenes: any[], apiKey: string) {
   return results;
 }
 
+async function generateWithLuma(scenes: any[], apiKey: string, aspect: string) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      const res = await fetch("https://api.lumalabs.ai/dream-machine/v1/generations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: scene.image_prompt || scene.description || "cinematic video scene",
+          aspect_ratio: aspect?.includes("16:9") ? "16:9" : "9:16",
+          loop: false,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Luma error:", res.status, await res.text());
+        results.push(null);
+        continue;
+      }
+
+      const data = await res.json();
+      const genId = data.id;
+      let videoUrl: string | null = null;
+
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await fetch(`https://api.lumalabs.ai/dream-machine/v1/generations/${genId}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        const pollData = await pollRes.json();
+        if (pollData.state === "completed") {
+          videoUrl = pollData.assets?.video;
+          break;
+        }
+        if (pollData.state === "failed") break;
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("Luma gen error:", err);
+      results.push(null);
+    }
+  }
+  return results;
+}
+
+async function generateWithStability(scenes: any[], apiKey: string) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      // First generate an image, then convert to video with Stable Video Diffusion
+      const imgRes = await fetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: "application/json",
+        },
+        body: (() => {
+          const fd = new FormData();
+          fd.append("prompt", scene.image_prompt || scene.description || "cinematic scene");
+          fd.append("output_format", "png");
+          fd.append("aspect_ratio", "9:16");
+          return fd;
+        })(),
+      });
+
+      if (!imgRes.ok) {
+        console.error("Stability img error:", imgRes.status, await imgRes.text());
+        results.push(null);
+        continue;
+      }
+
+      const imgData = await imgRes.json();
+      const imageBase64 = imgData.image;
+      if (!imageBase64) { results.push(null); continue; }
+
+      // Convert image to video
+      const vidFormData = new FormData();
+      const imageBlob = new Blob([Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0))], { type: "image/png" });
+      vidFormData.append("image", imageBlob, "scene.png");
+      vidFormData.append("cfg_scale", "2.5");
+      vidFormData.append("motion_bucket_id", "127");
+
+      const vidRes = await fetch("https://api.stability.ai/v2beta/image-to-video", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: vidFormData,
+      });
+
+      if (!vidRes.ok) {
+        console.error("Stability vid error:", vidRes.status, await vidRes.text());
+        // Fallback: return the image
+        results.push(`data:image/png;base64,${imageBase64}`);
+        continue;
+      }
+
+      const vidData = await vidRes.json();
+      const generationId = vidData.id;
+      let videoUrl: string | null = null;
+
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await fetch(`https://api.stability.ai/v2beta/image-to-video/result/${generationId}`, {
+          headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+        });
+        if (pollRes.status === 200) {
+          const pollData = await pollRes.json();
+          videoUrl = pollData.video ? `data:video/mp4;base64,${pollData.video}` : null;
+          break;
+        }
+        if (pollRes.status !== 202) break;
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("Stability gen error:", err);
+      results.push(null);
+    }
+  }
+  return results;
+}
+
+async function generateWithHeygen(scenes: any[], apiKey: string) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      const res = await fetch("https://api.heygen.com/v2/video/generate", {
+        method: "POST",
+        headers: {
+          "X-Api-Key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          video_inputs: [{
+            character: {
+              type: "avatar",
+              avatar_id: "Angela-inblackskirt-20220820",
+              avatar_style: "normal",
+            },
+            voice: {
+              type: "text",
+              input_text: scene.text_overlay || scene.description || "Hello!",
+              voice_id: "1bd001e7e50f421d891986aad5158bc8",
+            },
+          }],
+          dimension: { width: 1080, height: 1920 },
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("HeyGen error:", res.status, await res.text());
+        results.push(null);
+        continue;
+      }
+
+      const data = await res.json();
+      const videoId = data.data?.video_id;
+      let videoUrl: string | null = null;
+
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${videoId}`, {
+          headers: { "X-Api-Key": apiKey },
+        });
+        const pollData = await pollRes.json();
+        if (pollData.data?.status === "completed") {
+          videoUrl = pollData.data?.video_url;
+          break;
+        }
+        if (pollData.data?.status === "failed") break;
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("HeyGen gen error:", err);
+      results.push(null);
+    }
+  }
+  return results;
+}
+
+async function generateWithPixverse(scenes: any[], apiKey: string) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      const res = await fetch("https://app-api.pixverse.ai/openapi/v2/video/text/generate", {
+        method: "POST",
+        headers: {
+          "Api-Key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: scene.image_prompt || scene.description || "cinematic video scene",
+          duration: 4,
+          quality: "high",
+          aspect_ratio: "9:16",
+          model: "v3.5",
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("PixVerse error:", res.status, await res.text());
+        results.push(null);
+        continue;
+      }
+
+      const data = await res.json();
+      const taskId = data.Resp?.task_id;
+      let videoUrl: string | null = null;
+
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await fetch(`https://app-api.pixverse.ai/openapi/v2/video/result/${taskId}`, {
+          headers: { "Api-Key": apiKey },
+        });
+        const pollData = await pollRes.json();
+        if (pollData.Resp?.status === 1) {
+          videoUrl = pollData.Resp?.url;
+          break;
+        }
+        if (pollData.Resp?.status === 3) break; // failed
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("PixVerse gen error:", err);
+      results.push(null);
+    }
+  }
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -375,6 +612,18 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
       mediaType = "video";
     } else if (videoConfig.provider === "kling") {
       sceneMedia = await generateWithKling(scenes, videoConfig.apiKey);
+      mediaType = "video";
+    } else if (videoConfig.provider === "luma") {
+      sceneMedia = await generateWithLuma(scenes, videoConfig.apiKey, aspect);
+      mediaType = "video";
+    } else if (videoConfig.provider === "stability") {
+      sceneMedia = await generateWithStability(scenes, videoConfig.apiKey);
+      mediaType = "video";
+    } else if (videoConfig.provider === "heygen") {
+      sceneMedia = await generateWithHeygen(scenes, videoConfig.apiKey);
+      mediaType = "video";
+    } else if (videoConfig.provider === "pixverse") {
+      sceneMedia = await generateWithPixverse(scenes, videoConfig.apiKey);
       mediaType = "video";
     } else {
       // Fallback to Lovable AI images

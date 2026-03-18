@@ -1689,6 +1689,10 @@ export default function AdminPlans() {
                       <SelectItem value="runway">Runway — Plano ilimitado disponível</SelectItem>
                       <SelectItem value="kling">Kling AI — Melhor qualidade facial</SelectItem>
                       <SelectItem value="pika">Pika — Efeitos estilizados</SelectItem>
+                      <SelectItem value="luma">Luma AI (Dream Machine) — Alta qualidade cinematográfica</SelectItem>
+                      <SelectItem value="stability">Stability AI (Stable Video) — Open-source, baixo custo</SelectItem>
+                      <SelectItem value="heygen">HeyGen — Avatares realistas com fala</SelectItem>
+                      <SelectItem value="pixverse">PixVerse — Estilo anime e efeitos criativos</SelectItem>
                       <SelectItem value="lovable_ai">Lovable AI — Apenas imagens (sem custo extra)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1696,7 +1700,7 @@ export default function AdminPlans() {
 
                 {videoApiProvider !== 'lovable_ai' && (
                   <div className="space-y-3">
-                    <Label className="text-sm font-medium">API Key do {videoApiProvider === 'minimax' ? 'Minimax' : videoApiProvider === 'runway' ? 'Runway' : videoApiProvider === 'kling' ? 'Kling AI' : 'Pika'}</Label>
+                    <Label className="text-sm font-medium">API Key do {{ minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse' }[videoApiProvider] || videoApiProvider}</Label>
                     <Input
                       type="password"
                       placeholder="Cole sua API Key aqui"
@@ -1709,6 +1713,10 @@ export default function AdminPlans() {
                       {videoApiProvider === 'runway' && 'Crie sua conta em runway.ml e gere uma API Key no painel. 125 créditos grátis.'}
                       {videoApiProvider === 'kling' && 'Crie sua conta em klingai.com e gere uma API Key.'}
                       {videoApiProvider === 'pika' && 'Crie sua conta em pika.art e gere uma API Key.'}
+                      {videoApiProvider === 'luma' && 'Crie sua conta em lumalabs.ai e gere uma API Key no painel de desenvolvedor.'}
+                      {videoApiProvider === 'stability' && 'Crie sua conta em platform.stability.ai e gere uma API Key.'}
+                      {videoApiProvider === 'heygen' && 'Crie sua conta em heygen.com e gere uma API Key em Settings > API.'}
+                      {videoApiProvider === 'pixverse' && 'Crie sua conta em pixverse.ai e gere uma API Key no painel.'}
                     </p>
                   </div>
                 )}
@@ -1760,6 +1768,30 @@ export default function AdminPlans() {
                           <TableCell>~$0.10</TableCell>
                           <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$58/mês</Badge></TableCell>
                         </TableRow>
+                        <TableRow className={videoApiProvider === 'luma' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Luma AI</TableCell>
+                          <TableCell>5s</TableCell>
+                          <TableCell>~$0.04</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'stability' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Stability AI</TableCell>
+                          <TableCell>4s</TableCell>
+                          <TableCell>~$0.05</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'heygen' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">HeyGen</TableCell>
+                          <TableCell>Variável</TableCell>
+                          <TableCell>~$0.10</TableCell>
+                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$29/mês</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'pixverse' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">PixVerse</TableCell>
+                          <TableCell>4s</TableCell>
+                          <TableCell>~$0.05</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
                         <TableRow className={videoApiProvider === 'lovable_ai' ? 'bg-primary/5' : ''}>
                           <TableCell className="font-medium">Lovable AI</TableCell>
                           <TableCell>—</TableCell>
@@ -1779,7 +1811,7 @@ export default function AdminPlans() {
                 {videoApiLoaded && videoApiKey && videoApiProvider !== 'lovable_ai' && (
                   <div className="flex items-center gap-2 text-sm text-primary">
                     <CheckCircle2 className="w-4 h-4" />
-                    API configurada: <strong>{videoApiProvider === 'minimax' ? 'Minimax' : videoApiProvider === 'runway' ? 'Runway' : videoApiProvider === 'kling' ? 'Kling AI' : 'Pika'}</strong>
+                    API configurada: <strong>{{ minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse' }[videoApiProvider] || videoApiProvider}</strong>
                   </div>
                 )}
               </CardContent>
