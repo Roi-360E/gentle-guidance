@@ -608,7 +608,62 @@ async function generateWithPixverse(scenes: any[], apiKey: string, proxyKey: str
   return results;
 }
 
+async function validateImagineArtKey(apiKey: string, proxyKey: string | null): Promise<{ valid: boolean; error?: string }> {
+  try {
+    // Lightweight call to image endpoint with minimal params to validate the key
+    const testForm = new FormData();
+    testForm.append("prompt", "test");
+    testForm.append("style", "realistic");
+    testForm.append("aspect_ratio", "1:1");
+
+    const res = await proxiedFetch("https://api.vyro.ai/v2/image/generations", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: testForm,
+    }, proxyKey);
+
+    if (res.status === 401 || res.status === 403) {
+      const body = await res.text();
+      const lower = body.toLowerCase();
+      if (lower.includes("invalid") || lower.includes("unauthorized") || lower.includes("forbidden") || lower.includes("authentication")) {
+        return { valid: false, error: `Token inválido ou sem permissão (HTTP ${res.status}): ${body.slice(0, 150)}` };
+      }
+      // 403 could also be credits exhausted, which means the key IS valid
+      if (isCreditsError(res.status, body)) {
+        return { valid: true };
+      }
+      return { valid: false, error: `Acesso negado (HTTP ${res.status}): ${body.slice(0, 150)}` };
+    }
+
+    // Any other status (200, 402, 429, etc.) means the key itself is valid
+    return { valid: true };
+  } catch (err) {
+    console.error("[ImagineArt] Key validation network error:", err);
+    // Network errors don't mean the key is invalid
+    return { valid: true };
+  }
+}
+
 async function generateWithImagineArt(scenes: any[], apiKey: string, aspect: string, proxyKey: string | null) {
+  // --- Validate API key before processing scenes ---
+  console.log("[ImagineArt] Validando token antes de iniciar...");
+  const validation = await validateImagineArtKey(apiKey, proxyKey);
+  if (!validation.valid) {
+    console.error("[ImagineArt] Token inválido:", validation.error);
+    // Disable the key in the pool so it won't be retried
+    const supabase = getSupabaseAdmin();
+    await supabase
+      .from("video_api_keys")
+      .update({
+        is_enabled: false,
+        last_error: `Token inválido: ${validation.error}`,
+        fail_count: 999,
+      })
+      .eq("api_key", apiKey);
+    throw new Error(`CREDITS_EXHAUSTED: ImagineArt token inválido - ${validation.error}`);
+  }
+  console.log("[ImagineArt] Token válido, iniciando geração...");
+
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
