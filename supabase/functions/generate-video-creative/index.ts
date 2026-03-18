@@ -672,14 +672,14 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
     let usedKeyId = "";
     let usedProvider = "lovable_ai";
 
-    const generateFn: Record<string, (s: any[], k: string, a?: string) => Promise<(string | null)[]>> = {
-      runway: (s, k) => generateWithRunway(s, k, aspect),
-      minimax: (s, k) => generateWithMinimax(s, k),
-      kling: (s, k) => generateWithKling(s, k),
-      luma: (s, k) => generateWithLuma(s, k, aspect),
-      stability: (s, k) => generateWithStability(s, k),
-      heygen: (s, k) => generateWithHeygen(s, k),
-      pixverse: (s, k) => generateWithPixverse(s, k),
+    const generateFn: Record<string, (s: any[], k: string) => Promise<(string | null)[]>> = {
+      runway: (s, k) => generateWithRunway(s, k, aspect, proxyKey),
+      minimax: (s, k) => generateWithMinimax(s, k, proxyKey),
+      kling: (s, k) => generateWithKling(s, k, proxyKey),
+      luma: (s, k) => generateWithLuma(s, k, aspect, proxyKey),
+      stability: (s, k) => generateWithStability(s, k, proxyKey),
+      heygen: (s, k) => generateWithHeygen(s, k, proxyKey),
+      pixverse: (s, k) => generateWithPixverse(s, k, proxyKey),
     };
 
     console.log(`Step 2: Generating ${scenes.length} scenes, trying ${allKeys.length} keys...`);
