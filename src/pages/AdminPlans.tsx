@@ -1689,6 +1689,10 @@ export default function AdminPlans() {
                       <SelectItem value="runway">Runway — Plano ilimitado disponível</SelectItem>
                       <SelectItem value="kling">Kling AI — Melhor qualidade facial</SelectItem>
                       <SelectItem value="pika">Pika — Efeitos estilizados</SelectItem>
+                      <SelectItem value="luma">Luma AI (Dream Machine) — Alta qualidade cinematográfica</SelectItem>
+                      <SelectItem value="stability">Stability AI (Stable Video) — Open-source, baixo custo</SelectItem>
+                      <SelectItem value="heygen">HeyGen — Avatares realistas com fala</SelectItem>
+                      <SelectItem value="pixverse">PixVerse — Estilo anime e efeitos criativos</SelectItem>
                       <SelectItem value="lovable_ai">Lovable AI — Apenas imagens (sem custo extra)</SelectItem>
                     </SelectContent>
                   </Select>
