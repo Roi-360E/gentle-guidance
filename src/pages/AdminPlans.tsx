@@ -1700,61 +1700,80 @@ export default function AdminPlans() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">📋 Configure o provedor de geração de vídeo:</p>
-                  <p>Selecione qual API será usada para gerar vídeos no criador de criativos. Você pode trocar a qualquer momento sem alterar o código.</p>
+                  <p className="font-medium text-foreground">📋 Configure até 3 conectores de vídeo IA:</p>
+                  <p>Configure múltiplos provedores e selecione qual estará ativo. Assim você pode testar e comparar diferentes IAs sem perder as configurações.</p>
                 </div>
 
+                {/* Active connector selector */}
                 <div className="space-y-3">
-                  <Label className="text-sm font-medium">Provedor de Vídeo</Label>
-                  <Select value={videoApiProvider} onValueChange={setVideoApiProvider}>
+                  <Label className="text-sm font-medium">🎯 Conector Ativo</Label>
+                  <Select value={activeConnector} onValueChange={(v) => setActiveConnector(v as '1' | '2' | '3')}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione o provedor" />
+                      <SelectValue placeholder="Selecione o conector ativo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="minimax">Minimax (Hailuo) — Melhor custo-benefício</SelectItem>
-                      <SelectItem value="runway">Runway — Plano ilimitado disponível</SelectItem>
-                      <SelectItem value="kling">Kling AI — Melhor qualidade facial</SelectItem>
-                      <SelectItem value="pika">Pika — Efeitos estilizados</SelectItem>
-                      <SelectItem value="luma">Luma AI (Dream Machine) — Alta qualidade cinematográfica</SelectItem>
-                      <SelectItem value="stability">Stability AI (Stable Video) — Open-source, baixo custo</SelectItem>
-                      <SelectItem value="heygen">HeyGen — Avatares realistas com fala</SelectItem>
-                      <SelectItem value="pixverse">PixVerse — Estilo anime e efeitos criativos</SelectItem>
-                      <SelectItem value="lovable_ai">Lovable AI — Apenas imagens (sem custo extra)</SelectItem>
+                      <SelectItem value="1">Conector 1 {connector1Provider ? `— ${providerNames[connector1Provider] || connector1Provider}` : '(não configurado)'}</SelectItem>
+                      <SelectItem value="2">Conector 2 {connector2Provider ? `— ${providerNames[connector2Provider] || connector2Provider}` : '(não configurado)'}</SelectItem>
+                      <SelectItem value="3">Conector 3 {connector3Provider ? `— ${providerNames[connector3Provider] || connector3Provider}` : '(não configurado)'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {videoApiProvider !== 'lovable_ai' && (
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">API Key do {{ minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse' }[videoApiProvider] || videoApiProvider}</Label>
-                    <Input
-                      type="password"
-                      placeholder="Cole sua API Key aqui"
-                      value={videoApiKey}
-                      onChange={e => setVideoApiKey(e.target.value)}
-                      className="font-mono text-xs"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {videoApiProvider === 'minimax' && 'Crie sua conta em minimaxi.com e gere uma API Key no painel.'}
-                      {videoApiProvider === 'runway' && 'Crie sua conta em runway.ml e gere uma API Key no painel. 125 créditos grátis.'}
-                      {videoApiProvider === 'kling' && 'Crie sua conta em klingai.com e gere uma API Key.'}
-                      {videoApiProvider === 'pika' && 'Crie sua conta em pika.art e gere uma API Key.'}
-                      {videoApiProvider === 'luma' && 'Crie sua conta em lumalabs.ai e gere uma API Key no painel de desenvolvedor.'}
-                      {videoApiProvider === 'stability' && 'Crie sua conta em platform.stability.ai e gere uma API Key.'}
-                      {videoApiProvider === 'heygen' && 'Crie sua conta em heygen.com e gere uma API Key em Settings > API.'}
-                      {videoApiProvider === 'pixverse' && 'Crie sua conta em pixverse.ai e gere uma API Key no painel.'}
-                    </p>
-                  </div>
-                )}
+                {/* 3 Connector cards */}
+                {([
+                  { num: '1', provider: connector1Provider, setProvider: setConnector1Provider, key: connector1Key, setKey: setConnector1Key },
+                  { num: '2', provider: connector2Provider, setProvider: setConnector2Provider, key: connector2Key, setKey: setConnector2Key },
+                  { num: '3', provider: connector3Provider, setProvider: setConnector3Provider, key: connector3Key, setKey: setConnector3Key },
+                ] as const).map((slot) => (
+                  <div key={slot.num} className={`border rounded-lg p-4 space-y-3 ${activeConnector === slot.num ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold">
+                        {activeConnector === slot.num && <Badge className="mr-2 bg-primary text-primary-foreground">ATIVO</Badge>}
+                        Conector {slot.num}
+                      </Label>
+                      {slot.provider && slot.key && (
+                        <div className="flex items-center gap-1 text-xs text-primary">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Configurado
+                        </div>
+                      )}
+                    </div>
 
-                {videoApiProvider === 'lovable_ai' && (
-                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
-                    <p className="text-sm font-medium">✅ Lovable AI (Padrão)</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Gera roteiros + imagens de cenas usando IA. Não gera vídeos com movimento real. Sem custo extra de API externa.
-                    </p>
+                    <Select value={slot.provider} onValueChange={slot.setProvider}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o provedor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="minimax">Minimax (Hailuo) — Melhor custo-benefício</SelectItem>
+                        <SelectItem value="runway">Runway — Plano ilimitado disponível</SelectItem>
+                        <SelectItem value="kling">Kling AI — Melhor qualidade facial</SelectItem>
+                        <SelectItem value="pika">Pika — Efeitos estilizados</SelectItem>
+                        <SelectItem value="luma">Luma AI (Dream Machine) — Cinematográfica</SelectItem>
+                        <SelectItem value="stability">Stability AI — Open-source</SelectItem>
+                        <SelectItem value="heygen">HeyGen — Avatares com fala</SelectItem>
+                        <SelectItem value="pixverse">PixVerse — Anime e efeitos</SelectItem>
+                        <SelectItem value="lovable_ai">Lovable AI — Apenas imagens (sem custo)</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {slot.provider && slot.provider !== 'lovable_ai' && (
+                      <div className="space-y-2">
+                        <Input
+                          type="password"
+                          placeholder={`API Key do ${providerNames[slot.provider] || slot.provider}`}
+                          value={slot.key}
+                          onChange={e => slot.setKey(e.target.value)}
+                          className="font-mono text-xs"
+                        />
+                        <p className="text-xs text-muted-foreground">{providerHints[slot.provider] || ''}</p>
+                      </div>
+                    )}
+
+                    {slot.provider === 'lovable_ai' && (
+                      <p className="text-xs text-muted-foreground">✅ Gera imagens com IA. Sem custo extra de API externa.</p>
+                    )}
                   </div>
-                )}
+                ))}
 
                 {/* Provider comparison table */}
                 <div className="space-y-2">
@@ -1766,64 +1785,31 @@ export default function AdminPlans() {
                           <TableHead>Provedor</TableHead>
                           <TableHead>Duração/clipe</TableHead>
                           <TableHead>Custo/clipe</TableHead>
-                          <TableHead>Ilimitado?</TableHead>
+                          <TableHead>Modelo</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <TableRow className={videoApiProvider === 'minimax' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">Minimax</TableCell>
-                          <TableCell>6s</TableCell>
-                          <TableCell>~$0.03</TableCell>
-                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'runway' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">Runway</TableCell>
-                          <TableCell>16s</TableCell>
-                          <TableCell>~$0.20</TableCell>
-                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$95/mês</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'kling' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">Kling AI</TableCell>
-                          <TableCell>10s</TableCell>
-                          <TableCell>~$0.08</TableCell>
-                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'pika' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">Pika</TableCell>
-                          <TableCell>4s</TableCell>
-                          <TableCell>~$0.10</TableCell>
-                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$58/mês</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'luma' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">Luma AI</TableCell>
-                          <TableCell>5s</TableCell>
-                          <TableCell>~$0.04</TableCell>
-                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'stability' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">Stability AI</TableCell>
-                          <TableCell>4s</TableCell>
-                          <TableCell>~$0.05</TableCell>
-                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'heygen' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">HeyGen</TableCell>
-                          <TableCell>Variável</TableCell>
-                          <TableCell>~$0.10</TableCell>
-                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$29/mês</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'pixverse' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">PixVerse</TableCell>
-                          <TableCell>4s</TableCell>
-                          <TableCell>~$0.05</TableCell>
-                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
-                        </TableRow>
-                        <TableRow className={videoApiProvider === 'lovable_ai' ? 'bg-primary/5' : ''}>
-                          <TableCell className="font-medium">Lovable AI</TableCell>
-                          <TableCell>—</TableCell>
-                          <TableCell>Incluído</TableCell>
-                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">Imagens only</Badge></TableCell>
-                        </TableRow>
+                        {[
+                          { id: 'minimax', name: 'Minimax', dur: '6s', cost: '~$0.03', plan: 'Pay-per-use' },
+                          { id: 'runway', name: 'Runway', dur: '16s', cost: '~$0.20', plan: '$95/mês' },
+                          { id: 'kling', name: 'Kling AI', dur: '10s', cost: '~$0.08', plan: 'Pay-per-use' },
+                          { id: 'pika', name: 'Pika', dur: '4s', cost: '~$0.10', plan: '$58/mês' },
+                          { id: 'luma', name: 'Luma AI', dur: '5s', cost: '~$0.04', plan: 'Pay-per-use' },
+                          { id: 'stability', name: 'Stability AI', dur: '4s', cost: '~$0.05', plan: 'Pay-per-use' },
+                          { id: 'heygen', name: 'HeyGen', dur: 'Variável', cost: '~$0.10', plan: '$29/mês' },
+                          { id: 'pixverse', name: 'PixVerse', dur: '4s', cost: '~$0.05', plan: 'Pay-per-use' },
+                          { id: 'lovable_ai', name: 'Lovable AI', dur: '—', cost: 'Incluído', plan: 'Imagens' },
+                        ].map(p => {
+                          const isActive = [connector1Provider, connector2Provider, connector3Provider].includes(p.id);
+                          return (
+                            <TableRow key={p.id} className={isActive ? 'bg-primary/5' : ''}>
+                              <TableCell className="font-medium">{p.name} {isActive && <Badge variant="outline" className="ml-1 text-[10px]">Em uso</Badge>}</TableCell>
+                              <TableCell>{p.dur}</TableCell>
+                              <TableCell>{p.cost}</TableCell>
+                              <TableCell><Badge variant="outline">{p.plan}</Badge></TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -1831,15 +1817,8 @@ export default function AdminPlans() {
 
                 <Button onClick={saveVideoApiConfig} disabled={videoApiSaving} className="w-full gap-2">
                   {videoApiSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Salvar Configuração de Vídeo
+                  Salvar Configuração dos Conectores
                 </Button>
-
-                {videoApiLoaded && videoApiKey && videoApiProvider !== 'lovable_ai' && (
-                  <div className="flex items-center gap-2 text-sm text-primary">
-                    <CheckCircle2 className="w-4 h-4" />
-                    API configurada: <strong>{{ minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse' }[videoApiProvider] || videoApiProvider}</strong>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
