@@ -318,7 +318,11 @@ async function generateWithKling(scenes: any[], apiKey: string, proxyKey: string
       }, proxyKey);
 
       if (!res.ok) {
-        console.error("Kling error:", res.status, await res.text());
+        const errBody = await res.text();
+        console.error("Kling error:", res.status, errBody);
+        if (isCreditsError(res.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: Kling ${res.status} - ${errBody.slice(0, 100)}`);
+        }
         results.push(null);
         continue;
       }
