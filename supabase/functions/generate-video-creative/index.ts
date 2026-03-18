@@ -263,7 +263,11 @@ async function generateWithMinimax(scenes: any[], apiKey: string, proxyKey: stri
       }, proxyKey);
 
       if (!res.ok) {
-        console.error("Minimax error:", res.status, await res.text());
+        const errBody = await res.text();
+        console.error("Minimax error:", res.status, errBody);
+        if (isCreditsError(res.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: Minimax ${res.status} - ${errBody.slice(0, 100)}`);
+        }
         results.push(null);
         continue;
       }
