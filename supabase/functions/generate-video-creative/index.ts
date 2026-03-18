@@ -668,42 +668,65 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
       creative.ugc_aspects = UGC_ASPECTS;
     }
 
-    // Step 2: Generate visuals based on provider
+    // Step 2: Generate visuals with failover across key pool
     const scenes = creative.scenes || [];
     let sceneMedia: (string | null)[] = [];
     let mediaType: "image" | "video" = "image";
+    let usedKeyId = "";
 
-    console.log(`Step 2: Generating ${scenes.length} scenes with ${videoConfig.provider}...`);
+    console.log(`Step 2: Generating ${scenes.length} scenes with ${videoPool.provider}...`);
 
-    if (videoConfig.provider === "lovable_ai" || !videoConfig.apiKey) {
-      // Default: generate images with Lovable AI
+    if (videoPool.provider === "lovable_ai" || videoPool.keys.length === 0) {
       sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
       mediaType = "image";
-    } else if (videoConfig.provider === "runway") {
-      sceneMedia = await generateWithRunway(scenes, videoConfig.apiKey, aspect);
-      mediaType = "video";
-    } else if (videoConfig.provider === "minimax") {
-      sceneMedia = await generateWithMinimax(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "kling") {
-      sceneMedia = await generateWithKling(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "luma") {
-      sceneMedia = await generateWithLuma(scenes, videoConfig.apiKey, aspect);
-      mediaType = "video";
-    } else if (videoConfig.provider === "stability") {
-      sceneMedia = await generateWithStability(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "heygen") {
-      sceneMedia = await generateWithHeygen(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "pixverse") {
-      sceneMedia = await generateWithPixverse(scenes, videoConfig.apiKey);
-      mediaType = "video";
     } else {
-      // Fallback to Lovable AI images
-      sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
-      mediaType = "image";
+      // Try each key in the pool until one succeeds (failover)
+      const generateFn: Record<string, (s: any[], k: string, a?: string) => Promise<(string | null)[]>> = {
+        runway: (s, k) => generateWithRunway(s, k, aspect),
+        minimax: (s, k) => generateWithMinimax(s, k),
+        kling: (s, k) => generateWithKling(s, k),
+        luma: (s, k) => generateWithLuma(s, k, aspect),
+        stability: (s, k) => generateWithStability(s, k),
+        heygen: (s, k) => generateWithHeygen(s, k),
+        pixverse: (s, k) => generateWithPixverse(s, k),
+      };
+
+      const fn = generateFn[videoPool.provider];
+      if (!fn) {
+        sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
+        mediaType = "image";
+      } else {
+        mediaType = "video";
+        let succeeded = false;
+
+        for (const keyRow of videoPool.keys) {
+          console.log(`Trying key "${keyRow.label || keyRow.id}" (fails: ${keyRow.fail_count})...`);
+          try {
+            sceneMedia = await fn(scenes, keyRow.api_key);
+            const hasResults = sceneMedia.some((m) => m !== null);
+            if (hasResults) {
+              await markKeyUsed(keyRow.id);
+              usedKeyId = keyRow.id;
+              succeeded = true;
+              console.log(`Key "${keyRow.label || keyRow.id}" succeeded!`);
+              break;
+            } else {
+              await markKeyFailed(keyRow.id, "No results returned");
+              console.log(`Key "${keyRow.label || keyRow.id}" returned no results, trying next...`);
+            }
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            await markKeyFailed(keyRow.id, errMsg);
+            console.log(`Key "${keyRow.label || keyRow.id}" failed: ${errMsg}, trying next...`);
+          }
+        }
+
+        if (!succeeded) {
+          console.log("All keys failed, falling back to Lovable AI images...");
+          sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
+          mediaType = "image";
+        }
+      }
     }
 
     // Attach media to scenes
