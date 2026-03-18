@@ -125,9 +125,25 @@ export default function AdminPlans() {
   };
 
   // Domain verification state
-  // Video API connector state
-  const [videoApiProvider, setVideoApiProvider] = useState('minimax');
-  const [videoApiKey, setVideoApiKey] = useState('');
+  // Video API connector state — 3 slots
+  const providerNames: Record<string, string> = { minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse', lovable_ai: 'Lovable AI' };
+  const providerHints: Record<string, string> = {
+    minimax: 'Crie sua conta em minimaxi.com e gere uma API Key no painel.',
+    runway: 'Crie sua conta em runway.ml e gere uma API Key no painel. 125 créditos grátis.',
+    kling: 'Crie sua conta em klingai.com e gere uma API Key.',
+    pika: 'Crie sua conta em pika.art e gere uma API Key.',
+    luma: 'Crie sua conta em lumalabs.ai e gere uma API Key no painel de desenvolvedor.',
+    stability: 'Crie sua conta em platform.stability.ai e gere uma API Key.',
+    heygen: 'Crie sua conta em heygen.com e gere uma API Key em Settings > API.',
+    pixverse: 'Crie sua conta em pixverse.ai e gere uma API Key no painel.',
+  };
+  const [connector1Provider, setConnector1Provider] = useState('');
+  const [connector1Key, setConnector1Key] = useState('');
+  const [connector2Provider, setConnector2Provider] = useState('');
+  const [connector2Key, setConnector2Key] = useState('');
+  const [connector3Provider, setConnector3Provider] = useState('');
+  const [connector3Key, setConnector3Key] = useState('');
+  const [activeConnector, setActiveConnector] = useState<'1' | '2' | '3'>('1');
   const [videoApiSaving, setVideoApiSaving] = useState(false);
   const [videoApiLoaded, setVideoApiLoaded] = useState(false);
 
