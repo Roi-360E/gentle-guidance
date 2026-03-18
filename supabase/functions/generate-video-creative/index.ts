@@ -257,11 +257,11 @@ async function generateWithMinimax(scenes: any[], apiKey: string, proxyKey: stri
   return results;
 }
 
-async function generateWithKling(scenes: any[], apiKey: string) {
+async function generateWithKling(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.klingai.com/v1/videos/text2video", {
+      const res = await proxiedFetch("https://api.klingai.com/v1/videos/text2video", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -273,7 +273,7 @@ async function generateWithKling(scenes: any[], apiKey: string) {
           duration: "5",
           aspect_ratio: "9:16",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Kling error:", res.status, await res.text());
@@ -287,9 +287,10 @@ async function generateWithKling(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.klingai.com/v1/videos/text2video/${taskId}`, {
+        const pollRes = await proxiedFetch(`https://api.klingai.com/v1/videos/text2video/${taskId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}` },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.data?.task_status === "succeed") {
           videoUrl = pollData.data?.task_result?.videos?.[0]?.url;
