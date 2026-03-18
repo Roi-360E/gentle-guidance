@@ -469,7 +469,52 @@ export default function AdminPlans() {
     setAgentPromptSaving(false);
   };
 
-  const generateRecoveryMessage = async (lead: RecoveryLead) => {
+  const loadVideoApiConfig = async () => {
+    const { data } = await supabase
+      .from('admin_settings' as any)
+      .select('key, value')
+      .in('key', ['video_api_provider', 'video_api_key']);
+    if (data) {
+      (data as any[]).forEach((row: any) => {
+        if (row.key === 'video_api_provider') setVideoApiProvider(row.value || 'minimax');
+        if (row.key === 'video_api_key') setVideoApiKey(row.value || '');
+      });
+    }
+    setVideoApiLoaded(true);
+  };
+
+  const saveVideoApiConfig = async () => {
+    setVideoApiSaving(true);
+    const now = new Date().toISOString();
+    
+    // Upsert both settings
+    const upsert = async (key: string, value: string) => {
+      const { data: existing } = await supabase
+        .from('admin_settings' as any)
+        .select('key')
+        .eq('key', key)
+        .maybeSingle();
+      if (existing) {
+        return supabase.from('admin_settings' as any).update({ value, updated_at: now } as any).eq('key', key);
+      } else {
+        return supabase.from('admin_settings' as any).insert({ key, value, updated_at: now } as any);
+      }
+    };
+
+    const [r1, r2] = await Promise.all([
+      upsert('video_api_provider', videoApiProvider),
+      upsert('video_api_key', videoApiKey),
+    ]);
+
+    if (r1.error || r2.error) {
+      toast.error('Erro ao salvar: ' + (r1.error?.message || r2.error?.message));
+    } else {
+      toast.success('API de vídeo configurada com sucesso!');
+    }
+    setVideoApiSaving(false);
+  };
+
+
     setGeneratingMessageFor(lead.user_id);
     try {
       const { data, error } = await supabase.functions.invoke('recovery-message', {
