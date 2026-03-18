@@ -40,61 +40,18 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
-async function getVideoApiKeysPool(): Promise<{ provider: string; keys: ApiKeyRow[] }> {
+async function getAllApiKeys(): Promise<ApiKeyRow[]> {
   const supabase = getSupabaseAdmin();
 
-  // Get active provider from admin_settings
-  const { data: settingsData } = await supabase
-    .from("admin_settings")
-    .select("key, value")
-    .in("key", [
-      "video_active_provider",
-      // Legacy fallback keys
-      "video_connector_1_provider", "video_connector_1_key",
-      "video_active_connector",
-      "video_api_provider", "video_api_key",
-    ]);
-
-  const config: Record<string, string> = {};
-  (settingsData || []).forEach((row: any) => {
-    config[row.key] = row.value;
-  });
-
-  // New system: active provider from admin_settings
-  let activeProvider = config["video_active_provider"] || "";
-
-  // Legacy fallback
-  if (!activeProvider) {
-    const activeSlot = config["video_active_connector"] || "1";
-    activeProvider = config[`video_connector_${activeSlot}_provider`] || config["video_api_provider"] || "lovable_ai";
-  }
-
-  if (activeProvider === "lovable_ai" || !activeProvider) {
-    return { provider: "lovable_ai", keys: [] };
-  }
-
-  // Fetch all enabled keys for this provider, sorted by least failures
+  // Fetch ALL enabled keys across ALL providers, sorted by least failures
   const { data: keysData } = await supabase
     .from("video_api_keys")
     .select("id, provider, api_key, label, is_enabled, fail_count")
-    .eq("provider", activeProvider)
     .eq("is_enabled", true)
     .order("fail_count", { ascending: true })
     .order("last_used_at", { ascending: true, nullsFirst: true });
 
-  // Legacy fallback: if no keys in pool, check old connector slots
-  if (!keysData || keysData.length === 0) {
-    const activeSlot = config["video_active_connector"] || "1";
-    const legacyKey = config[`video_connector_${activeSlot}_key`] || config["video_api_key"] || "";
-    if (legacyKey) {
-      return {
-        provider: activeProvider,
-        keys: [{ id: "legacy", provider: activeProvider, api_key: legacyKey, label: "Legacy", is_enabled: true, fail_count: 0 }],
-      };
-    }
-  }
-
-  return { provider: activeProvider, keys: keysData || [] };
+  return keysData || [];
 }
 
 async function markKeyFailed(keyId: string, error: string) {
@@ -563,9 +520,9 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Get video API keys pool with failover
-    const videoPool = await getVideoApiKeysPool();
-    console.log(`Video provider: ${videoPool.provider}, keys in pool: ${videoPool.keys.length}`);
+    // Get ALL enabled API keys across ALL providers
+    const allKeys = await getAllApiKeys();
+    console.log(`Total keys in pool: ${allKeys.length} across providers: ${[...new Set(allKeys.map(k => k.provider))].join(', ') || 'none'}`);
 
     const isUGC = model?.toLowerCase().includes("ugc");
 
@@ -668,64 +625,67 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
       creative.ugc_aspects = UGC_ASPECTS;
     }
 
-    // Step 2: Generate visuals with failover across key pool
+    // Step 2: Generate visuals — try ALL keys across ALL providers with failover
     const scenes = creative.scenes || [];
     let sceneMedia: (string | null)[] = [];
     let mediaType: "image" | "video" = "image";
     let usedKeyId = "";
+    let usedProvider = "lovable_ai";
 
-    console.log(`Step 2: Generating ${scenes.length} scenes with ${videoPool.provider}...`);
+    const generateFn: Record<string, (s: any[], k: string, a?: string) => Promise<(string | null)[]>> = {
+      runway: (s, k) => generateWithRunway(s, k, aspect),
+      minimax: (s, k) => generateWithMinimax(s, k),
+      kling: (s, k) => generateWithKling(s, k),
+      luma: (s, k) => generateWithLuma(s, k, aspect),
+      stability: (s, k) => generateWithStability(s, k),
+      heygen: (s, k) => generateWithHeygen(s, k),
+      pixverse: (s, k) => generateWithPixverse(s, k),
+    };
 
-    if (videoPool.provider === "lovable_ai" || videoPool.keys.length === 0) {
+    console.log(`Step 2: Generating ${scenes.length} scenes, trying ${allKeys.length} keys...`);
+
+    if (allKeys.length === 0) {
+      // No external keys — use Lovable AI
       sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
       mediaType = "image";
     } else {
-      // Try each key in the pool until one succeeds (failover)
-      const generateFn: Record<string, (s: any[], k: string, a?: string) => Promise<(string | null)[]>> = {
-        runway: (s, k) => generateWithRunway(s, k, aspect),
-        minimax: (s, k) => generateWithMinimax(s, k),
-        kling: (s, k) => generateWithKling(s, k),
-        luma: (s, k) => generateWithLuma(s, k, aspect),
-        stability: (s, k) => generateWithStability(s, k),
-        heygen: (s, k) => generateWithHeygen(s, k),
-        pixverse: (s, k) => generateWithPixverse(s, k),
-      };
+      // Try each key across ALL providers until one succeeds
+      let succeeded = false;
 
-      const fn = generateFn[videoPool.provider];
-      if (!fn) {
+      for (const keyRow of allKeys) {
+        const fn = generateFn[keyRow.provider];
+        if (!fn) {
+          console.log(`No generator for provider "${keyRow.provider}", skipping key "${keyRow.label}"`);
+          continue;
+        }
+
+        console.log(`Trying [${keyRow.provider}] key "${keyRow.label || keyRow.id}" (fails: ${keyRow.fail_count})...`);
+        try {
+          sceneMedia = await fn(scenes, keyRow.api_key);
+          const hasResults = sceneMedia.some((m) => m !== null);
+          if (hasResults) {
+            await markKeyUsed(keyRow.id);
+            usedKeyId = keyRow.id;
+            usedProvider = keyRow.provider;
+            mediaType = "video";
+            succeeded = true;
+            console.log(`[${keyRow.provider}] Key "${keyRow.label || keyRow.id}" succeeded!`);
+            break;
+          } else {
+            await markKeyFailed(keyRow.id, "No results returned");
+            console.log(`[${keyRow.provider}] Key "${keyRow.label || keyRow.id}" returned no results, trying next...`);
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          await markKeyFailed(keyRow.id, errMsg);
+          console.log(`[${keyRow.provider}] Key "${keyRow.label || keyRow.id}" failed: ${errMsg}, trying next...`);
+        }
+      }
+
+      if (!succeeded) {
+        console.log("All keys failed, falling back to Lovable AI images...");
         sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
         mediaType = "image";
-      } else {
-        mediaType = "video";
-        let succeeded = false;
-
-        for (const keyRow of videoPool.keys) {
-          console.log(`Trying key "${keyRow.label || keyRow.id}" (fails: ${keyRow.fail_count})...`);
-          try {
-            sceneMedia = await fn(scenes, keyRow.api_key);
-            const hasResults = sceneMedia.some((m) => m !== null);
-            if (hasResults) {
-              await markKeyUsed(keyRow.id);
-              usedKeyId = keyRow.id;
-              succeeded = true;
-              console.log(`Key "${keyRow.label || keyRow.id}" succeeded!`);
-              break;
-            } else {
-              await markKeyFailed(keyRow.id, "No results returned");
-              console.log(`Key "${keyRow.label || keyRow.id}" returned no results, trying next...`);
-            }
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            await markKeyFailed(keyRow.id, errMsg);
-            console.log(`Key "${keyRow.label || keyRow.id}" failed: ${errMsg}, trying next...`);
-          }
-        }
-
-        if (!succeeded) {
-          console.log("All keys failed, falling back to Lovable AI images...");
-          sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
-          mediaType = "image";
-        }
       }
     }
 
@@ -742,11 +702,11 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
 
     creative.scenes = scenes;
     creative.media_type = mediaType;
-    creative.provider = videoPool.provider;
+    creative.provider = usedProvider;
     creative.has_generated_images = sceneMedia.some((m) => m !== null);
     creative.used_key_id = usedKeyId || null;
 
-    console.log(`Done! Generated ${sceneMedia.filter(Boolean).length}/${scenes.length} media items via ${videoPool.provider}.`);
+    console.log(`Done! Generated ${sceneMedia.filter(Boolean).length}/${scenes.length} media items via ${usedProvider}.`);
 
     return new Response(JSON.stringify({ creative }), {
       status: 200,

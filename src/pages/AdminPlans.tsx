@@ -484,38 +484,13 @@ export default function AdminPlans() {
   };
 
   const loadVideoApiConfig = async () => {
-    // Load active provider
-    const { data: settingsData } = await supabase
-      .from('admin_settings' as any)
-      .select('key, value')
-      .eq('key', 'video_active_provider');
-    if (settingsData && (settingsData as any[]).length > 0) {
-      setActiveProvider((settingsData as any[])[0].value || 'lovable_ai');
-    }
-    // Load key pool
+    // Load key pool (all providers)
     const { data: keysData } = await supabase
       .from('video_api_keys' as any)
       .select('*')
       .order('created_at', { ascending: true });
     if (keysData) setApiKeyPool(keysData as any[]);
     setVideoApiLoaded(true);
-  };
-
-  const saveActiveProvider = async () => {
-    setVideoApiSaving(true);
-    const now = new Date().toISOString();
-    const { data: existing } = await supabase
-      .from('admin_settings' as any)
-      .select('key')
-      .eq('key', 'video_active_provider')
-      .maybeSingle();
-    if (existing) {
-      await supabase.from('admin_settings' as any).update({ value: activeProvider, updated_at: now } as any).eq('key', 'video_active_provider');
-    } else {
-      await supabase.from('admin_settings' as any).insert({ key: 'video_active_provider', value: activeProvider, updated_at: now } as any);
-    }
-    toast.success('Provedor ativo salvo!');
-    setVideoApiSaving(false);
   };
 
   const addApiKey = async () => {
@@ -1712,25 +1687,32 @@ export default function AdminPlans() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Video className="w-5 h-5 text-primary" />
-                  Pool de API Keys — Geração de Vídeo com IA
+                  Pool de API Keys — Todos os Provedores Ativos
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">🔄 Pool de Chaves com Failover Automático</p>
-                  <p>Adicione quantas chaves quiser do mesmo provedor. Quando uma chave falhar (créditos esgotados, rate limit), o sistema automaticamente tenta a próxima.</p>
+                  <p className="font-medium text-foreground">🔄 Multi-Provedor com Failover Automático</p>
+                  <p>Todos os provedores ficam ativos simultaneamente. Adicione chaves de diferentes provedores — o sistema tenta cada uma em ordem de menos falhas até conseguir gerar o vídeo. Se todas falharem, usa Lovable AI como fallback.</p>
                 </div>
 
-                {/* Active provider selector */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">🎯 Provedor Ativo</Label>
-                  <div className="flex gap-2">
-                    <Select value={activeProvider} onValueChange={setActiveProvider}>
+                {/* Add new key */}
+                <div className="border border-dashed border-border rounded-lg p-4 space-y-3">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Adicionar Nova Chave
+                  </Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <Input
+                      placeholder="Rótulo (ex: Conta 1)"
+                      value={newKeyLabel}
+                      onChange={e => setNewKeyLabel(e.target.value)}
+                    />
+                    <Select value={newKeyProvider} onValueChange={setNewKeyProvider}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o provedor" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="minimax">Minimax (Hailuo)</SelectItem>
+                        <SelectItem value="minimax">Minimax</SelectItem>
                         <SelectItem value="runway">Runway</SelectItem>
                         <SelectItem value="kling">Kling AI</SelectItem>
                         <SelectItem value="pika">Pika</SelectItem>
@@ -1738,70 +1720,35 @@ export default function AdminPlans() {
                         <SelectItem value="stability">Stability AI</SelectItem>
                         <SelectItem value="heygen">HeyGen</SelectItem>
                         <SelectItem value="pixverse">PixVerse</SelectItem>
-                        <SelectItem value="lovable_ai">Lovable AI (sem custo)</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button onClick={saveActiveProvider} disabled={videoApiSaving} size="sm" className="gap-1 shrink-0">
-                      {videoApiSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Salvar
-                    </Button>
+                    <Input
+                      type="password"
+                      placeholder="API Key"
+                      value={newKeyValue}
+                      onChange={e => setNewKeyValue(e.target.value)}
+                      className="font-mono text-xs"
+                    />
                   </div>
+                  {newKeyProvider && providerHints[newKeyProvider] && (
+                    <p className="text-xs text-muted-foreground">{providerHints[newKeyProvider]}</p>
+                  )}
+                  <Button onClick={addApiKey} disabled={addingKey} size="sm" className="gap-1">
+                    {addingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Adicionar ao Pool
+                  </Button>
                 </div>
 
-                {activeProvider !== 'lovable_ai' && (
-                  <>
-                    {/* Add new key */}
-                    <div className="border border-dashed border-border rounded-lg p-4 space-y-3">
+                {/* Keys grouped by provider */}
+                {Object.keys(providerNames).filter(p => p !== 'lovable_ai').map(provider => {
+                  const providerKeys = apiKeyPool.filter(k => k.provider === provider);
+                  if (providerKeys.length === 0) return null;
+                  return (
+                    <div key={provider} className="space-y-2">
                       <Label className="text-sm font-medium flex items-center gap-2">
-                        <Plus className="w-4 h-4" /> Adicionar Nova Chave — {providerNames[activeProvider] || activeProvider}
+                        🔑 {providerNames[provider]} ({providerKeys.length} chave{providerKeys.length > 1 ? 's' : ''})
                       </Label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <Input
-                          placeholder="Rótulo (ex: Conta 1)"
-                          value={newKeyLabel}
-                          onChange={e => setNewKeyLabel(e.target.value)}
-                        />
-                        <Select value={newKeyProvider || activeProvider} onValueChange={setNewKeyProvider}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Provedor" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="minimax">Minimax</SelectItem>
-                            <SelectItem value="runway">Runway</SelectItem>
-                            <SelectItem value="kling">Kling AI</SelectItem>
-                            <SelectItem value="pika">Pika</SelectItem>
-                            <SelectItem value="luma">Luma AI</SelectItem>
-                            <SelectItem value="stability">Stability AI</SelectItem>
-                            <SelectItem value="heygen">HeyGen</SelectItem>
-                            <SelectItem value="pixverse">PixVerse</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="password"
-                          placeholder="API Key"
-                          value={newKeyValue}
-                          onChange={e => setNewKeyValue(e.target.value)}
-                          className="font-mono text-xs"
-                        />
-                      </div>
-                      {providerHints[newKeyProvider || activeProvider] && (
-                        <p className="text-xs text-muted-foreground">{providerHints[newKeyProvider || activeProvider]}</p>
-                      )}
-                      <Button onClick={addApiKey} disabled={addingKey} size="sm" className="gap-1">
-                        {addingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                        Adicionar ao Pool
-                      </Button>
-                    </div>
-
-                    {/* Key pool list */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        🔑 Chaves no Pool ({apiKeyPool.filter(k => k.provider === activeProvider).length} para {providerNames[activeProvider] || activeProvider})
-                      </Label>
-                      {apiKeyPool.filter(k => k.provider === activeProvider).length === 0 && (
-                        <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma chave adicionada para este provedor.</p>
-                      )}
-                      {apiKeyPool.filter(k => k.provider === activeProvider).map((key, idx) => (
+                      {providerKeys.map((key, idx) => (
                         <div key={key.id} className={`border rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 ${key.is_enabled ? 'border-border' : 'border-border/50 opacity-60'}`}>
                           <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex items-center gap-2">
@@ -1841,32 +1788,18 @@ export default function AdminPlans() {
                         </div>
                       ))}
                     </div>
+                  );
+                })}
 
-                    {/* Show all keys across providers */}
-                    {apiKeyPool.filter(k => k.provider !== activeProvider).length > 0 && (
-                      <div className="space-y-2 pt-4 border-t border-border">
-                        <Label className="text-sm font-medium text-muted-foreground">Chaves de outros provedores</Label>
-                        {apiKeyPool.filter(k => k.provider !== activeProvider).map((key, idx) => (
-                          <div key={key.id} className="border rounded-lg p-3 flex items-center gap-3 opacity-50">
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm">{key.label || `Chave ${idx + 1}`}</span>
-                              <span className="text-xs text-muted-foreground ml-2">({providerNames[key.provider] || key.provider})</span>
-                            </div>
-                            <Button variant="ghost" size="sm" onClick={() => removeApiKey(key.id)}>
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {activeProvider === 'lovable_ai' && (
-                  <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
-                    ✅ Lovable AI gera imagens automaticamente sem necessidade de API Key externa.
+                {apiKeyPool.length === 0 && (
+                  <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground text-center">
+                    Nenhuma chave cadastrada. Adicione chaves de qualquer provedor acima. Enquanto não houver chaves, o Lovable AI será usado automaticamente.
                   </div>
                 )}
+
+                <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
+                  ✅ <strong>Fallback:</strong> Lovable AI gera imagens automaticamente se nenhuma chave externa funcionar.
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
