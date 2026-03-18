@@ -1768,6 +1768,30 @@ export default function AdminPlans() {
                           <TableCell>~$0.10</TableCell>
                           <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$58/mês</Badge></TableCell>
                         </TableRow>
+                        <TableRow className={videoApiProvider === 'luma' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Luma AI</TableCell>
+                          <TableCell>5s</TableCell>
+                          <TableCell>~$0.04</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'stability' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">Stability AI</TableCell>
+                          <TableCell>4s</TableCell>
+                          <TableCell>~$0.05</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'heygen' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">HeyGen</TableCell>
+                          <TableCell>Variável</TableCell>
+                          <TableCell>~$0.10</TableCell>
+                          <TableCell><Badge className="bg-primary/20 text-primary border-primary/30">$29/mês</Badge></TableCell>
+                        </TableRow>
+                        <TableRow className={videoApiProvider === 'pixverse' ? 'bg-primary/5' : ''}>
+                          <TableCell className="font-medium">PixVerse</TableCell>
+                          <TableCell>4s</TableCell>
+                          <TableCell>~$0.05</TableCell>
+                          <TableCell><Badge variant="outline">Pay-per-use</Badge></TableCell>
+                        </TableRow>
                         <TableRow className={videoApiProvider === 'lovable_ai' ? 'bg-primary/5' : ''}>
                           <TableCell className="font-medium">Lovable AI</TableCell>
                           <TableCell>—</TableCell>
