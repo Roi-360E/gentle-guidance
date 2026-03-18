@@ -805,6 +805,7 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
       stability: (s, k) => generateWithStability(s, k, proxyKey),
       heygen: (s, k) => generateWithHeygen(s, k, proxyKey),
       pixverse: (s, k) => generateWithPixverse(s, k, proxyKey),
+      imagineart: (s, k) => generateWithImagineArt(s, k, aspect, proxyKey),
     };
 
     console.log(`Step 2: Generating ${scenes.length} scenes, trying ${allKeys.length} keys...`);
