@@ -484,38 +484,13 @@ export default function AdminPlans() {
   };
 
   const loadVideoApiConfig = async () => {
-    // Load active provider
-    const { data: settingsData } = await supabase
-      .from('admin_settings' as any)
-      .select('key, value')
-      .eq('key', 'video_active_provider');
-    if (settingsData && (settingsData as any[]).length > 0) {
-      setActiveProvider((settingsData as any[])[0].value || 'lovable_ai');
-    }
-    // Load key pool
+    // Load key pool (all providers)
     const { data: keysData } = await supabase
       .from('video_api_keys' as any)
       .select('*')
       .order('created_at', { ascending: true });
     if (keysData) setApiKeyPool(keysData as any[]);
     setVideoApiLoaded(true);
-  };
-
-  const saveActiveProvider = async () => {
-    setVideoApiSaving(true);
-    const now = new Date().toISOString();
-    const { data: existing } = await supabase
-      .from('admin_settings' as any)
-      .select('key')
-      .eq('key', 'video_active_provider')
-      .maybeSingle();
-    if (existing) {
-      await supabase.from('admin_settings' as any).update({ value: activeProvider, updated_at: now } as any).eq('key', 'video_active_provider');
-    } else {
-      await supabase.from('admin_settings' as any).insert({ key: 'video_active_provider', value: activeProvider, updated_at: now } as any);
-    }
-    toast.success('Provedor ativo salvo!');
-    setVideoApiSaving(false);
   };
 
   const addApiKey = async () => {
