@@ -515,7 +515,7 @@ export default function AdminPlans() {
   };
 
 
-    setGeneratingMessageFor(lead.user_id);
+    const generateRecoveryMessage = async (lead: RecoveryLead) => {
     try {
       const { data, error } = await supabase.functions.invoke('recovery-message', {
         body: {
