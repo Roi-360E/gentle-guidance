@@ -428,7 +428,11 @@ async function generateWithStability(scenes: any[], apiKey: string, proxyKey: st
       }, proxyKey);
 
       if (!imgRes.ok) {
-        console.error("Stability img error:", imgRes.status, await imgRes.text());
+        const errBody = await imgRes.text();
+        console.error("Stability img error:", imgRes.status, errBody);
+        if (isCreditsError(imgRes.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: Stability ${imgRes.status} - ${errBody.slice(0, 100)}`);
+        }
         results.push(null);
         continue;
       }
