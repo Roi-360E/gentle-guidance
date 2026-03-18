@@ -144,6 +144,8 @@ export default function AdminPlans() {
   const [videoApiSaving, setVideoApiSaving] = useState(false);
   const [videoApiLoaded, setVideoApiLoaded] = useState(false);
   const [addingKey, setAddingKey] = useState(false);
+  const [pendingKeys, setPendingKeys] = useState<{ provider: string; api_key: string; label: string }[]>([]);
+  const [savingPendingKeys, setSavingPendingKeys] = useState(false);
 
   // Proxy API key state
   const [proxyApiKey, setProxyApiKey] = useState('');
