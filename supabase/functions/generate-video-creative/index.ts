@@ -434,11 +434,11 @@ async function generateWithStability(scenes: any[], apiKey: string, proxyKey: st
   return results;
 }
 
-async function generateWithHeygen(scenes: any[], apiKey: string) {
+async function generateWithHeygen(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.heygen.com/v2/video/generate", {
+      const res = await proxiedFetch("https://api.heygen.com/v2/video/generate", {
         method: "POST",
         headers: {
           "X-Api-Key": apiKey,
@@ -459,7 +459,7 @@ async function generateWithHeygen(scenes: any[], apiKey: string) {
           }],
           dimension: { width: 1080, height: 1920 },
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("HeyGen error:", res.status, await res.text());
@@ -473,9 +473,10 @@ async function generateWithHeygen(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${videoId}`, {
+        const pollRes = await proxiedFetch(`https://api.heygen.com/v1/video_status.get?video_id=${videoId}`, {
+          method: "GET",
           headers: { "X-Api-Key": apiKey },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.data?.status === "completed") {
           videoUrl = pollData.data?.video_url;
@@ -493,11 +494,11 @@ async function generateWithHeygen(scenes: any[], apiKey: string) {
   return results;
 }
 
-async function generateWithPixverse(scenes: any[], apiKey: string) {
+async function generateWithPixverse(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://app-api.pixverse.ai/openapi/v2/video/text/generate", {
+      const res = await proxiedFetch("https://app-api.pixverse.ai/openapi/v2/video/text/generate", {
         method: "POST",
         headers: {
           "Api-Key": apiKey,
@@ -510,7 +511,7 @@ async function generateWithPixverse(scenes: any[], apiKey: string) {
           aspect_ratio: "9:16",
           model: "v3.5",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("PixVerse error:", res.status, await res.text());
@@ -524,15 +525,16 @@ async function generateWithPixverse(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://app-api.pixverse.ai/openapi/v2/video/result/${taskId}`, {
+        const pollRes = await proxiedFetch(`https://app-api.pixverse.ai/openapi/v2/video/result/${taskId}`, {
+          method: "GET",
           headers: { "Api-Key": apiKey },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.Resp?.status === 1) {
           videoUrl = pollData.Resp?.url;
           break;
         }
-        if (pollData.Resp?.status === 3) break; // failed
+        if (pollData.Resp?.status === 3) break;
       }
 
       results.push(videoUrl);
