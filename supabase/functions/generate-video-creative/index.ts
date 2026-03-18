@@ -358,12 +358,11 @@ async function generateWithLuma(scenes: any[], apiKey: string, aspect: string, p
   return results;
 }
 
-async function generateWithStability(scenes: any[], apiKey: string) {
+async function generateWithStability(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      // First generate an image, then convert to video with Stable Video Diffusion
-      const imgRes = await fetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
+      const imgRes = await proxiedFetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -376,7 +375,7 @@ async function generateWithStability(scenes: any[], apiKey: string) {
           fd.append("aspect_ratio", "9:16");
           return fd;
         })(),
-      });
+      }, proxyKey);
 
       if (!imgRes.ok) {
         console.error("Stability img error:", imgRes.status, await imgRes.text());
@@ -388,24 +387,22 @@ async function generateWithStability(scenes: any[], apiKey: string) {
       const imageBase64 = imgData.image;
       if (!imageBase64) { results.push(null); continue; }
 
-      // Convert image to video
       const vidFormData = new FormData();
       const imageBlob = new Blob([Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0))], { type: "image/png" });
       vidFormData.append("image", imageBlob, "scene.png");
       vidFormData.append("cfg_scale", "2.5");
       vidFormData.append("motion_bucket_id", "127");
 
-      const vidRes = await fetch("https://api.stability.ai/v2beta/image-to-video", {
+      const vidRes = await proxiedFetch("https://api.stability.ai/v2beta/image-to-video", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
         },
         body: vidFormData,
-      });
+      }, proxyKey);
 
       if (!vidRes.ok) {
         console.error("Stability vid error:", vidRes.status, await vidRes.text());
-        // Fallback: return the image
         results.push(`data:image/png;base64,${imageBase64}`);
         continue;
       }
@@ -416,9 +413,10 @@ async function generateWithStability(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.stability.ai/v2beta/image-to-video/result/${generationId}`, {
+        const pollRes = await proxiedFetch(`https://api.stability.ai/v2beta/image-to-video/result/${generationId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
-        });
+        }, proxyKey);
         if (pollRes.status === 200) {
           const pollData = await pollRes.json();
           videoUrl = pollData.video ? `data:video/mp4;base64,${pollData.video}` : null;
