@@ -144,6 +144,8 @@ export default function AdminPlans() {
   const [videoApiSaving, setVideoApiSaving] = useState(false);
   const [videoApiLoaded, setVideoApiLoaded] = useState(false);
   const [addingKey, setAddingKey] = useState(false);
+  const [pendingKeys, setPendingKeys] = useState<{ provider: string; api_key: string; label: string }[]>([]);
+  const [savingPendingKeys, setSavingPendingKeys] = useState(false);
 
   // Proxy API key state
   const [proxyApiKey, setProxyApiKey] = useState('');
@@ -519,26 +521,39 @@ export default function AdminPlans() {
     setProxyApiKeySaving(false);
   };
 
-  const addApiKey = async () => {
+  const addApiKey = () => {
     if (!newKeyProvider || !newKeyValue) {
       toast.error('Selecione o provedor e insira a chave.');
       return;
     }
-    setAddingKey(true);
-    const { error } = await supabase.from('video_api_keys' as any).insert({
-      provider: newKeyProvider,
-      api_key: newKeyValue,
-      label: newKeyLabel || `Chave ${apiKeyPool.filter(k => k.provider === newKeyProvider).length + 1}`,
-    } as any);
+    const label = newKeyLabel || `Chave ${apiKeyPool.filter(k => k.provider === newKeyProvider).length + pendingKeys.filter(k => k.provider === newKeyProvider).length + 1}`;
+    setPendingKeys(prev => [...prev, { provider: newKeyProvider, api_key: newKeyValue, label }]);
+    setNewKeyValue('');
+    setNewKeyLabel('');
+    toast.success('Chave adicionada à lista. Clique em "Salvar Chaves" para confirmar.');
+  };
+
+  const removePendingKey = (index: number) => {
+    setPendingKeys(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const savePendingKeys = async () => {
+    if (pendingKeys.length === 0) {
+      toast.error('Nenhuma chave pendente para salvar.');
+      return;
+    }
+    setSavingPendingKeys(true);
+    const { error } = await supabase.from('video_api_keys' as any).insert(
+      pendingKeys.map(k => ({ provider: k.provider, api_key: k.api_key, label: k.label })) as any
+    );
     if (error) {
-      toast.error('Erro ao adicionar chave.');
+      toast.error('Erro ao salvar chaves.');
     } else {
-      toast.success('Chave adicionada ao pool!');
-      setNewKeyValue('');
-      setNewKeyLabel('');
+      toast.success(`${pendingKeys.length} chave(s) salva(s) com sucesso!`);
+      setPendingKeys([]);
       await loadVideoApiConfig();
     }
-    setAddingKey(false);
+    setSavingPendingKeys(false);
   };
 
   const removeApiKey = async (id: string) => {
@@ -1759,13 +1774,36 @@ export default function AdminPlans() {
                   {newKeyProvider && providerHints[newKeyProvider] && (
                     <p className="text-xs text-muted-foreground">{providerHints[newKeyProvider]}</p>
                   )}
-                  <Button onClick={addApiKey} disabled={addingKey} size="sm" className="gap-1">
-                    {addingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    Adicionar ao Pool
+                  <Button onClick={addApiKey} size="sm" className="gap-1">
+                    <Plus className="w-4 h-4" />
+                    Adicionar à Lista
                   </Button>
                 </div>
 
-                {/* Keys grouped by provider */}
+                {/* Pending keys */}
+                {pendingKeys.length > 0 && (
+                  <div className="border border-primary/30 rounded-lg p-4 space-y-3 bg-primary/5">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      📝 Chaves Pendentes ({pendingKeys.length})
+                    </Label>
+                    {pendingKeys.map((pk, idx) => (
+                      <div key={idx} className="flex items-center gap-3 border rounded-lg p-2 bg-background">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium">{pk.label}</span>
+                          <span className="text-xs text-muted-foreground ml-2">({providerNames[pk.provider] || pk.provider})</span>
+                          <p className="text-xs font-mono text-muted-foreground">{pk.api_key.slice(0, 8)}...{pk.api_key.slice(-4)}</p>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => removePendingKey(idx)}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button onClick={savePendingKeys} disabled={savingPendingKeys} className="gap-2 w-full">
+                      {savingPendingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Salvar {pendingKeys.length} Chave{pendingKeys.length > 1 ? 's' : ''}
+                    </Button>
+                  </div>
+                )}
                 {Object.keys(providerNames).filter(p => p !== 'lovable_ai').map(provider => {
                   const providerKeys = apiKeyPool.filter(k => k.provider === provider);
                   if (providerKeys.length === 0) return null;
