@@ -4,10 +4,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ArrowLeft, Plus, Trash2, Play, Upload, Link2,
   GripVertical, Sparkles, Video, Home, X,
-  ZoomIn, ZoomOut, Maximize2, Download, Layers
+  ZoomIn, ZoomOut, Maximize2, Download, Layers, Menu
 } from "lucide-react";
 
 /* ─── Types ─── */
@@ -28,7 +29,7 @@ interface CanvasNode {
   x: number;
   y: number;
   data: NodeData;
-  parentBlockId?: string; // for preview nodes, links back to creation block
+  parentBlockId?: string;
 }
 
 interface CanvasConnection {
@@ -45,6 +46,7 @@ const ShortsReels = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   /* Access gate */
   const [accessChecked, setAccessChecked] = useState(false);
@@ -65,6 +67,7 @@ const ShortsReels = () => {
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [connections, setConnections] = useState<CanvasConnection[]>([]);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   /* Drag state */
   const [dragging, setDragging] = useState<string | null>(null);
@@ -76,6 +79,9 @@ const ShortsReels = () => {
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
 
+  /* Touch state for two-finger zoom */
+  const lastTouchDist = useRef<number | null>(null);
+
   /* ─── Add image node ─── */
   const addImageNode = useCallback(() => {
     const id = newId();
@@ -83,6 +89,7 @@ const ShortsReels = () => {
       ...prev,
       { id, type: "image", x: 80 + Math.random() * 120, y: 120 + Math.random() * 200, data: { label: "Imagem", imageUrl: "" } },
     ]);
+    setShowMobileMenu(false);
   }, []);
 
   /* ─── Add creation block ─── */
@@ -104,47 +111,43 @@ const ShortsReels = () => {
         },
       },
     ]);
+    setShowMobileMenu(false);
   }, [nodes]);
 
-  /* ─── Generate preview (no credits consumed) ─── */
+  /* ─── Generate preview ─── */
   const handleGenerate = useCallback((blockId: string) => {
-    // Mark block as generating
     setNodes((prev) =>
       prev.map((n) => n.id === blockId ? { ...n, data: { ...n.data, generating: true } } : n)
     );
 
-    // Simulate generation delay
     setTimeout(() => {
       const block = nodes.find(n => n.id === blockId);
       if (!block) return;
 
       const previewId = newId();
       setNodes((prev) => {
-        // Stop generating state
         const updated = prev.map((n) =>
           n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n
         );
-        // Add preview node to the right of the block
         return [
           ...updated,
           {
             id: previewId,
             type: "preview" as const,
-            x: block.x + 380,
-            y: block.y,
+            x: block.x + (isMobile ? 20 : 380),
+            y: block.y + (isMobile ? 450 : 0),
             data: { label: "Preview", videoReady: true },
             parentBlockId: blockId,
           },
         ];
       });
 
-      // Auto-connect block → preview
       setConnections((prev) => [
         ...prev,
         { id: `conn-${Date.now()}`, fromId: blockId, toId: previewId },
       ]);
     }, 1500);
-  }, [nodes]);
+  }, [nodes, isMobile]);
 
   /* ─── Upload image to node ─── */
   const handleImageUpload = useCallback((nodeId: string, file: File) => {
@@ -184,10 +187,9 @@ const ShortsReels = () => {
     }
   }, [connectingFrom]);
 
-  /* ─── Drag handlers ─── */
+  /* ─── Mouse Drag handlers ─── */
   const onNodeMouseDown = useCallback(
     (e: React.MouseEvent, nodeId: string) => {
-      // Ctrl+click = pan mode, don't start node drag
       if (e.ctrlKey || e.metaKey) {
         isPanning.current = true;
         panStart.current = { x: e.clientX, y: e.clientY };
@@ -227,17 +229,16 @@ const ShortsReels = () => {
   const onMouseUp = useCallback(() => {
     setDragging(null);
     isPanning.current = false;
+    lastTouchDist.current = null;
   }, []);
 
   const onCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    // Ctrl+click anywhere = pan mode
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       isPanning.current = true;
       panStart.current = { x: e.clientX, y: e.clientY };
       return;
     }
-    // Normal click on empty canvas area = pan
     const tag = (e.target as HTMLElement).tagName.toLowerCase();
     const isCanvasBg = e.target === canvasRef.current || (e.target as HTMLElement).classList.contains("canvas-bg");
     const isSvgArea = tag === "svg" || tag === "path" || tag === "circle" || tag === "g";
@@ -247,7 +248,76 @@ const ShortsReels = () => {
     }
   }, []);
 
-  /* Mouse wheel to pan (shift+wheel = horizontal, wheel = vertical, ctrl+wheel = zoom) */
+  /* ─── Touch handlers for mobile ─── */
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Two-finger: start pinch zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastTouchDist.current = Math.sqrt(dx * dx + dy * dy);
+      return;
+    }
+    if (e.touches.length === 1) {
+      // Single finger on canvas bg = pan
+      const target = e.target as HTMLElement;
+      const isCanvasBg = target === canvasRef.current || target.classList.contains("canvas-bg");
+      if (isCanvasBg) {
+        isPanning.current = true;
+        panStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    }
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDist.current !== null) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scale = dist / lastTouchDist.current;
+      setZoom((z) => Math.min(2, Math.max(0.3, z * scale)));
+      lastTouchDist.current = dist;
+      return;
+    }
+    if (dragging && e.touches.length === 1) {
+      const touch = e.touches[0];
+      const x = touch.clientX / zoom - dragOffset.current.x - pan.x;
+      const y = touch.clientY / zoom - dragOffset.current.y - pan.y;
+      setNodes((prev) =>
+        prev.map((n) => (n.id === dragging ? { ...n, x, y } : n))
+      );
+    } else if (isPanning.current && e.touches.length === 1) {
+      const touch = e.touches[0];
+      setPan((p) => ({
+        x: p.x + (touch.clientX - panStart.current.x) / zoom,
+        y: p.y + (touch.clientY - panStart.current.y) / zoom,
+      }));
+      panStart.current = { x: touch.clientX, y: touch.clientY };
+    }
+  }, [dragging, zoom, pan]);
+
+  const onTouchEnd = useCallback(() => {
+    setDragging(null);
+    isPanning.current = false;
+    lastTouchDist.current = null;
+  }, []);
+
+  const onNodeTouchStart = useCallback(
+    (e: React.TouchEvent, nodeId: string) => {
+      if (e.touches.length !== 1) return;
+      e.stopPropagation();
+      const touch = e.touches[0];
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      dragOffset.current = {
+        x: touch.clientX / zoom - node.x - pan.x,
+        y: touch.clientY / zoom - node.y - pan.y,
+      };
+      setDragging(nodeId);
+    },
+    [nodes, zoom, pan]
+  );
+
+  /* Mouse wheel */
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
@@ -262,37 +332,48 @@ const ShortsReels = () => {
 
   /* ─── Get node center for connection lines ─── */
   const getNodeCenter = (node: CanvasNode) => {
-    const w = node.type === "creation-block" ? 320 : node.type === "preview" ? 280 : 160;
+    const w = node.type === "creation-block" ? (isMobile ? 260 : 320) : node.type === "preview" ? (isMobile ? 240 : 280) : (isMobile ? 130 : 160);
     const h = node.type === "creation-block" ? 400 : node.type === "preview" ? 320 : 180;
     return { x: node.x + w / 2, y: node.y + h / 2 };
   };
 
+  /* ESC to cancel connection */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConnectingFrom(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   if (!accessChecked) return null;
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-white overflow-hidden">
+    <div className="h-[100dvh] w-screen flex flex-col bg-background overflow-hidden">
       {/* ─── Top Bar ─── */}
-      <header className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 z-20 shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="text-gray-500 hover:text-gray-900">
-            <ArrowLeft className="h-5 w-5" />
+      <header className="h-12 sm:h-14 border-b border-border bg-background flex items-center justify-between px-2 sm:px-4 z-20 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground shrink-0">
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
-          <h1 className="text-lg font-bold text-gray-900">Criador de Vídeos</h1>
+          <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Criador de Vídeos</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-2 text-gray-600" onClick={addImageNode}>
+
+        {/* Desktop/Tablet actions */}
+        <div className="hidden sm:flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-2 text-muted-foreground" onClick={addImageNode}>
             <Plus className="h-4 w-4" />
-            Adicionar Imagem
+            <span className="hidden md:inline">Adicionar</span> Imagem
           </Button>
           <Button variant="outline" size="sm" className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={addCreationBlock}>
             <Layers className="h-4 w-4" />
-            Bloco de Criação
+            <span className="hidden md:inline">Bloco de</span> Criação
           </Button>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom((z) => Math.max(0.3, z - 0.1))}>
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
-            <span className="text-xs text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+            <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom((z) => Math.min(2, z + 0.1))}>
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
@@ -300,27 +381,61 @@ const ShortsReels = () => {
               <Maximize2 className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <Button variant="ghost" size="sm" className="text-gray-500 gap-2" onClick={() => navigate("/")}>
+          <Button variant="ghost" size="sm" className="text-muted-foreground gap-2" onClick={() => navigate("/")}>
             <Home className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Mobile actions */}
+        <div className="flex sm:hidden items-center gap-1">
+          <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom((z) => Math.max(0.3, z - 0.1))}>
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <span className="text-[10px] text-muted-foreground w-8 text-center">{Math.round(zoom * 100)}%</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom((z) => Math.min(2, z + 0.1))}>
+              <ZoomIn className="h-3 w-3" />
+            </Button>
+          </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMobileMenu(!showMobileMenu)}>
+            <Menu className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
+      {/* Mobile dropdown menu */}
+      {showMobileMenu && (
+        <div className="sm:hidden absolute top-12 right-2 z-30 bg-background border border-border rounded-xl shadow-lg p-2 flex flex-col gap-1 min-w-[180px]">
+          <Button variant="ghost" size="sm" className="justify-start gap-2 text-foreground" onClick={addImageNode}>
+            <Plus className="h-4 w-4" /> Adicionar Imagem
+          </Button>
+          <Button variant="ghost" size="sm" className="justify-start gap-2 text-blue-600" onClick={addCreationBlock}>
+            <Layers className="h-4 w-4" /> Bloco de Criação
+          </Button>
+          <Button variant="ghost" size="sm" className="justify-start gap-2 text-muted-foreground" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); setShowMobileMenu(false); }}>
+            <Maximize2 className="h-4 w-4" /> Resetar Vista
+          </Button>
+          <Button variant="ghost" size="sm" className="justify-start gap-2 text-muted-foreground" onClick={() => { navigate("/"); setShowMobileMenu(false); }}>
+            <Home className="h-4 w-4" /> Início
+          </Button>
+        </div>
+      )}
+
       {/* Empty state */}
       {nodes.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none" style={{ top: 56 }}>
-          <div className="text-center pointer-events-auto">
-            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Layers className="h-8 w-8 text-blue-400" />
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none px-4" style={{ top: 48 }}>
+          <div className="text-center pointer-events-auto max-w-xs">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <Layers className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-700 mb-2">Canvas vazio</h2>
-            <p className="text-sm text-gray-500 mb-4 max-w-xs">Comece adicionando imagens e blocos de criação para gerar seus criativos</p>
-            <div className="flex gap-2 justify-center">
-              <Button variant="outline" size="sm" className="gap-2" onClick={addImageNode}>
-                <Plus className="h-4 w-4" /> Imagem
+            <h2 className="text-base sm:text-lg font-semibold text-foreground mb-1.5 sm:mb-2">Canvas vazio</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">Comece adicionando imagens e blocos de criação para gerar seus criativos</p>
+            <div className="flex gap-2 justify-center flex-wrap">
+              <Button variant="outline" size="sm" className="gap-2 text-xs sm:text-sm" onClick={addImageNode}>
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Imagem
               </Button>
-              <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={addCreationBlock}>
-                <Layers className="h-4 w-4" /> Bloco de Criação
+              <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm" onClick={addCreationBlock}>
+                <Layers className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Bloco de Criação
               </Button>
             </div>
           </div>
@@ -330,9 +445,9 @@ const ShortsReels = () => {
       {/* ─── Canvas ─── */}
       <div
         ref={canvasRef}
-        className="flex-1 relative cursor-grab active:cursor-grabbing canvas-bg"
+        className="flex-1 relative cursor-grab active:cursor-grabbing canvas-bg touch-none"
         style={{
-          backgroundImage: "radial-gradient(circle, #e5e7eb 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)",
           backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
           backgroundPosition: `${pan.x * zoom}px ${pan.y * zoom}px`,
         }}
@@ -341,6 +456,9 @@ const ShortsReels = () => {
         onWheel={onWheel}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
       >
         {/* SVG connection lines */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
@@ -382,7 +500,9 @@ const ShortsReels = () => {
                 <ImageNode
                   key={node.id}
                   node={node}
+                  isMobile={isMobile}
                   onMouseDown={onNodeMouseDown}
+                  onTouchStart={onNodeTouchStart}
                   onUpload={handleImageUpload}
                   onRemove={removeNode}
                   onConnect={startConnection}
@@ -397,7 +517,9 @@ const ShortsReels = () => {
                 <CreationBlockNode
                   key={node.id}
                   node={node}
+                  isMobile={isMobile}
                   onMouseDown={onNodeMouseDown}
+                  onTouchStart={onNodeTouchStart}
                   onConnect={startConnection}
                   isConnecting={connectingFrom !== null}
                   isConnectingFrom={connectingFrom === node.id}
@@ -413,7 +535,9 @@ const ShortsReels = () => {
                 <PreviewNode
                   key={node.id}
                   node={node}
+                  isMobile={isMobile}
                   onMouseDown={onNodeMouseDown}
+                  onTouchStart={onNodeTouchStart}
                   onConnect={startConnection}
                   isConnecting={connectingFrom !== null}
                   isConnectingFrom={connectingFrom === node.id}
@@ -427,8 +551,8 @@ const ShortsReels = () => {
 
         {/* Connecting hint */}
         {connectingFrom && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-30 animate-pulse">
-            Clique em outro bloco para conectar • ESC para cancelar
+          <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium shadow-lg z-30 animate-pulse whitespace-nowrap">
+            Toque em outro bloco para conectar
           </div>
         )}
       </div>
@@ -441,7 +565,9 @@ const ShortsReels = () => {
 /* ═══════════════════════════════════════════════ */
 interface ImageNodeProps {
   node: CanvasNode;
+  isMobile: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
+  onTouchStart: (e: React.TouchEvent, id: string) => void;
   onUpload: (nodeId: string, file: File) => void;
   onRemove: (nodeId: string) => void;
   onConnect: (nodeId: string) => void;
@@ -449,46 +575,48 @@ interface ImageNodeProps {
   isConnectingFrom: boolean;
 }
 
-function ImageNode({ node, onMouseDown, onUpload, onRemove, onConnect, isConnecting, isConnectingFrom }: ImageNodeProps) {
+function ImageNode({ node, isMobile, onMouseDown, onTouchStart, onUpload, onRemove, onConnect, isConnecting, isConnectingFrom }: ImageNodeProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const w = isMobile ? 130 : 160;
   return (
     <div
       className={`absolute select-none group ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2" : ""}`}
-      style={{ left: node.x, top: node.y, width: 160 }}
+      style={{ left: node.x, top: node.y, width: w }}
       onMouseDown={(e) => onMouseDown(e, node.id)}
+      onTouchStart={(e) => onTouchStart(e, node.id)}
     >
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow">
-        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100 cursor-move">
-          <div className="flex items-center gap-1.5">
-            <GripVertical className="h-3.5 w-3.5 text-gray-400" />
-            <span className="text-xs font-medium text-gray-600">Imagem</span>
+      <div className="bg-background rounded-2xl shadow-lg border border-border overflow-hidden hover:shadow-xl transition-shadow">
+        <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 bg-muted border-b border-border cursor-move">
+          <div className="flex items-center gap-1">
+            <GripVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
+            <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Imagem</span>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex gap-1">
             <button onClick={(e) => { e.stopPropagation(); onConnect(node.id); }} className="p-0.5 rounded hover:bg-blue-100" title="Conectar">
               <Link2 className="h-3 w-3 text-blue-500" />
             </button>
             <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-0.5 rounded hover:bg-red-100" title="Remover">
-              <Trash2 className="h-3 w-3 text-red-400" />
+              <Trash2 className="h-3 w-3 text-destructive" />
             </button>
           </div>
         </div>
         <div
-          className="w-full aspect-square bg-gray-100 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors"
+          className="w-full aspect-square bg-muted flex items-center justify-center cursor-pointer hover:bg-muted/70 transition-colors"
           onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
         >
           {node.data.imageUrl ? (
             <img src={node.data.imageUrl} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="text-center p-3">
-              <Upload className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-              <span className="text-[10px] text-gray-400">Clique para enviar</span>
+            <div className="text-center p-2 sm:p-3">
+              <Upload className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground mx-auto mb-1" />
+              <span className="text-[9px] sm:text-[10px] text-muted-foreground">Toque para enviar</span>
             </div>
           )}
         </div>
         {isConnecting && !isConnectingFrom && (
           <button
             onClick={(e) => { e.stopPropagation(); onConnect(node.id); }}
-            className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md animate-pulse"
+            className="absolute -right-3 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-6 sm:h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md animate-pulse"
           >
             <Plus className="h-3 w-3 text-white" />
           </button>
@@ -513,7 +641,9 @@ function ImageNode({ node, onMouseDown, onUpload, onRemove, onConnect, isConnect
 /* ═══════════════════════════════════════════════ */
 interface CreationBlockProps {
   node: CanvasNode;
+  isMobile: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
+  onTouchStart: (e: React.TouchEvent, id: string) => void;
   onConnect: (nodeId: string) => void;
   isConnecting: boolean;
   isConnectingFrom: boolean;
@@ -524,40 +654,42 @@ interface CreationBlockProps {
 }
 
 function CreationBlockNode({
-  node, onMouseDown, onConnect, isConnecting, isConnectingFrom,
+  node, isMobile, onMouseDown, onTouchStart, onConnect, isConnecting, isConnectingFrom,
   imageCount, onGenerate, onRemove, onUpdateData,
 }: CreationBlockProps) {
   const { prompt = "", model = "Rosto para vídeo (Alta qualidade)", aspect = "9:16 (Vertical)", generating } = node.data;
+  const w = isMobile ? 260 : 320;
 
   return (
     <div
       className={`absolute select-none group ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2 rounded-2xl" : ""}`}
-      style={{ left: node.x, top: node.y, width: 320 }}
+      style={{ left: node.x, top: node.y, width: w }}
       onMouseDown={(e) => onMouseDown(e, node.id)}
+      onTouchStart={(e) => onTouchStart(e, node.id)}
     >
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100 cursor-move">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-4 w-4 text-gray-400" />
-            <span className="text-sm font-semibold text-gray-800">{node.data.label || "Bloco de Criação"}</span>
+      <div className="bg-background rounded-2xl shadow-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-muted border-b border-border cursor-move">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+            <span className="text-xs sm:text-sm font-semibold text-foreground truncate">{node.data.label || "Bloco de Criação"}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button onClick={(e) => { e.stopPropagation(); onConnect(node.id); }} className="p-1 rounded hover:bg-blue-100" title="Conectar">
-              <Link2 className="h-4 w-4 text-blue-500" />
+              <Link2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">
-              <Trash2 className="h-4 w-4 text-red-400" />
+            <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100" title="Remover">
+              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
             </button>
           </div>
         </div>
 
-        <div className="p-4 space-y-4" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="p-3 sm:p-4 space-y-3 sm:space-y-4" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-1 block">Modelo</label>
+            <label className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 block">Modelo</label>
             <select
               value={model}
               onChange={(e) => onUpdateData(node.id, "model", e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
+              className="w-full bg-muted border border-border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-foreground"
             >
               <option>Rosto para vídeo (Alta qualidade)</option>
               <option>Produto showcase</option>
@@ -565,17 +697,17 @@ function CreationBlockNode({
             </select>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
-            Conecte até 5 imagens de referência
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs text-blue-700">
+            Conecte até 5 imagens
             <span className="float-right font-bold">{imageCount}/5</span>
           </div>
 
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-1 block">Aspecto</label>
+            <label className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 block">Aspecto</label>
             <select
               value={aspect}
               onChange={(e) => onUpdateData(node.id, "aspect", e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
+              className="w-full bg-muted border border-border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-foreground"
             >
               <option>9:16 (Vertical)</option>
               <option>16:9 (Horizontal)</option>
@@ -584,28 +716,28 @@ function CreationBlockNode({
           </div>
 
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-1 block">Prompt</label>
+            <label className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 block">Prompt</label>
             <Textarea
               value={prompt}
               onChange={(e) => onUpdateData(node.id, "prompt", e.target.value)}
               placeholder="Descreva o criativo que deseja gerar..."
-              className="min-h-[80px] text-sm bg-gray-50 border-gray-200 resize-none text-gray-900 placeholder:text-gray-400"
+              className="min-h-[60px] sm:min-h-[80px] text-xs sm:text-sm bg-muted border-border resize-none text-foreground placeholder:text-muted-foreground"
             />
           </div>
 
           <Button
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl h-11 gap-2 disabled:opacity-60"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl h-9 sm:h-11 gap-2 text-xs sm:text-sm disabled:opacity-60"
             onClick={(e) => { e.stopPropagation(); onGenerate(node.id); }}
             disabled={!!generating}
           >
             {generating ? (
               <>
-                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Gerando...
               </>
             ) : (
               <>
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 Criar Criativo
               </>
             )}
@@ -615,7 +747,7 @@ function CreationBlockNode({
         {isConnecting && !isConnectingFrom && (
           <button
             onClick={(e) => { e.stopPropagation(); onConnect(node.id); }}
-            className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md animate-pulse"
+            className="absolute -left-3 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-6 sm:h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md animate-pulse"
           >
             <Plus className="h-3 w-3 text-white" />
           </button>
@@ -630,49 +762,53 @@ function CreationBlockNode({
 /* ═══════════════════════════════════════════════ */
 interface PreviewNodeProps {
   node: CanvasNode;
+  isMobile: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
+  onTouchStart: (e: React.TouchEvent, id: string) => void;
   onConnect: (nodeId: string) => void;
   isConnecting: boolean;
   isConnectingFrom: boolean;
   onRemove: (nodeId: string) => void;
 }
 
-function PreviewNode({ node, onMouseDown, onConnect, isConnecting, isConnectingFrom, onRemove }: PreviewNodeProps) {
+function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isConnecting, isConnectingFrom, onRemove }: PreviewNodeProps) {
+  const w = isMobile ? 240 : 280;
   return (
     <div
       className={`absolute select-none group ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2 rounded-2xl" : ""}`}
-      style={{ left: node.x, top: node.y, width: 280 }}
+      style={{ left: node.x, top: node.y, width: w }}
       onMouseDown={(e) => onMouseDown(e, node.id)}
+      onTouchStart={(e) => onTouchStart(e, node.id)}
     >
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100 cursor-move">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-4 w-4 text-gray-400" />
-            <span className="text-sm font-semibold text-gray-800">Preview</span>
+      <div className="bg-background rounded-2xl shadow-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-muted border-b border-border cursor-move">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+            <span className="text-xs sm:text-sm font-semibold text-foreground">Preview</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">pronto</span>
-            <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">
-              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">pronto</span>
+            <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100" title="Remover">
+              <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-destructive" />
             </button>
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-3 sm:p-4">
           <div className="w-full aspect-[9/16] bg-gray-900 rounded-xl flex items-center justify-center relative overflow-hidden">
             <div className="text-center">
-              <Video className="h-10 w-10 text-gray-600 mx-auto mb-2" />
-              <span className="text-xs text-gray-500">Vídeo gerado (simulado)</span>
+              <Video className="h-8 w-8 sm:h-10 sm:w-10 text-gray-600 mx-auto mb-2" />
+              <span className="text-[10px] sm:text-xs text-gray-500">Vídeo gerado (simulado)</span>
             </div>
-            <button className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
-              <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
-                <Play className="h-6 w-6 text-gray-900 ml-1" />
+            <button className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 active:opacity-100 transition-opacity bg-black/20">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+                <Play className="h-5 w-5 sm:h-6 sm:w-6 text-gray-900 ml-0.5" />
               </div>
             </button>
           </div>
 
-          <Button className="w-full mt-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl h-10 gap-2 text-sm font-medium">
-            <Download className="h-4 w-4" />
+          <Button className="w-full mt-2 sm:mt-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl h-9 sm:h-10 gap-2 text-xs sm:text-sm font-medium">
+            <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Baixar Criativo
           </Button>
         </div>
@@ -680,7 +816,7 @@ function PreviewNode({ node, onMouseDown, onConnect, isConnecting, isConnectingF
         {isConnecting && !isConnectingFrom && (
           <button
             onClick={(e) => { e.stopPropagation(); onConnect(node.id); }}
-            className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md animate-pulse"
+            className="absolute -left-3 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-6 sm:h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md animate-pulse"
           >
             <Plus className="h-3 w-3 text-white" />
           </button>
