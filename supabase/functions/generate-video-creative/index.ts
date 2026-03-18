@@ -154,7 +154,7 @@ async function generateWithLovableAI(
   return Promise.all(imagePromises);
 }
 
-async function generateWithRunway(scenes: any[], apiKey: string, aspect: string) {
+async function generateWithRunway(scenes: any[], apiKey: string, aspect: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
