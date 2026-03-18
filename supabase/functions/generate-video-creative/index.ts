@@ -40,10 +40,45 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
+async function getProxyApiKey(): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from("admin_settings")
+    .select("value")
+    .eq("key", "proxy_api_key")
+    .single();
+  return data?.value || null;
+}
+
+/**
+ * Proxied fetch: if a proxy API key is configured (ScraperAPI-style),
+ * routes the request through the proxy with rotating IPs.
+ * Each call gets a different IP, making each API key appear as a different app.
+ */
+async function proxiedFetch(
+  url: string,
+  options: RequestInit,
+  proxyKey: string | null
+): Promise<Response> {
+  if (!proxyKey) {
+    return fetch(url, options);
+  }
+
+  // ScraperAPI-style proxy: route through proxy URL with rotating session
+  const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const proxyUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(url)}&session_number=${sessionId}&render=false`;
+
+  console.log(`[Proxy] Routing through proxy with session ${sessionId}`);
+  return fetch(proxyUrl, {
+    method: options.method || "GET",
+    headers: options.headers,
+    body: options.body,
+  });
+}
+
 async function getAllApiKeys(): Promise<ApiKeyRow[]> {
   const supabase = getSupabaseAdmin();
 
-  // Fetch ALL enabled keys across ALL providers, sorted by least failures
   const { data: keysData } = await supabase
     .from("video_api_keys")
     .select("id, provider, api_key, label, is_enabled, fail_count")
