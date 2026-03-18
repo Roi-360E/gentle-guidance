@@ -608,6 +608,69 @@ async function generateWithPixverse(scenes: any[], apiKey: string, proxyKey: str
   return results;
 }
 
+async function generateWithImagineArt(scenes: any[], apiKey: string, aspect: string, proxyKey: string | null) {
+  const results: (string | null)[] = [];
+  for (const scene of scenes.slice(0, 4)) {
+    try {
+      const formData = new FormData();
+      formData.append("prompt", scene.image_prompt || scene.description || "cinematic video scene");
+      formData.append("style_id", "11002"); // realistic style
+      formData.append("aspect_ratio", aspect?.includes("16:9") ? "16:9" : "9:16");
+
+      const res = await proxiedFetch("https://api.vyro.ai/v2/video/text-to-video", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: formData,
+      }, proxyKey);
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        console.error("ImagineArt error:", res.status, errBody);
+        if (isCreditsError(res.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: ImagineArt ${res.status} - ${errBody.slice(0, 100)}`);
+        }
+        results.push(null);
+        continue;
+      }
+
+      const data = await res.json();
+      const videoId = data.data?.id || data.id;
+      if (!videoId) { results.push(null); continue; }
+
+      let videoUrl: string | null = null;
+
+      // Poll status endpoint (video generation takes 10-15 min)
+      for (let i = 0; i < 180; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const pollRes = await proxiedFetch(`https://api.vyro.ai/v2/video/status/${videoId}`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${apiKey}` },
+        }, proxyKey);
+
+        if (!pollRes.ok) continue;
+
+        const pollData = await pollRes.json();
+        const videoStatus = pollData.video?.status || pollData.status;
+
+        if (videoStatus === "COMPLETED" || pollData.status === "success") {
+          videoUrl = pollData.video?.url || pollData.video?.download_url || null;
+          break;
+        }
+        if (videoStatus === "FAILED" || videoStatus === "ERROR") break;
+      }
+
+      results.push(videoUrl);
+    } catch (err) {
+      console.error("ImagineArt gen error:", err);
+      if (err instanceof Error && err.message.includes("CREDITS_EXHAUSTED")) throw err;
+      results.push(null);
+    }
+  }
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
