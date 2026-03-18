@@ -25,33 +25,100 @@ const UGC_ASPECTS = [
   "Duração ideal entre 15-60 segundos",
 ];
 
-async function getVideoApiConfig() {
+interface ApiKeyRow {
+  id: string;
+  provider: string;
+  api_key: string;
+  label: string;
+  is_enabled: boolean;
+  fail_count: number;
+}
+
+function getSupabaseAdmin() {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  return createClient(supabaseUrl, supabaseKey);
+}
 
-  const { data } = await supabase
+async function getVideoApiKeysPool(): Promise<{ provider: string; keys: ApiKeyRow[] }> {
+  const supabase = getSupabaseAdmin();
+
+  // Get active provider from admin_settings
+  const { data: settingsData } = await supabase
     .from("admin_settings")
     .select("key, value")
     .in("key", [
+      "video_active_provider",
+      // Legacy fallback keys
       "video_connector_1_provider", "video_connector_1_key",
-      "video_connector_2_provider", "video_connector_2_key",
-      "video_connector_3_provider", "video_connector_3_key",
       "video_active_connector",
-      // Legacy fallback
       "video_api_provider", "video_api_key",
     ]);
 
   const config: Record<string, string> = {};
-  (data || []).forEach((row: any) => {
+  (settingsData || []).forEach((row: any) => {
     config[row.key] = row.value;
   });
 
-  const activeSlot = config["video_active_connector"] || "1";
-  const provider = config[`video_connector_${activeSlot}_provider`] || config["video_api_provider"] || "lovable_ai";
-  const apiKey = config[`video_connector_${activeSlot}_key`] || config["video_api_key"] || "";
+  // New system: active provider from admin_settings
+  let activeProvider = config["video_active_provider"] || "";
 
-  return { provider, apiKey };
+  // Legacy fallback
+  if (!activeProvider) {
+    const activeSlot = config["video_active_connector"] || "1";
+    activeProvider = config[`video_connector_${activeSlot}_provider`] || config["video_api_provider"] || "lovable_ai";
+  }
+
+  if (activeProvider === "lovable_ai" || !activeProvider) {
+    return { provider: "lovable_ai", keys: [] };
+  }
+
+  // Fetch all enabled keys for this provider, sorted by least failures
+  const { data: keysData } = await supabase
+    .from("video_api_keys")
+    .select("id, provider, api_key, label, is_enabled, fail_count")
+    .eq("provider", activeProvider)
+    .eq("is_enabled", true)
+    .order("fail_count", { ascending: true })
+    .order("last_used_at", { ascending: true, nullsFirst: true });
+
+  // Legacy fallback: if no keys in pool, check old connector slots
+  if (!keysData || keysData.length === 0) {
+    const activeSlot = config["video_active_connector"] || "1";
+    const legacyKey = config[`video_connector_${activeSlot}_key`] || config["video_api_key"] || "";
+    if (legacyKey) {
+      return {
+        provider: activeProvider,
+        keys: [{ id: "legacy", provider: activeProvider, api_key: legacyKey, label: "Legacy", is_enabled: true, fail_count: 0 }],
+      };
+    }
+  }
+
+  return { provider: activeProvider, keys: keysData || [] };
+}
+
+async function markKeyFailed(keyId: string, error: string) {
+  if (keyId === "legacy") return;
+  const supabase = getSupabaseAdmin();
+  const { data: existing } = await supabase
+    .from("video_api_keys")
+    .select("fail_count")
+    .eq("id", keyId)
+    .single();
+  const newCount = (existing?.fail_count || 0) + 1;
+  await supabase
+    .from("video_api_keys")
+    .update({ fail_count: newCount, last_error: error, last_used_at: new Date().toISOString() })
+    .eq("id", keyId);
+}
+
+async function markKeyUsed(keyId: string) {
+  if (keyId === "legacy") return;
+  const supabase = getSupabaseAdmin();
+  await supabase
+    .from("video_api_keys")
+    .update({ last_used_at: new Date().toISOString(), last_error: null })
+    .eq("id", keyId);
 }
 
 async function generateWithLovableAI(
