@@ -125,6 +125,12 @@ export default function AdminPlans() {
   };
 
   // Domain verification state
+  // Video API connector state
+  const [videoApiProvider, setVideoApiProvider] = useState('minimax');
+  const [videoApiKey, setVideoApiKey] = useState('');
+  const [videoApiSaving, setVideoApiSaving] = useState(false);
+  const [videoApiLoaded, setVideoApiLoaded] = useState(false);
+
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
   const [domainVerifStatus, setDomainVerifStatus] = useState<'idle' | 'saved' | 'error'>('idle');
