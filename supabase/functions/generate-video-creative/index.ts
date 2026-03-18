@@ -209,7 +209,11 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string,
       }, proxyKey);
 
       if (!res.ok) {
-        console.error("Runway error:", res.status, await res.text());
+        const errBody = await res.text();
+        console.error("Runway error:", res.status, errBody);
+        if (isCreditsError(res.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: Runway ${res.status} - ${errBody.slice(0, 100)}`);
+        }
         results.push(null);
         continue;
       }
