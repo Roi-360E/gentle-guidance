@@ -742,10 +742,11 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
 
     creative.scenes = scenes;
     creative.media_type = mediaType;
-    creative.provider = videoConfig.provider;
+    creative.provider = videoPool.provider;
     creative.has_generated_images = sceneMedia.some((m) => m !== null);
+    creative.used_key_id = usedKeyId || null;
 
-    console.log(`Done! Generated ${sceneMedia.filter(Boolean).length}/${scenes.length} media items via ${videoConfig.provider}.`);
+    console.log(`Done! Generated ${sceneMedia.filter(Boolean).length}/${scenes.length} media items via ${videoPool.provider}.`);
 
     return new Response(JSON.stringify({ creative }), {
       status: 200,
