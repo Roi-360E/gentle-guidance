@@ -159,7 +159,7 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string,
   for (const scene of scenes.slice(0, 4)) {
     try {
       // Runway Gen-3 Alpha Turbo API
-      const res = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+      const res = await proxiedFetch("https://api.dev.runwayml.com/v1/image_to_video", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
