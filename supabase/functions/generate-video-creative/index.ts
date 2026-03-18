@@ -208,11 +208,11 @@ async function generateWithRunway(scenes: any[], apiKey: string, aspect: string,
   return results;
 }
 
-async function generateWithMinimax(scenes: any[], apiKey: string) {
+async function generateWithMinimax(scenes: any[], apiKey: string, proxyKey: string | null) {
   const results: (string | null)[] = [];
   for (const scene of scenes.slice(0, 4)) {
     try {
-      const res = await fetch("https://api.minimaxi.chat/v1/video_generation", {
+      const res = await proxiedFetch("https://api.minimaxi.chat/v1/video_generation", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -222,7 +222,7 @@ async function generateWithMinimax(scenes: any[], apiKey: string) {
           model: "video-01",
           prompt: scene.image_prompt || scene.description || "cinematic video scene",
         }),
-      });
+      }, proxyKey);
 
       if (!res.ok) {
         console.error("Minimax error:", res.status, await res.text());
@@ -236,9 +236,10 @@ async function generateWithMinimax(scenes: any[], apiKey: string) {
 
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await fetch(`https://api.minimaxi.chat/v1/query/video_generation?task_id=${taskId}`, {
+        const pollRes = await proxiedFetch(`https://api.minimaxi.chat/v1/query/video_generation?task_id=${taskId}`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${apiKey}` },
-        });
+        }, proxyKey);
         const pollData = await pollRes.json();
         if (pollData.status === "Success") {
           videoUrl = pollData.file_id ? `https://api.minimaxi.chat/v1/files/retrieve?file_id=${pollData.file_id}` : null;
