@@ -489,11 +489,16 @@ export default function AdminPlans() {
     const { data } = await supabase
       .from('admin_settings' as any)
       .select('key, value')
-      .in('key', ['video_api_provider', 'video_api_key']);
+      .in('key', ['video_connector_1_provider', 'video_connector_1_key', 'video_connector_2_provider', 'video_connector_2_key', 'video_connector_3_provider', 'video_connector_3_key', 'video_active_connector']);
     if (data) {
       (data as any[]).forEach((row: any) => {
-        if (row.key === 'video_api_provider') setVideoApiProvider(row.value || 'minimax');
-        if (row.key === 'video_api_key') setVideoApiKey(row.value || '');
+        if (row.key === 'video_connector_1_provider') setConnector1Provider(row.value || '');
+        if (row.key === 'video_connector_1_key') setConnector1Key(row.value || '');
+        if (row.key === 'video_connector_2_provider') setConnector2Provider(row.value || '');
+        if (row.key === 'video_connector_2_key') setConnector2Key(row.value || '');
+        if (row.key === 'video_connector_3_provider') setConnector3Provider(row.value || '');
+        if (row.key === 'video_connector_3_key') setConnector3Key(row.value || '');
+        if (row.key === 'video_active_connector') setActiveConnector((row.value || '1') as '1' | '2' | '3');
       });
     }
     setVideoApiLoaded(true);
@@ -503,7 +508,6 @@ export default function AdminPlans() {
     setVideoApiSaving(true);
     const now = new Date().toISOString();
     
-    // Upsert both settings
     const upsert = async (key: string, value: string) => {
       const { data: existing } = await supabase
         .from('admin_settings' as any)
@@ -517,15 +521,21 @@ export default function AdminPlans() {
       }
     };
 
-    const [r1, r2] = await Promise.all([
-      upsert('video_api_provider', videoApiProvider),
-      upsert('video_api_key', videoApiKey),
+    const results = await Promise.all([
+      upsert('video_connector_1_provider', connector1Provider),
+      upsert('video_connector_1_key', connector1Key),
+      upsert('video_connector_2_provider', connector2Provider),
+      upsert('video_connector_2_key', connector2Key),
+      upsert('video_connector_3_provider', connector3Provider),
+      upsert('video_connector_3_key', connector3Key),
+      upsert('video_active_connector', activeConnector),
     ]);
 
-    if (r1.error || r2.error) {
-      toast.error('Erro ao salvar: ' + (r1.error?.message || r2.error?.message));
+    const hasError = results.some(r => r.error);
+    if (hasError) {
+      toast.error('Erro ao salvar configuração.');
     } else {
-      toast.success('API de vídeo configurada com sucesso!');
+      toast.success('Conectores de vídeo salvos com sucesso!');
     }
     setVideoApiSaving(false);
   };
