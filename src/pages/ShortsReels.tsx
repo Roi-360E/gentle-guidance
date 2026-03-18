@@ -5,10 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 import {
   ArrowLeft, Plus, Trash2, Play, Upload, Link2,
   GripVertical, Sparkles, Video, Home, X,
-  ZoomIn, ZoomOut, Maximize2, Download, Layers, Menu
+  ZoomIn, ZoomOut, Maximize2, Download, Layers, Menu,
+  ChevronDown, ChevronUp, Eye
 } from "lucide-react";
 
 /* ─── Types ─── */
@@ -21,6 +24,8 @@ interface NodeData {
   aspect?: string;
   generating?: boolean;
   videoReady?: boolean;
+  creative?: any;
+  ugcAspects?: string[];
 }
 
 interface CanvasNode {
@@ -41,6 +46,24 @@ interface CanvasConnection {
 /* ─── Helpers ─── */
 let nodeCounter = 0;
 const newId = () => `node-${++nodeCounter}-${Date.now()}`;
+
+const UGC_ASPECTS = [
+  "Pessoa real falando para a câmera (talking head)",
+  "Iluminação natural e cenário casual",
+  "Enquadramento close-up ou meio-corpo",
+  "Movimentos de câmera orgânicos",
+  "Texto overlay com fontes modernas",
+  "Transições rápidas e dinâmicas",
+  "Legendas automáticas estilo TikTok/Reels",
+  "Hook forte nos primeiros 3 segundos",
+  "CTA claro e direto no final",
+  "Música de fundo trending",
+  "Demonstração do produto em uso real",
+  "Depoimento autêntico com emoção",
+  "Storytelling pessoal (antes/depois)",
+  "Efeitos nativos da plataforma",
+  "Duração ideal entre 15-60 segundos",
+];
 
 const ShortsReels = () => {
   const navigate = useNavigate();
@@ -78,8 +101,6 @@ const ShortsReels = () => {
   const [zoom, setZoom] = useState(1);
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
-
-  /* Touch state for two-finger zoom */
   const lastTouchDist = useRef<number | null>(null);
 
   /* ─── Add image node ─── */
@@ -114,17 +135,43 @@ const ShortsReels = () => {
     setShowMobileMenu(false);
   }, [nodes]);
 
-  /* ─── Generate preview ─── */
-  const handleGenerate = useCallback((blockId: string) => {
+  /* ─── Generate creative via AI ─── */
+  const handleGenerate = useCallback(async (blockId: string) => {
+    const block = nodes.find(n => n.id === blockId);
+    if (!block) return;
+
+    // Get connected images
+    const connectedImageIds = connections
+      .filter(c => c.toId === blockId)
+      .map(c => c.fromId);
+    const connectedImages = nodes.filter(n => connectedImageIds.includes(n.id) && n.type === "image");
+
+    // Build image descriptions
+    const imageDescriptions = connectedImages
+      .map((img, i) => img.data.imageUrl ? `Imagem ${i + 1} enviada pelo usuário` : `Imagem ${i + 1} (sem arquivo)`)
+      .filter(Boolean);
+
+    // Mark as generating
     setNodes((prev) =>
       prev.map((n) => n.id === blockId ? { ...n, data: { ...n.data, generating: true } } : n)
     );
 
-    setTimeout(() => {
-      const block = nodes.find(n => n.id === blockId);
-      if (!block) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-video-creative", {
+        body: {
+          prompt: block.data.prompt || "Criar um criativo impactante",
+          model: block.data.model || "Rosto para vídeo (Alta qualidade)",
+          aspect: block.data.aspect || "9:16 (Vertical)",
+          imageDescriptions,
+        },
+      });
 
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const creative = data?.creative;
       const previewId = newId();
+
       setNodes((prev) => {
         const updated = prev.map((n) =>
           n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n
@@ -136,7 +183,12 @@ const ShortsReels = () => {
             type: "preview" as const,
             x: block.x + (isMobile ? 20 : 380),
             y: block.y + (isMobile ? 450 : 0),
-            data: { label: "Preview", videoReady: true },
+            data: {
+              label: "Preview",
+              videoReady: true,
+              creative,
+              ugcAspects: creative?.ugc_aspects,
+            },
             parentBlockId: blockId,
           },
         ];
@@ -146,8 +198,16 @@ const ShortsReels = () => {
         ...prev,
         { id: `conn-${Date.now()}`, fromId: blockId, toId: previewId },
       ]);
-    }, 1500);
-  }, [nodes, isMobile]);
+
+      toast.success("Criativo gerado com sucesso!");
+    } catch (err: any) {
+      console.error("Generation error:", err);
+      setNodes((prev) =>
+        prev.map((n) => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n)
+      );
+      toast.error(err?.message || "Erro ao gerar criativo");
+    }
+  }, [nodes, connections, isMobile]);
 
   /* ─── Upload image to node ─── */
   const handleImageUpload = useCallback((nodeId: string, file: File) => {
@@ -248,17 +308,15 @@ const ShortsReels = () => {
     }
   }, []);
 
-  /* ─── Touch handlers for mobile ─── */
+  /* ─── Touch handlers ─── */
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      // Two-finger: start pinch zoom
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       lastTouchDist.current = Math.sqrt(dx * dx + dy * dy);
       return;
     }
     if (e.touches.length === 1) {
-      // Single finger on canvas bg = pan
       const target = e.target as HTMLElement;
       const isCanvasBg = target === canvasRef.current || target.classList.contains("canvas-bg");
       if (isCanvasBg) {
@@ -317,7 +375,6 @@ const ShortsReels = () => {
     [nodes, zoom, pan]
   );
 
-  /* Mouse wheel */
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
@@ -330,14 +387,12 @@ const ShortsReels = () => {
     }
   }, [zoom]);
 
-  /* ─── Get node center for connection lines ─── */
   const getNodeCenter = (node: CanvasNode) => {
-    const w = node.type === "creation-block" ? (isMobile ? 260 : 320) : node.type === "preview" ? (isMobile ? 240 : 280) : (isMobile ? 130 : 160);
+    const w = node.type === "creation-block" ? (isMobile ? 260 : 320) : node.type === "preview" ? (isMobile ? 260 : 340) : (isMobile ? 130 : 160);
     const h = node.type === "creation-block" ? 400 : node.type === "preview" ? 320 : 180;
     return { x: node.x + w / 2, y: node.y + h / 2 };
   };
 
-  /* ESC to cancel connection */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") setConnectingFrom(null);
@@ -356,10 +411,9 @@ const ShortsReels = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground shrink-0">
             <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
-          <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Criador de Vídeos</h1>
+          <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Criador de Vídeos I.A</h1>
         </div>
 
-        {/* Desktop/Tablet actions */}
         <div className="hidden sm:flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-2 text-muted-foreground" onClick={addImageNode}>
             <Plus className="h-4 w-4" />
@@ -386,7 +440,6 @@ const ShortsReels = () => {
           </Button>
         </div>
 
-        {/* Mobile actions */}
         <div className="flex sm:hidden items-center gap-1">
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom((z) => Math.max(0.3, z - 0.1))}>
@@ -403,7 +456,6 @@ const ShortsReels = () => {
         </div>
       </header>
 
-      {/* Mobile dropdown menu */}
       {showMobileMenu && (
         <div className="sm:hidden absolute top-12 right-2 z-30 bg-background border border-border rounded-xl shadow-lg p-2 flex flex-col gap-1 min-w-[180px]">
           <Button variant="ghost" size="sm" className="justify-start gap-2 text-foreground" onClick={addImageNode}>
@@ -421,15 +473,14 @@ const ShortsReels = () => {
         </div>
       )}
 
-      {/* Empty state */}
       {nodes.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none px-4" style={{ top: 48 }}>
           <div className="text-center pointer-events-auto max-w-xs">
             <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
-              <Layers className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400" />
+              <Sparkles className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400" />
             </div>
-            <h2 className="text-base sm:text-lg font-semibold text-foreground mb-1.5 sm:mb-2">Canvas vazio</h2>
-            <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">Comece adicionando imagens e blocos de criação para gerar seus criativos</p>
+            <h2 className="text-base sm:text-lg font-semibold text-foreground mb-1.5 sm:mb-2">Criador de Vídeos I.A</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">Adicione imagens, conecte a um bloco de criação e gere criativos com inteligência artificial</p>
             <div className="flex gap-2 justify-center flex-wrap">
               <Button variant="outline" size="sm" className="gap-2 text-xs sm:text-sm" onClick={addImageNode}>
                 <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Imagem
@@ -460,7 +511,6 @@ const ShortsReels = () => {
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* SVG connection lines */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
           {connections.map((conn) => {
             const from = nodes.find((n) => n.id === conn.fromId);
@@ -476,38 +526,23 @@ const ShortsReels = () => {
             const cpx2 = bx - (bx - ax) * 0.5;
             return (
               <g key={conn.id}>
-                <path
-                  d={`M ${ax} ${ay} C ${cpx1} ${ay}, ${cpx2} ${by}, ${bx} ${by}`}
-                  stroke="#3b82f6"
-                  strokeWidth="2.5"
-                  fill="none"
-                  strokeLinecap="round"
-                />
+                <path d={`M ${ax} ${ay} C ${cpx1} ${ay}, ${cpx2} ${by}, ${bx} ${by}`} stroke="#3b82f6" strokeWidth="2.5" fill="none" strokeLinecap="round" />
                 <circle cx={bx} cy={by} r="5" fill="#3b82f6" />
               </g>
             );
           })}
         </svg>
 
-        {/* Nodes */}
-        <div
-          className="absolute inset-0 z-10"
-          style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`, transformOrigin: "0 0" }}
-        >
+        <div className="absolute inset-0 z-10" style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`, transformOrigin: "0 0" }}>
           {nodes.map((node) => {
             if (node.type === "image") {
               return (
                 <ImageNode
-                  key={node.id}
-                  node={node}
-                  isMobile={isMobile}
-                  onMouseDown={onNodeMouseDown}
-                  onTouchStart={onNodeTouchStart}
-                  onUpload={handleImageUpload}
-                  onRemove={removeNode}
+                  key={node.id} node={node} isMobile={isMobile}
+                  onMouseDown={onNodeMouseDown} onTouchStart={onNodeTouchStart}
+                  onUpload={handleImageUpload} onRemove={removeNode}
                   onConnect={startConnection}
-                  isConnecting={connectingFrom !== null}
-                  isConnectingFrom={connectingFrom === node.id}
+                  isConnecting={connectingFrom !== null} isConnectingFrom={connectingFrom === node.id}
                 />
               );
             }
@@ -515,32 +550,22 @@ const ShortsReels = () => {
               const imageCount = connections.filter((c) => c.toId === node.id).length;
               return (
                 <CreationBlockNode
-                  key={node.id}
-                  node={node}
-                  isMobile={isMobile}
-                  onMouseDown={onNodeMouseDown}
-                  onTouchStart={onNodeTouchStart}
+                  key={node.id} node={node} isMobile={isMobile}
+                  onMouseDown={onNodeMouseDown} onTouchStart={onNodeTouchStart}
                   onConnect={startConnection}
-                  isConnecting={connectingFrom !== null}
-                  isConnectingFrom={connectingFrom === node.id}
-                  imageCount={imageCount}
-                  onGenerate={handleGenerate}
-                  onRemove={removeNode}
-                  onUpdateData={updateNodeData}
+                  isConnecting={connectingFrom !== null} isConnectingFrom={connectingFrom === node.id}
+                  imageCount={imageCount} onGenerate={handleGenerate}
+                  onRemove={removeNode} onUpdateData={updateNodeData}
                 />
               );
             }
             if (node.type === "preview") {
               return (
                 <PreviewNode
-                  key={node.id}
-                  node={node}
-                  isMobile={isMobile}
-                  onMouseDown={onNodeMouseDown}
-                  onTouchStart={onNodeTouchStart}
+                  key={node.id} node={node} isMobile={isMobile}
+                  onMouseDown={onNodeMouseDown} onTouchStart={onNodeTouchStart}
                   onConnect={startConnection}
-                  isConnecting={connectingFrom !== null}
-                  isConnectingFrom={connectingFrom === node.id}
+                  isConnecting={connectingFrom !== null} isConnectingFrom={connectingFrom === node.id}
                   onRemove={removeNode}
                 />
               );
@@ -549,7 +574,6 @@ const ShortsReels = () => {
           })}
         </div>
 
-        {/* Connecting hint */}
         {connectingFrom && (
           <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium shadow-lg z-30 animate-pulse whitespace-nowrap">
             Toque em outro bloco para conectar
@@ -564,15 +588,13 @@ const ShortsReels = () => {
 /* ─── Image Node ─── */
 /* ═══════════════════════════════════════════════ */
 interface ImageNodeProps {
-  node: CanvasNode;
-  isMobile: boolean;
+  node: CanvasNode; isMobile: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
   onTouchStart: (e: React.TouchEvent, id: string) => void;
   onUpload: (nodeId: string, file: File) => void;
   onRemove: (nodeId: string) => void;
   onConnect: (nodeId: string) => void;
-  isConnecting: boolean;
-  isConnectingFrom: boolean;
+  isConnecting: boolean; isConnectingFrom: boolean;
 }
 
 function ImageNode({ node, isMobile, onMouseDown, onTouchStart, onUpload, onRemove, onConnect, isConnecting, isConnectingFrom }: ImageNodeProps) {
@@ -622,16 +644,7 @@ function ImageNode({ node, isMobile, onMouseDown, onTouchStart, onUpload, onRemo
           </button>
         )}
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onUpload(node.id, f);
-        }}
-      />
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(node.id, f); }} />
     </div>
   );
 }
@@ -640,13 +653,11 @@ function ImageNode({ node, isMobile, onMouseDown, onTouchStart, onUpload, onRemo
 /* ─── Creation Block Node ─── */
 /* ═══════════════════════════════════════════════ */
 interface CreationBlockProps {
-  node: CanvasNode;
-  isMobile: boolean;
+  node: CanvasNode; isMobile: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
   onTouchStart: (e: React.TouchEvent, id: string) => void;
   onConnect: (nodeId: string) => void;
-  isConnecting: boolean;
-  isConnectingFrom: boolean;
+  isConnecting: boolean; isConnectingFrom: boolean;
   imageCount: number;
   onGenerate: (blockId: string) => void;
   onRemove: (nodeId: string) => void;
@@ -659,6 +670,8 @@ function CreationBlockNode({
 }: CreationBlockProps) {
   const { prompt = "", model = "Rosto para vídeo (Alta qualidade)", aspect = "9:16 (Vertical)", generating } = node.data;
   const w = isMobile ? 260 : 320;
+  const [showUgcAspects, setShowUgcAspects] = useState(false);
+  const isUGC = model.toLowerCase().includes("ugc");
 
   return (
     <div
@@ -685,7 +698,7 @@ function CreationBlockNode({
 
         <div className="p-3 sm:p-4 space-y-3 sm:space-y-4" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
           <div>
-            <label className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 block">Modelo</label>
+            <label className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 block">Modelo I.A</label>
             <select
               value={model}
               onChange={(e) => onUpdateData(node.id, "model", e.target.value)}
@@ -696,6 +709,32 @@ function CreationBlockNode({
               <option>UGC estilo natural</option>
             </select>
           </div>
+
+          {/* UGC Aspects panel */}
+          {isUGC && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg overflow-hidden">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowUgcAspects(!showUgcAspects); }}
+                className="w-full flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-purple-700"
+              >
+                <span className="flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  Aspectos UGC Aplicados ({UGC_ASPECTS.length})
+                </span>
+                {showUgcAspects ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </button>
+              {showUgcAspects && (
+                <div className="px-2 sm:px-3 pb-2 space-y-1 max-h-40 overflow-y-auto">
+                  {UGC_ASPECTS.map((aspect, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-[9px] sm:text-[10px] text-purple-600">
+                      <span className="text-purple-400 mt-0.5">✓</span>
+                      <span>{aspect}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs text-blue-700">
             Conecte até 5 imagens
@@ -720,7 +759,7 @@ function CreationBlockNode({
             <Textarea
               value={prompt}
               onChange={(e) => onUpdateData(node.id, "prompt", e.target.value)}
-              placeholder="Descreva o criativo que deseja gerar..."
+              placeholder={isUGC ? "Ex: Mostre uma pessoa usando o produto e fazendo um review autêntico..." : "Descreva o criativo que deseja gerar..."}
               className="min-h-[60px] sm:min-h-[80px] text-xs sm:text-sm bg-muted border-border resize-none text-foreground placeholder:text-muted-foreground"
             />
           </div>
@@ -733,12 +772,12 @@ function CreationBlockNode({
             {generating ? (
               <>
                 <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Gerando...
+                Gerando com I.A...
               </>
             ) : (
               <>
                 <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Criar Criativo
+                Criar Criativo com I.A
               </>
             )}
           </Button>
@@ -761,18 +800,20 @@ function CreationBlockNode({
 /* ─── Preview Node ─── */
 /* ═══════════════════════════════════════════════ */
 interface PreviewNodeProps {
-  node: CanvasNode;
-  isMobile: boolean;
+  node: CanvasNode; isMobile: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
   onTouchStart: (e: React.TouchEvent, id: string) => void;
   onConnect: (nodeId: string) => void;
-  isConnecting: boolean;
-  isConnectingFrom: boolean;
+  isConnecting: boolean; isConnectingFrom: boolean;
   onRemove: (nodeId: string) => void;
 }
 
 function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isConnecting, isConnectingFrom, onRemove }: PreviewNodeProps) {
-  const w = isMobile ? 240 : 280;
+  const w = isMobile ? 260 : 340;
+  const [showScript, setShowScript] = useState(false);
+  const [showScenes, setShowScenes] = useState(false);
+  const creative = node.data.creative;
+
   return (
     <div
       className={`absolute select-none group ${isConnectingFrom ? "ring-2 ring-blue-500 ring-offset-2 rounded-2xl" : ""}`}
@@ -784,32 +825,118 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
         <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-muted border-b border-border cursor-move">
           <div className="flex items-center gap-1.5 sm:gap-2">
             <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-            <span className="text-xs sm:text-sm font-semibold text-foreground">Preview</span>
+            <span className="text-xs sm:text-sm font-semibold text-foreground">
+              {creative?.title || "Preview"}
+            </span>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">pronto</span>
+            <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
+              I.A ✓
+            </span>
             <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100" title="Remover">
               <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-destructive" />
             </button>
           </div>
         </div>
 
-        <div className="p-3 sm:p-4">
-          <div className="w-full aspect-[9/16] bg-gray-900 rounded-xl flex items-center justify-center relative overflow-hidden">
-            <div className="text-center">
-              <Video className="h-8 w-8 sm:h-10 sm:w-10 text-gray-600 mx-auto mb-2" />
-              <span className="text-[10px] sm:text-xs text-gray-500">Vídeo gerado (simulado)</span>
-            </div>
-            <button className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 active:opacity-100 transition-opacity bg-black/20">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
-                <Play className="h-5 w-5 sm:h-6 sm:w-6 text-gray-900 ml-0.5" />
-              </div>
-            </button>
-          </div>
+        <div className="p-3 sm:p-4 space-y-3" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          {/* Creative info */}
+          {creative && (
+            <>
+              {creative.total_duration && (
+                <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
+                  <span>Duração: {creative.total_duration}</span>
+                  {creative.music_suggestion && (
+                    <span className="truncate ml-2">🎵 {creative.music_suggestion.substring(0, 30)}</span>
+                  )}
+                </div>
+              )}
 
-          <Button className="w-full mt-2 sm:mt-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl h-9 sm:h-10 gap-2 text-xs sm:text-sm font-medium">
+              {/* Script */}
+              <div className="bg-muted rounded-lg overflow-hidden">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowScript(!showScript); }}
+                  className="w-full flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-foreground"
+                >
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-3 w-3" /> Roteiro
+                  </span>
+                  {showScript ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {showScript && (
+                  <div className="px-2 sm:px-3 pb-2 max-h-48 overflow-y-auto">
+                    <div className="prose prose-xs text-[10px] sm:text-xs text-muted-foreground">
+                      <ReactMarkdown>{creative.script || creative.creative_notes || ""}</ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Scenes */}
+              {creative.scenes?.length > 0 && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg overflow-hidden">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowScenes(!showScenes); }}
+                    className="w-full flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-blue-700"
+                  >
+                    <span>🎬 {creative.scenes.length} Cenas</span>
+                    {showScenes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+                  {showScenes && (
+                    <div className="px-2 sm:px-3 pb-2 space-y-2 max-h-48 overflow-y-auto">
+                      {creative.scenes.map((scene: any, i: number) => (
+                        <div key={i} className="bg-white rounded-lg p-2 border border-blue-100">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold text-blue-800">Cena {scene.number || i + 1}</span>
+                            <span className="text-[9px] text-blue-500">{scene.duration}</span>
+                          </div>
+                          <p className="text-[9px] sm:text-[10px] text-blue-600">{scene.description}</p>
+                          {scene.text_overlay && (
+                            <p className="text-[9px] text-blue-400 mt-1 italic">"{scene.text_overlay}"</p>
+                          )}
+                          {scene.transition && (
+                            <span className="text-[8px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded mt-1 inline-block">
+                              → {scene.transition}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* UGC Aspects */}
+              {creative.ugc_aspects && (
+                <div className="bg-purple-50 border border-purple-100 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
+                  <span className="text-[10px] sm:text-xs font-medium text-purple-700 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> UGC Otimizado — {creative.ugc_aspects.length} aspectos aplicados
+                  </span>
+                </div>
+              )}
+
+              {/* Creative notes */}
+              {creative.creative_notes && !showScript && (
+                <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-3">
+                  {typeof creative.creative_notes === 'string' ? creative.creative_notes.substring(0, 150) + "..." : ""}
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Placeholder if no creative */}
+          {!creative && (
+            <div className="w-full aspect-[9/16] bg-gray-900 rounded-xl flex items-center justify-center">
+              <div className="text-center">
+                <Video className="h-8 w-8 sm:h-10 sm:w-10 text-gray-600 mx-auto mb-2" />
+                <span className="text-[10px] sm:text-xs text-gray-500">Aguardando geração...</span>
+              </div>
+            </div>
+          )}
+
+          <Button className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl h-9 sm:h-10 gap-2 text-xs sm:text-sm font-medium">
             <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            Baixar Criativo
+            Exportar Criativo
           </Button>
         </div>
 
