@@ -124,8 +124,7 @@ export default function AdminPlans() {
     setTimeout(() => window.location.reload(), 800);
   };
 
-  // Domain verification state
-  // Video API connector state — 3 slots
+  // Video API key pool state
   const providerNames: Record<string, string> = { minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse', lovable_ai: 'Lovable AI' };
   const providerHints: Record<string, string> = {
     minimax: 'Crie sua conta em minimaxi.com e gere uma API Key no painel.',
@@ -137,15 +136,14 @@ export default function AdminPlans() {
     heygen: 'Crie sua conta em heygen.com e gere uma API Key em Settings > API.',
     pixverse: 'Crie sua conta em pixverse.ai e gere uma API Key no painel.',
   };
-  const [connector1Provider, setConnector1Provider] = useState('');
-  const [connector1Key, setConnector1Key] = useState('');
-  const [connector2Provider, setConnector2Provider] = useState('');
-  const [connector2Key, setConnector2Key] = useState('');
-  const [connector3Provider, setConnector3Provider] = useState('');
-  const [connector3Key, setConnector3Key] = useState('');
-  const [activeConnector, setActiveConnector] = useState<'1' | '2' | '3'>('1');
+  const [activeProvider, setActiveProvider] = useState('lovable_ai');
+  const [apiKeyPool, setApiKeyPool] = useState<{ id: string; provider: string; api_key: string; label: string; is_enabled: boolean; fail_count: number; last_error: string | null; last_used_at: string | null }[]>([]);
+  const [newKeyProvider, setNewKeyProvider] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [newKeyLabel, setNewKeyLabel] = useState('');
   const [videoApiSaving, setVideoApiSaving] = useState(false);
   const [videoApiLoaded, setVideoApiLoaded] = useState(false);
+  const [addingKey, setAddingKey] = useState(false);
 
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
@@ -486,58 +484,77 @@ export default function AdminPlans() {
   };
 
   const loadVideoApiConfig = async () => {
-    const { data } = await supabase
+    // Load active provider
+    const { data: settingsData } = await supabase
       .from('admin_settings' as any)
       .select('key, value')
-      .in('key', ['video_connector_1_provider', 'video_connector_1_key', 'video_connector_2_provider', 'video_connector_2_key', 'video_connector_3_provider', 'video_connector_3_key', 'video_active_connector']);
-    if (data) {
-      (data as any[]).forEach((row: any) => {
-        if (row.key === 'video_connector_1_provider') setConnector1Provider(row.value || '');
-        if (row.key === 'video_connector_1_key') setConnector1Key(row.value || '');
-        if (row.key === 'video_connector_2_provider') setConnector2Provider(row.value || '');
-        if (row.key === 'video_connector_2_key') setConnector2Key(row.value || '');
-        if (row.key === 'video_connector_3_provider') setConnector3Provider(row.value || '');
-        if (row.key === 'video_connector_3_key') setConnector3Key(row.value || '');
-        if (row.key === 'video_active_connector') setActiveConnector((row.value || '1') as '1' | '2' | '3');
-      });
+      .eq('key', 'video_active_provider');
+    if (settingsData && (settingsData as any[]).length > 0) {
+      setActiveProvider((settingsData as any[])[0].value || 'lovable_ai');
     }
+    // Load key pool
+    const { data: keysData } = await supabase
+      .from('video_api_keys' as any)
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (keysData) setApiKeyPool(keysData as any[]);
     setVideoApiLoaded(true);
   };
 
-  const saveVideoApiConfig = async () => {
+  const saveActiveProvider = async () => {
     setVideoApiSaving(true);
     const now = new Date().toISOString();
-    
-    const upsert = async (key: string, value: string) => {
-      const { data: existing } = await supabase
-        .from('admin_settings' as any)
-        .select('key')
-        .eq('key', key)
-        .maybeSingle();
-      if (existing) {
-        return supabase.from('admin_settings' as any).update({ value, updated_at: now } as any).eq('key', key);
-      } else {
-        return supabase.from('admin_settings' as any).insert({ key, value, updated_at: now } as any);
-      }
-    };
-
-    const results = await Promise.all([
-      upsert('video_connector_1_provider', connector1Provider),
-      upsert('video_connector_1_key', connector1Key),
-      upsert('video_connector_2_provider', connector2Provider),
-      upsert('video_connector_2_key', connector2Key),
-      upsert('video_connector_3_provider', connector3Provider),
-      upsert('video_connector_3_key', connector3Key),
-      upsert('video_active_connector', activeConnector),
-    ]);
-
-    const hasError = results.some(r => r.error);
-    if (hasError) {
-      toast.error('Erro ao salvar configuração.');
+    const { data: existing } = await supabase
+      .from('admin_settings' as any)
+      .select('key')
+      .eq('key', 'video_active_provider')
+      .maybeSingle();
+    if (existing) {
+      await supabase.from('admin_settings' as any).update({ value: activeProvider, updated_at: now } as any).eq('key', 'video_active_provider');
     } else {
-      toast.success('Conectores de vídeo salvos com sucesso!');
+      await supabase.from('admin_settings' as any).insert({ key: 'video_active_provider', value: activeProvider, updated_at: now } as any);
     }
+    toast.success('Provedor ativo salvo!');
     setVideoApiSaving(false);
+  };
+
+  const addApiKey = async () => {
+    if (!newKeyProvider || !newKeyValue) {
+      toast.error('Selecione o provedor e insira a chave.');
+      return;
+    }
+    setAddingKey(true);
+    const { error } = await supabase.from('video_api_keys' as any).insert({
+      provider: newKeyProvider,
+      api_key: newKeyValue,
+      label: newKeyLabel || `Chave ${apiKeyPool.filter(k => k.provider === newKeyProvider).length + 1}`,
+    } as any);
+    if (error) {
+      toast.error('Erro ao adicionar chave.');
+    } else {
+      toast.success('Chave adicionada ao pool!');
+      setNewKeyValue('');
+      setNewKeyLabel('');
+      await loadVideoApiConfig();
+    }
+    setAddingKey(false);
+  };
+
+  const removeApiKey = async (id: string) => {
+    await supabase.from('video_api_keys' as any).delete().eq('id', id);
+    setApiKeyPool(prev => prev.filter(k => k.id !== id));
+    toast.success('Chave removida.');
+  };
+
+  const toggleApiKey = async (id: string, enabled: boolean) => {
+    await supabase.from('video_api_keys' as any).update({ is_enabled: enabled } as any).eq('id', id);
+    setApiKeyPool(prev => prev.map(k => k.id === id ? { ...k, is_enabled: enabled } : k));
+  };
+
+  const resetKeyFailures = async (id: string) => {
+    await supabase.from('video_api_keys' as any).update({ fail_count: 0, last_error: null } as any).eq('id', id);
+    setApiKeyPool(prev => prev.map(k => k.id === id ? { ...k, fail_count: 0, last_error: null } : k));
+    toast.success('Contador de falhas resetado.');
   };
 
 
@@ -1695,130 +1712,161 @@ export default function AdminPlans() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Video className="w-5 h-5 text-primary" />
-                  Conector de API — Geração de Vídeo com IA
+                  Pool de API Keys — Geração de Vídeo com IA
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">📋 Configure até 3 conectores de vídeo IA:</p>
-                  <p>Configure múltiplos provedores e selecione qual estará ativo. Assim você pode testar e comparar diferentes IAs sem perder as configurações.</p>
+                  <p className="font-medium text-foreground">🔄 Pool de Chaves com Failover Automático</p>
+                  <p>Adicione quantas chaves quiser do mesmo provedor. Quando uma chave falhar (créditos esgotados, rate limit), o sistema automaticamente tenta a próxima.</p>
                 </div>
 
-                {/* Active connector selector */}
+                {/* Active provider selector */}
                 <div className="space-y-3">
-                  <Label className="text-sm font-medium">🎯 Conector Ativo</Label>
-                  <Select value={activeConnector} onValueChange={(v) => setActiveConnector(v as '1' | '2' | '3')}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o conector ativo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Conector 1 {connector1Provider ? `— ${providerNames[connector1Provider] || connector1Provider}` : '(não configurado)'}</SelectItem>
-                      <SelectItem value="2">Conector 2 {connector2Provider ? `— ${providerNames[connector2Provider] || connector2Provider}` : '(não configurado)'}</SelectItem>
-                      <SelectItem value="3">Conector 3 {connector3Provider ? `— ${providerNames[connector3Provider] || connector3Provider}` : '(não configurado)'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* 3 Connector cards */}
-                {([
-                  { num: '1', provider: connector1Provider, setProvider: setConnector1Provider, key: connector1Key, setKey: setConnector1Key },
-                  { num: '2', provider: connector2Provider, setProvider: setConnector2Provider, key: connector2Key, setKey: setConnector2Key },
-                  { num: '3', provider: connector3Provider, setProvider: setConnector3Provider, key: connector3Key, setKey: setConnector3Key },
-                ] as const).map((slot) => (
-                  <div key={slot.num} className={`border rounded-lg p-4 space-y-3 ${activeConnector === slot.num ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold">
-                        {activeConnector === slot.num && <Badge className="mr-2 bg-primary text-primary-foreground">ATIVO</Badge>}
-                        Conector {slot.num}
-                      </Label>
-                      {slot.provider && slot.key && (
-                        <div className="flex items-center gap-1 text-xs text-primary">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Configurado
-                        </div>
-                      )}
-                    </div>
-
-                    <Select value={slot.provider} onValueChange={slot.setProvider}>
+                  <Label className="text-sm font-medium">🎯 Provedor Ativo</Label>
+                  <div className="flex gap-2">
+                    <Select value={activeProvider} onValueChange={setActiveProvider}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o provedor" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="minimax">Minimax (Hailuo) — Melhor custo-benefício</SelectItem>
-                        <SelectItem value="runway">Runway — Plano ilimitado disponível</SelectItem>
-                        <SelectItem value="kling">Kling AI — Melhor qualidade facial</SelectItem>
-                        <SelectItem value="pika">Pika — Efeitos estilizados</SelectItem>
-                        <SelectItem value="luma">Luma AI (Dream Machine) — Cinematográfica</SelectItem>
-                        <SelectItem value="stability">Stability AI — Open-source</SelectItem>
-                        <SelectItem value="heygen">HeyGen — Avatares com fala</SelectItem>
-                        <SelectItem value="pixverse">PixVerse — Anime e efeitos</SelectItem>
-                        <SelectItem value="lovable_ai">Lovable AI — Apenas imagens (sem custo)</SelectItem>
+                        <SelectItem value="minimax">Minimax (Hailuo)</SelectItem>
+                        <SelectItem value="runway">Runway</SelectItem>
+                        <SelectItem value="kling">Kling AI</SelectItem>
+                        <SelectItem value="pika">Pika</SelectItem>
+                        <SelectItem value="luma">Luma AI</SelectItem>
+                        <SelectItem value="stability">Stability AI</SelectItem>
+                        <SelectItem value="heygen">HeyGen</SelectItem>
+                        <SelectItem value="pixverse">PixVerse</SelectItem>
+                        <SelectItem value="lovable_ai">Lovable AI (sem custo)</SelectItem>
                       </SelectContent>
                     </Select>
-
-                    {slot.provider && slot.provider !== 'lovable_ai' && (
-                      <div className="space-y-2">
-                        <Input
-                          type="password"
-                          placeholder={`API Key do ${providerNames[slot.provider] || slot.provider}`}
-                          value={slot.key}
-                          onChange={e => slot.setKey(e.target.value)}
-                          className="font-mono text-xs"
-                        />
-                        <p className="text-xs text-muted-foreground">{providerHints[slot.provider] || ''}</p>
-                      </div>
-                    )}
-
-                    {slot.provider === 'lovable_ai' && (
-                      <p className="text-xs text-muted-foreground">✅ Gera imagens com IA. Sem custo extra de API externa.</p>
-                    )}
-                  </div>
-                ))}
-
-                {/* Provider comparison table */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Comparativo de provedores</Label>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Provedor</TableHead>
-                          <TableHead>Duração/clipe</TableHead>
-                          <TableHead>Custo/clipe</TableHead>
-                          <TableHead>Modelo</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {[
-                          { id: 'minimax', name: 'Minimax', dur: '6s', cost: '~$0.03', plan: 'Pay-per-use' },
-                          { id: 'runway', name: 'Runway', dur: '16s', cost: '~$0.20', plan: '$95/mês' },
-                          { id: 'kling', name: 'Kling AI', dur: '10s', cost: '~$0.08', plan: 'Pay-per-use' },
-                          { id: 'pika', name: 'Pika', dur: '4s', cost: '~$0.10', plan: '$58/mês' },
-                          { id: 'luma', name: 'Luma AI', dur: '5s', cost: '~$0.04', plan: 'Pay-per-use' },
-                          { id: 'stability', name: 'Stability AI', dur: '4s', cost: '~$0.05', plan: 'Pay-per-use' },
-                          { id: 'heygen', name: 'HeyGen', dur: 'Variável', cost: '~$0.10', plan: '$29/mês' },
-                          { id: 'pixverse', name: 'PixVerse', dur: '4s', cost: '~$0.05', plan: 'Pay-per-use' },
-                          { id: 'lovable_ai', name: 'Lovable AI', dur: '—', cost: 'Incluído', plan: 'Imagens' },
-                        ].map(p => {
-                          const isActive = [connector1Provider, connector2Provider, connector3Provider].includes(p.id);
-                          return (
-                            <TableRow key={p.id} className={isActive ? 'bg-primary/5' : ''}>
-                              <TableCell className="font-medium">{p.name} {isActive && <Badge variant="outline" className="ml-1 text-[10px]">Em uso</Badge>}</TableCell>
-                              <TableCell>{p.dur}</TableCell>
-                              <TableCell>{p.cost}</TableCell>
-                              <TableCell><Badge variant="outline">{p.plan}</Badge></TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                    <Button onClick={saveActiveProvider} disabled={videoApiSaving} size="sm" className="gap-1 shrink-0">
+                      {videoApiSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Salvar
+                    </Button>
                   </div>
                 </div>
 
-                <Button onClick={saveVideoApiConfig} disabled={videoApiSaving} className="w-full gap-2">
-                  {videoApiSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Salvar Configuração dos Conectores
-                </Button>
+                {activeProvider !== 'lovable_ai' && (
+                  <>
+                    {/* Add new key */}
+                    <div className="border border-dashed border-border rounded-lg p-4 space-y-3">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> Adicionar Nova Chave — {providerNames[activeProvider] || activeProvider}
+                      </Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <Input
+                          placeholder="Rótulo (ex: Conta 1)"
+                          value={newKeyLabel}
+                          onChange={e => setNewKeyLabel(e.target.value)}
+                        />
+                        <Select value={newKeyProvider || activeProvider} onValueChange={setNewKeyProvider}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Provedor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="minimax">Minimax</SelectItem>
+                            <SelectItem value="runway">Runway</SelectItem>
+                            <SelectItem value="kling">Kling AI</SelectItem>
+                            <SelectItem value="pika">Pika</SelectItem>
+                            <SelectItem value="luma">Luma AI</SelectItem>
+                            <SelectItem value="stability">Stability AI</SelectItem>
+                            <SelectItem value="heygen">HeyGen</SelectItem>
+                            <SelectItem value="pixverse">PixVerse</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="password"
+                          placeholder="API Key"
+                          value={newKeyValue}
+                          onChange={e => setNewKeyValue(e.target.value)}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                      {providerHints[newKeyProvider || activeProvider] && (
+                        <p className="text-xs text-muted-foreground">{providerHints[newKeyProvider || activeProvider]}</p>
+                      )}
+                      <Button onClick={addApiKey} disabled={addingKey} size="sm" className="gap-1">
+                        {addingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        Adicionar ao Pool
+                      </Button>
+                    </div>
+
+                    {/* Key pool list */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">
+                        🔑 Chaves no Pool ({apiKeyPool.filter(k => k.provider === activeProvider).length} para {providerNames[activeProvider] || activeProvider})
+                      </Label>
+                      {apiKeyPool.filter(k => k.provider === activeProvider).length === 0 && (
+                        <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma chave adicionada para este provedor.</p>
+                      )}
+                      {apiKeyPool.filter(k => k.provider === activeProvider).map((key, idx) => (
+                        <div key={key.id} className={`border rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 ${key.is_enabled ? 'border-border' : 'border-border/50 opacity-60'}`}>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{key.label || `Chave ${idx + 1}`}</span>
+                              <Badge variant={key.is_enabled ? 'default' : 'secondary'} className="text-[10px]">
+                                {key.is_enabled ? 'Ativa' : 'Desativada'}
+                              </Badge>
+                              {key.fail_count > 0 && (
+                                <Badge variant="destructive" className="text-[10px]">
+                                  {key.fail_count} falha{key.fail_count > 1 ? 's' : ''}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs font-mono text-muted-foreground truncate">
+                              {key.api_key.slice(0, 8)}...{key.api_key.slice(-4)}
+                            </p>
+                            {key.last_error && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" /> {key.last_error.slice(0, 80)}
+                              </p>
+                            )}
+                            {key.last_used_at && (
+                              <p className="text-xs text-muted-foreground">Último uso: {new Date(key.last_used_at).toLocaleString('pt-BR')}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Switch checked={key.is_enabled} onCheckedChange={(v) => toggleApiKey(key.id, v)} />
+                            {key.fail_count > 0 && (
+                              <Button variant="outline" size="sm" onClick={() => resetKeyFailures(key.id)} className="text-xs gap-1">
+                                <ShieldCheck className="w-3 h-3" /> Reset
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="sm" onClick={() => removeApiKey(key.id)}>
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Show all keys across providers */}
+                    {apiKeyPool.filter(k => k.provider !== activeProvider).length > 0 && (
+                      <div className="space-y-2 pt-4 border-t border-border">
+                        <Label className="text-sm font-medium text-muted-foreground">Chaves de outros provedores</Label>
+                        {apiKeyPool.filter(k => k.provider !== activeProvider).map((key, idx) => (
+                          <div key={key.id} className="border rounded-lg p-3 flex items-center gap-3 opacity-50">
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm">{key.label || `Chave ${idx + 1}`}</span>
+                              <span className="text-xs text-muted-foreground ml-2">({providerNames[key.provider] || key.provider})</span>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => removeApiKey(key.id)}>
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {activeProvider === 'lovable_ai' && (
+                  <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
+                    ✅ Lovable AI gera imagens automaticamente sem necessidade de API Key externa.
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

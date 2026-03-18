@@ -517,6 +517,45 @@ export type Database = {
         }
         Relationships: []
       }
+      video_api_keys: {
+        Row: {
+          api_key: string
+          created_at: string
+          fail_count: number
+          id: string
+          is_enabled: boolean
+          label: string
+          last_error: string | null
+          last_used_at: string | null
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          fail_count?: number
+          id?: string
+          is_enabled?: boolean
+          label?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          fail_count?: number
+          id?: string
+          is_enabled?: boolean
+          label?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       video_usage: {
         Row: {
           created_at: string

@@ -25,33 +25,100 @@ const UGC_ASPECTS = [
   "Duração ideal entre 15-60 segundos",
 ];
 
-async function getVideoApiConfig() {
+interface ApiKeyRow {
+  id: string;
+  provider: string;
+  api_key: string;
+  label: string;
+  is_enabled: boolean;
+  fail_count: number;
+}
+
+function getSupabaseAdmin() {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  return createClient(supabaseUrl, supabaseKey);
+}
 
-  const { data } = await supabase
+async function getVideoApiKeysPool(): Promise<{ provider: string; keys: ApiKeyRow[] }> {
+  const supabase = getSupabaseAdmin();
+
+  // Get active provider from admin_settings
+  const { data: settingsData } = await supabase
     .from("admin_settings")
     .select("key, value")
     .in("key", [
+      "video_active_provider",
+      // Legacy fallback keys
       "video_connector_1_provider", "video_connector_1_key",
-      "video_connector_2_provider", "video_connector_2_key",
-      "video_connector_3_provider", "video_connector_3_key",
       "video_active_connector",
-      // Legacy fallback
       "video_api_provider", "video_api_key",
     ]);
 
   const config: Record<string, string> = {};
-  (data || []).forEach((row: any) => {
+  (settingsData || []).forEach((row: any) => {
     config[row.key] = row.value;
   });
 
-  const activeSlot = config["video_active_connector"] || "1";
-  const provider = config[`video_connector_${activeSlot}_provider`] || config["video_api_provider"] || "lovable_ai";
-  const apiKey = config[`video_connector_${activeSlot}_key`] || config["video_api_key"] || "";
+  // New system: active provider from admin_settings
+  let activeProvider = config["video_active_provider"] || "";
 
-  return { provider, apiKey };
+  // Legacy fallback
+  if (!activeProvider) {
+    const activeSlot = config["video_active_connector"] || "1";
+    activeProvider = config[`video_connector_${activeSlot}_provider`] || config["video_api_provider"] || "lovable_ai";
+  }
+
+  if (activeProvider === "lovable_ai" || !activeProvider) {
+    return { provider: "lovable_ai", keys: [] };
+  }
+
+  // Fetch all enabled keys for this provider, sorted by least failures
+  const { data: keysData } = await supabase
+    .from("video_api_keys")
+    .select("id, provider, api_key, label, is_enabled, fail_count")
+    .eq("provider", activeProvider)
+    .eq("is_enabled", true)
+    .order("fail_count", { ascending: true })
+    .order("last_used_at", { ascending: true, nullsFirst: true });
+
+  // Legacy fallback: if no keys in pool, check old connector slots
+  if (!keysData || keysData.length === 0) {
+    const activeSlot = config["video_active_connector"] || "1";
+    const legacyKey = config[`video_connector_${activeSlot}_key`] || config["video_api_key"] || "";
+    if (legacyKey) {
+      return {
+        provider: activeProvider,
+        keys: [{ id: "legacy", provider: activeProvider, api_key: legacyKey, label: "Legacy", is_enabled: true, fail_count: 0 }],
+      };
+    }
+  }
+
+  return { provider: activeProvider, keys: keysData || [] };
+}
+
+async function markKeyFailed(keyId: string, error: string) {
+  if (keyId === "legacy") return;
+  const supabase = getSupabaseAdmin();
+  const { data: existing } = await supabase
+    .from("video_api_keys")
+    .select("fail_count")
+    .eq("id", keyId)
+    .single();
+  const newCount = (existing?.fail_count || 0) + 1;
+  await supabase
+    .from("video_api_keys")
+    .update({ fail_count: newCount, last_error: error, last_used_at: new Date().toISOString() })
+    .eq("id", keyId);
+}
+
+async function markKeyUsed(keyId: string) {
+  if (keyId === "legacy") return;
+  const supabase = getSupabaseAdmin();
+  await supabase
+    .from("video_api_keys")
+    .update({ last_used_at: new Date().toISOString(), last_error: null })
+    .eq("id", keyId);
 }
 
 async function generateWithLovableAI(
@@ -496,9 +563,9 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Get video API config from admin settings
-    const videoConfig = await getVideoApiConfig();
-    console.log(`Video provider: ${videoConfig.provider}`);
+    // Get video API keys pool with failover
+    const videoPool = await getVideoApiKeysPool();
+    console.log(`Video provider: ${videoPool.provider}, keys in pool: ${videoPool.keys.length}`);
 
     const isUGC = model?.toLowerCase().includes("ugc");
 
@@ -601,42 +668,65 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
       creative.ugc_aspects = UGC_ASPECTS;
     }
 
-    // Step 2: Generate visuals based on provider
+    // Step 2: Generate visuals with failover across key pool
     const scenes = creative.scenes || [];
     let sceneMedia: (string | null)[] = [];
     let mediaType: "image" | "video" = "image";
+    let usedKeyId = "";
 
-    console.log(`Step 2: Generating ${scenes.length} scenes with ${videoConfig.provider}...`);
+    console.log(`Step 2: Generating ${scenes.length} scenes with ${videoPool.provider}...`);
 
-    if (videoConfig.provider === "lovable_ai" || !videoConfig.apiKey) {
-      // Default: generate images with Lovable AI
+    if (videoPool.provider === "lovable_ai" || videoPool.keys.length === 0) {
       sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
       mediaType = "image";
-    } else if (videoConfig.provider === "runway") {
-      sceneMedia = await generateWithRunway(scenes, videoConfig.apiKey, aspect);
-      mediaType = "video";
-    } else if (videoConfig.provider === "minimax") {
-      sceneMedia = await generateWithMinimax(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "kling") {
-      sceneMedia = await generateWithKling(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "luma") {
-      sceneMedia = await generateWithLuma(scenes, videoConfig.apiKey, aspect);
-      mediaType = "video";
-    } else if (videoConfig.provider === "stability") {
-      sceneMedia = await generateWithStability(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "heygen") {
-      sceneMedia = await generateWithHeygen(scenes, videoConfig.apiKey);
-      mediaType = "video";
-    } else if (videoConfig.provider === "pixverse") {
-      sceneMedia = await generateWithPixverse(scenes, videoConfig.apiKey);
-      mediaType = "video";
     } else {
-      // Fallback to Lovable AI images
-      sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
-      mediaType = "image";
+      // Try each key in the pool until one succeeds (failover)
+      const generateFn: Record<string, (s: any[], k: string, a?: string) => Promise<(string | null)[]>> = {
+        runway: (s, k) => generateWithRunway(s, k, aspect),
+        minimax: (s, k) => generateWithMinimax(s, k),
+        kling: (s, k) => generateWithKling(s, k),
+        luma: (s, k) => generateWithLuma(s, k, aspect),
+        stability: (s, k) => generateWithStability(s, k),
+        heygen: (s, k) => generateWithHeygen(s, k),
+        pixverse: (s, k) => generateWithPixverse(s, k),
+      };
+
+      const fn = generateFn[videoPool.provider];
+      if (!fn) {
+        sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
+        mediaType = "image";
+      } else {
+        mediaType = "video";
+        let succeeded = false;
+
+        for (const keyRow of videoPool.keys) {
+          console.log(`Trying key "${keyRow.label || keyRow.id}" (fails: ${keyRow.fail_count})...`);
+          try {
+            sceneMedia = await fn(scenes, keyRow.api_key);
+            const hasResults = sceneMedia.some((m) => m !== null);
+            if (hasResults) {
+              await markKeyUsed(keyRow.id);
+              usedKeyId = keyRow.id;
+              succeeded = true;
+              console.log(`Key "${keyRow.label || keyRow.id}" succeeded!`);
+              break;
+            } else {
+              await markKeyFailed(keyRow.id, "No results returned");
+              console.log(`Key "${keyRow.label || keyRow.id}" returned no results, trying next...`);
+            }
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            await markKeyFailed(keyRow.id, errMsg);
+            console.log(`Key "${keyRow.label || keyRow.id}" failed: ${errMsg}, trying next...`);
+          }
+        }
+
+        if (!succeeded) {
+          console.log("All keys failed, falling back to Lovable AI images...");
+          sceneMedia = await generateWithLovableAI(scenes, aspect, LOVABLE_API_KEY);
+          mediaType = "image";
+        }
+      }
     }
 
     // Attach media to scenes
@@ -652,10 +742,11 @@ Gere o roteiro criativo completo com image_prompts para cada cena. Limite a no m
 
     creative.scenes = scenes;
     creative.media_type = mediaType;
-    creative.provider = videoConfig.provider;
+    creative.provider = videoPool.provider;
     creative.has_generated_images = sceneMedia.some((m) => m !== null);
+    creative.used_key_id = usedKeyId || null;
 
-    console.log(`Done! Generated ${sceneMedia.filter(Boolean).length}/${scenes.length} media items via ${videoConfig.provider}.`);
+    console.log(`Done! Generated ${sceneMedia.filter(Boolean).length}/${scenes.length} media items via ${videoPool.provider}.`);
 
     return new Response(JSON.stringify({ creative }), {
       status: 200,
