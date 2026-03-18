@@ -1700,7 +1700,7 @@ export default function AdminPlans() {
 
                 {videoApiProvider !== 'lovable_ai' && (
                   <div className="space-y-3">
-                    <Label className="text-sm font-medium">API Key do {videoApiProvider === 'minimax' ? 'Minimax' : videoApiProvider === 'runway' ? 'Runway' : videoApiProvider === 'kling' ? 'Kling AI' : 'Pika'}</Label>
+                    <Label className="text-sm font-medium">API Key do {{ minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse' }[videoApiProvider] || videoApiProvider}</Label>
                     <Input
                       type="password"
                       placeholder="Cole sua API Key aqui"
