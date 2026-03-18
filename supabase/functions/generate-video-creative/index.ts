@@ -33,17 +33,25 @@ async function getVideoApiConfig() {
   const { data } = await supabase
     .from("admin_settings")
     .select("key, value")
-    .in("key", ["video_api_provider", "video_api_key"]);
+    .in("key", [
+      "video_connector_1_provider", "video_connector_1_key",
+      "video_connector_2_provider", "video_connector_2_key",
+      "video_connector_3_provider", "video_connector_3_key",
+      "video_active_connector",
+      // Legacy fallback
+      "video_api_provider", "video_api_key",
+    ]);
 
   const config: Record<string, string> = {};
   (data || []).forEach((row: any) => {
     config[row.key] = row.value;
   });
 
-  return {
-    provider: config["video_api_provider"] || "lovable_ai",
-    apiKey: config["video_api_key"] || "",
-  };
+  const activeSlot = config["video_active_connector"] || "1";
+  const provider = config[`video_connector_${activeSlot}_provider`] || config["video_api_provider"] || "lovable_ai";
+  const apiKey = config[`video_connector_${activeSlot}_key`] || config["video_api_key"] || "";
+
+  return { provider, apiKey };
 }
 
 async function generateWithLovableAI(
