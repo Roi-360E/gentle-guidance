@@ -124,8 +124,7 @@ export default function AdminPlans() {
     setTimeout(() => window.location.reload(), 800);
   };
 
-  // Domain verification state
-  // Video API connector state — 3 slots
+  // Video API key pool state
   const providerNames: Record<string, string> = { minimax: 'Minimax', runway: 'Runway', kling: 'Kling AI', pika: 'Pika', luma: 'Luma AI', stability: 'Stability AI', heygen: 'HeyGen', pixverse: 'PixVerse', lovable_ai: 'Lovable AI' };
   const providerHints: Record<string, string> = {
     minimax: 'Crie sua conta em minimaxi.com e gere uma API Key no painel.',
@@ -137,15 +136,14 @@ export default function AdminPlans() {
     heygen: 'Crie sua conta em heygen.com e gere uma API Key em Settings > API.',
     pixverse: 'Crie sua conta em pixverse.ai e gere uma API Key no painel.',
   };
-  const [connector1Provider, setConnector1Provider] = useState('');
-  const [connector1Key, setConnector1Key] = useState('');
-  const [connector2Provider, setConnector2Provider] = useState('');
-  const [connector2Key, setConnector2Key] = useState('');
-  const [connector3Provider, setConnector3Provider] = useState('');
-  const [connector3Key, setConnector3Key] = useState('');
-  const [activeConnector, setActiveConnector] = useState<'1' | '2' | '3'>('1');
+  const [activeProvider, setActiveProvider] = useState('lovable_ai');
+  const [apiKeyPool, setApiKeyPool] = useState<{ id: string; provider: string; api_key: string; label: string; is_enabled: boolean; fail_count: number; last_error: string | null; last_used_at: string | null }[]>([]);
+  const [newKeyProvider, setNewKeyProvider] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [newKeyLabel, setNewKeyLabel] = useState('');
   const [videoApiSaving, setVideoApiSaving] = useState(false);
   const [videoApiLoaded, setVideoApiLoaded] = useState(false);
+  const [addingKey, setAddingKey] = useState(false);
 
   const [domainVerifHtml, setDomainVerifHtml] = useState('');
   const [domainVerifSaving, setDomainVerifSaving] = useState(false);
