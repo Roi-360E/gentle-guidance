@@ -809,10 +809,32 @@ interface PreviewNodeProps {
 }
 
 function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isConnecting, isConnectingFrom, onRemove }: PreviewNodeProps) {
-  const w = isMobile ? 260 : 340;
+  const w = isMobile ? 280 : 360;
   const [showScript, setShowScript] = useState(false);
   const [showScenes, setShowScenes] = useState(false);
+  const [currentScene, setCurrentScene] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const creative = node.data.creative;
+
+  // Get scenes with images
+  const scenesWithImages = (creative?.scenes || []).filter((s: any) => s.generated_image);
+  const allScenes = creative?.scenes || [];
+
+  // Auto-play slideshow
+  useEffect(() => {
+    if (isPlaying && scenesWithImages.length > 1) {
+      intervalRef.current = setInterval(() => {
+        setCurrentScene((prev) => (prev + 1) % scenesWithImages.length);
+      }, 3000);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isPlaying, scenesWithImages.length]);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsPlaying(!isPlaying);
+  };
 
   return (
     <div
@@ -823,13 +845,13 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
     >
       <div className="bg-background rounded-2xl shadow-lg border border-border overflow-hidden">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-muted border-b border-border cursor-move">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-            <span className="text-xs sm:text-sm font-semibold text-foreground">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+            <span className="text-xs sm:text-sm font-semibold text-foreground truncate">
               {creative?.title || "Preview"}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
               I.A ✓
             </span>
@@ -840,9 +862,88 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
         </div>
 
         <div className="p-3 sm:p-4 space-y-3" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-          {/* Creative info */}
           {creative && (
             <>
+              {/* Video Player / Image Slideshow */}
+              {scenesWithImages.length > 0 && (
+                <div className="relative w-full aspect-[9/16] bg-black rounded-xl overflow-hidden">
+                  <img
+                    src={scenesWithImages[currentScene]?.generated_image}
+                    alt={`Cena ${currentScene + 1}`}
+                    className="w-full h-full object-cover transition-opacity duration-500"
+                  />
+                  {/* Overlay with scene info */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                    {scenesWithImages[currentScene]?.text_overlay && (
+                      <p className="text-white text-xs sm:text-sm font-bold text-center mb-2 drop-shadow-lg">
+                        {scenesWithImages[currentScene].text_overlay}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70 text-[10px]">
+                        Cena {currentScene + 1}/{scenesWithImages.length}
+                      </span>
+                      <span className="text-white/70 text-[10px]">
+                        {scenesWithImages[currentScene]?.duration || "3s"}
+                      </span>
+                    </div>
+                    {/* Progress dots */}
+                    <div className="flex gap-1 justify-center mt-2">
+                      {scenesWithImages.map((_: any, i: number) => (
+                        <button
+                          key={i}
+                          onClick={(e) => { e.stopPropagation(); setCurrentScene(i); }}
+                          className={`h-1.5 rounded-full transition-all ${
+                            i === currentScene ? "w-4 bg-white" : "w-1.5 bg-white/40"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {/* Play/Pause button */}
+                  <button
+                    onClick={togglePlay}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-black/60 transition-all"
+                  >
+                    {isPlaying ? (
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-5 bg-white rounded-full" />
+                        <div className="w-1.5 h-5 bg-white rounded-full" />
+                      </div>
+                    ) : (
+                      <Play className="h-5 w-5 text-white ml-0.5" />
+                    )}
+                  </button>
+                  {/* Navigation arrows */}
+                  {scenesWithImages.length > 1 && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCurrentScene((prev) => (prev - 1 + scenesWithImages.length) % scenesWithImages.length); }}
+                        className="absolute left-1 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/40 rounded-full flex items-center justify-center text-white hover:bg-black/60"
+                      >
+                        <ChevronUp className="h-4 w-4 -rotate-90" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCurrentScene((prev) => (prev + 1) % scenesWithImages.length); }}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/40 rounded-full flex items-center justify-center text-white hover:bg-black/60"
+                      >
+                        <ChevronDown className="h-4 w-4 -rotate-90" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Fallback if no images generated */}
+              {scenesWithImages.length === 0 && (
+                <div className="w-full aspect-[9/16] bg-gray-900 rounded-xl flex items-center justify-center">
+                  <div className="text-center p-4">
+                    <Video className="h-8 w-8 text-gray-600 mx-auto mb-2" />
+                    <span className="text-[10px] text-gray-500">Imagens não puderam ser geradas</span>
+                  </div>
+                </div>
+              )}
+
               {creative.total_duration && (
                 <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
                   <span>Duração: {creative.total_duration}</span>
@@ -873,19 +974,22 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
               </div>
 
               {/* Scenes */}
-              {creative.scenes?.length > 0 && (
+              {allScenes.length > 0 && (
                 <div className="bg-blue-50 border border-blue-100 rounded-lg overflow-hidden">
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowScenes(!showScenes); }}
                     className="w-full flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-blue-700"
                   >
-                    <span>🎬 {creative.scenes.length} Cenas</span>
+                    <span>🎬 {allScenes.length} Cenas</span>
                     {showScenes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   </button>
                   {showScenes && (
                     <div className="px-2 sm:px-3 pb-2 space-y-2 max-h-48 overflow-y-auto">
-                      {creative.scenes.map((scene: any, i: number) => (
+                      {allScenes.map((scene: any, i: number) => (
                         <div key={i} className="bg-white rounded-lg p-2 border border-blue-100">
+                          {scene.generated_image && (
+                            <img src={scene.generated_image} alt={`Cena ${i + 1}`} className="w-full h-20 object-cover rounded mb-1.5" />
+                          )}
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-bold text-blue-800">Cena {scene.number || i + 1}</span>
                             <span className="text-[9px] text-blue-500">{scene.duration}</span>
@@ -893,11 +997,6 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
                           <p className="text-[9px] sm:text-[10px] text-blue-600">{scene.description}</p>
                           {scene.text_overlay && (
                             <p className="text-[9px] text-blue-400 mt-1 italic">"{scene.text_overlay}"</p>
-                          )}
-                          {scene.transition && (
-                            <span className="text-[8px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded mt-1 inline-block">
-                              → {scene.transition}
-                            </span>
                           )}
                         </div>
                       ))}
@@ -913,13 +1012,6 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
                     <Sparkles className="h-3 w-3" /> UGC Otimizado — {creative.ugc_aspects.length} aspectos aplicados
                   </span>
                 </div>
-              )}
-
-              {/* Creative notes */}
-              {creative.creative_notes && !showScript && (
-                <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-3">
-                  {typeof creative.creative_notes === 'string' ? creative.creative_notes.substring(0, 150) + "..." : ""}
-                </p>
               )}
             </>
           )}
