@@ -1774,13 +1774,36 @@ export default function AdminPlans() {
                   {newKeyProvider && providerHints[newKeyProvider] && (
                     <p className="text-xs text-muted-foreground">{providerHints[newKeyProvider]}</p>
                   )}
-                  <Button onClick={addApiKey} disabled={addingKey} size="sm" className="gap-1">
-                    {addingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    Adicionar ao Pool
+                  <Button onClick={addApiKey} size="sm" className="gap-1">
+                    <Plus className="w-4 h-4" />
+                    Adicionar à Lista
                   </Button>
                 </div>
 
-                {/* Keys grouped by provider */}
+                {/* Pending keys */}
+                {pendingKeys.length > 0 && (
+                  <div className="border border-primary/30 rounded-lg p-4 space-y-3 bg-primary/5">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      📝 Chaves Pendentes ({pendingKeys.length})
+                    </Label>
+                    {pendingKeys.map((pk, idx) => (
+                      <div key={idx} className="flex items-center gap-3 border rounded-lg p-2 bg-background">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium">{pk.label}</span>
+                          <span className="text-xs text-muted-foreground ml-2">({providerNames[pk.provider] || pk.provider})</span>
+                          <p className="text-xs font-mono text-muted-foreground">{pk.api_key.slice(0, 8)}...{pk.api_key.slice(-4)}</p>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => removePendingKey(idx)}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button onClick={savePendingKeys} disabled={savingPendingKeys} className="gap-2 w-full">
+                      {savingPendingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Salvar {pendingKeys.length} Chave{pendingKeys.length > 1 ? 's' : ''}
+                    </Button>
+                  </div>
+                )}
                 {Object.keys(providerNames).filter(p => p !== 'lovable_ai').map(provider => {
                   const providerKeys = apiKeyPool.filter(k => k.provider === provider);
                   if (providerKeys.length === 0) return null;
