@@ -572,7 +572,11 @@ async function generateWithPixverse(scenes: any[], apiKey: string, proxyKey: str
       }, proxyKey);
 
       if (!res.ok) {
-        console.error("PixVerse error:", res.status, await res.text());
+        const errBody = await res.text();
+        console.error("PixVerse error:", res.status, errBody);
+        if (isCreditsError(res.status, errBody)) {
+          throw new Error(`CREDITS_EXHAUSTED: PixVerse ${res.status} - ${errBody.slice(0, 100)}`);
+        }
         results.push(null);
         continue;
       }
