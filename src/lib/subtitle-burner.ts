@@ -2,10 +2,8 @@
  * CapCut-style subtitle burner using FFmpeg.wasm drawtext filter.
  * 
  * KEY FEATURE: Word-by-word highlighting
- * - Splits segments into word groups (3-4 words)
- * - Each word gets highlighted in accent color while others stay primary
- * - Two-layer rendering: base text (primary) + highlighted word overlay
- * - Font size calculated as % of video height for consistency
+ * - For large files (>50MB), uses VPS native FFmpeg for burning
+ * - For smaller files, uses FFmpeg.wasm in browser
  */
 
 import { getFFmpeg } from '@/lib/video-processor';
@@ -33,6 +31,10 @@ export interface BurnOptions {
 
 const FONT_PATH = '/fonts/Inter-Variable.ttf';
 const FONT_FS_NAME = 'subtitle_font.ttf';
+
+/** Threshold for VPS processing */
+const VPS_THRESHOLD = 50 * 1024 * 1024; // 50MB
+const VPS_URL = 'https://api.deploysites.online';
 
 /**
  * Sanitize text for FFmpeg drawtext
@@ -81,12 +83,6 @@ async function probeVideoDimensions(ffmpeg: any, inputName: string): Promise<{ w
 
 /**
  * Build drawtext filter chain with word-by-word highlighting.
- * 
- * Strategy:
- * For each word group time slice, we render TWO layers:
- * 1. Base layer: full group text in primary color (centered)
- * 2. Highlight layer: just the highlighted word in highlight color, 
- *    positioned to overlap the correct word using character-width approximation
  */
 export function buildDrawtextFilter(
   options: BurnOptions,
@@ -101,7 +97,6 @@ export function buildDrawtextFilter(
   const shadowDist = Math.max(3, Math.round(fontSize * 0.05));
   const marginBottom = Math.round(videoHeight * 0.08);
 
-  // Approximate character width for Inter Bold uppercase: ~0.58 * fontSize
   const charWidth = fontSize * 0.58;
   const spaceWidth = fontSize * 0.25;
 
@@ -114,7 +109,6 @@ export function buildDrawtextFilter(
   const wordGroups = splitSegmentsIntoWordGroups(segments, wordsPerGroup, maxLines);
   const filters: string[] = [];
 
-  // Common style params
   const baseParams = (color: string) => [
     `fontfile=${fontFile}`,
     `fontsize=${fontSize}`,
@@ -126,7 +120,6 @@ export function buildDrawtextFilter(
     `shadowy=${shadowDist}`,
   ];
 
-  // Build bg params if needed
   const bgParams: string[] = [];
   if (style.bgColor !== 'transparent' && style.bgColor !== '#00000000') {
     const boxPad = Math.round(fontSize * 0.2);
@@ -141,7 +134,6 @@ export function buildDrawtextFilter(
     const endSec = (group.toMs / 1000).toFixed(3);
     const enableExpr = `enable='between(t\\,${startSec}\\,${endSec})'`;
 
-    // Layer 1: Full text in primary color (base)
     const baseParts = [
       `drawtext=${baseParams(style.fontColor).join(':')}`,
       `text='${fullText}'`,
@@ -152,24 +144,18 @@ export function buildDrawtextFilter(
     ];
     filters.push(baseParts.join(':'));
 
-    // Layer 2: Highlighted word overlay in highlight color
     const highlightedWord = sanitizeForDrawtext(group.words[group.highlightIndex] || '');
     if (!highlightedWord) continue;
 
-    // Calculate x offset for the highlighted word within the centered text
-    // Total text width approximation
     const sanitizedWords = group.words.map(w => sanitizeForDrawtext(w));
     const totalTextWidth = sanitizedWords.reduce((sum, w) => sum + w.length * charWidth, 0) 
       + (sanitizedWords.length - 1) * spaceWidth;
 
-    // Offset to the highlighted word start
     let offsetToWord = 0;
     for (let i = 0; i < group.highlightIndex; i++) {
       offsetToWord += sanitizedWords[i].length * charWidth + spaceWidth;
     }
 
-    // Center the full text, then offset to the word
-    // x = (w - totalTextWidth) / 2 + offsetToWord
     const baseXExpr = textAlign === 'left' ? `${marginBottom}` : textAlign === 'right' ? `w-${Math.round(totalTextWidth)}-${marginBottom}` : `(w-${Math.round(totalTextWidth)})/2`;
     const xExpr = `${baseXExpr}+${Math.round(offsetToWord)}`;
 
@@ -198,11 +184,98 @@ async function loadFontIntoFS(ffmpeg: any): Promise<string> {
   }
 }
 
+/**
+ * Burn subtitles via VPS for large files (native FFmpeg).
+ * Builds the filter string locally then sends video + filter to VPS.
+ */
+async function burnSubtitlesViaVPS(
+  videoFile: File,
+  options: BurnOptions,
+  onProgress?: (pct: number, status: string) => void,
+): Promise<Blob> {
+  const sizeMB = (videoFile.size / (1024 * 1024)).toFixed(1);
+  onProgress?.(5, `Enviando vídeo (${sizeMB}MB) para servidor...`);
+
+  // We need video dimensions — probe via a quick <video> element
+  const dims = await new Promise<{ width: number; height: number }>((resolve) => {
+    const vid = document.createElement('video');
+    vid.preload = 'metadata';
+    vid.onloadedmetadata = () => {
+      resolve({ width: vid.videoWidth || 1080, height: vid.videoHeight || 1920 });
+      URL.revokeObjectURL(vid.src);
+    };
+    vid.onerror = () => {
+      resolve({ width: 1080, height: 1920 });
+      URL.revokeObjectURL(vid.src);
+    };
+    vid.src = URL.createObjectURL(videoFile);
+  });
+
+  onProgress?.(10, 'Construindo filtro de legendas...');
+  const filterStr = buildDrawtextFilter(options, FONT_FS_NAME, dims.height, dims.width);
+  console.log('[SubtitleBurner] VPS burn for', videoFile.name, `${dims.width}x${dims.height}`, 'filter length:', filterStr.length);
+
+  const formData = new FormData();
+  formData.append('video', videoFile, videoFile.name);
+  formData.append('filter', filterStr);
+
+  const controller = new AbortController();
+  const timeoutMs = 120000 + Math.ceil(videoFile.size / (10 * 1024 * 1024)) * 15000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  onProgress?.(15, 'Gravando legendas no servidor...');
+
+  try {
+    const res = await fetch(`${VPS_URL}/burn-subtitles`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      throw new Error(`VPS error: ${data.error}`);
+    }
+    if (!res.ok) {
+      throw new Error(`VPS HTTP ${res.status}`);
+    }
+
+    onProgress?.(85, 'Baixando vídeo legendado...');
+    const blob = await res.blob();
+    
+    if (blob.size < 1000) {
+      throw new Error('VPS returned empty video');
+    }
+
+    console.log(`[SubtitleBurner] ✅ VPS burn complete: ${(blob.size / (1024 * 1024)).toFixed(1)}MB`);
+    onProgress?.(100, 'Concluído!');
+    return blob;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
 export async function burnSubtitlesIntoVideo(
   videoFile: File,
   options: BurnOptions,
   onProgress?: (pct: number, status: string) => void,
 ): Promise<Blob> {
+  // For large files, try VPS first
+  if (videoFile.size > VPS_THRESHOLD) {
+    try {
+      console.log(`[SubtitleBurner] 🌐 Large file (${(videoFile.size / (1024 * 1024)).toFixed(1)}MB), using VPS`);
+      return await burnSubtitlesViaVPS(videoFile, options, onProgress);
+    } catch (err) {
+      console.warn('[SubtitleBurner] VPS burn failed, falling back to local WASM:', err);
+      onProgress?.(5, 'Servidor indisponível, processando localmente...');
+    }
+  }
+
+  // Local WASM processing
   onProgress?.(5, 'Preparando FFmpeg...');
   const ffmpeg = await getFFmpeg();
 
