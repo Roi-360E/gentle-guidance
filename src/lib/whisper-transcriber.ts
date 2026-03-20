@@ -1,8 +1,8 @@
 /**
  * Audio/Video Transcriber — uses Gemini via edge function for fast transcription
  * 
- * Envia o vídeo diretamente ao Gemini sem extração de áudio no cliente,
- * reduzindo o tempo de transcrição para < 3 segundos por arquivo.
+ * For large files (>50MB), audio is extracted via VPS (native FFmpeg).
+ * For smaller files, audio extraction uses FFmpeg.wasm in the browser.
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -59,12 +59,73 @@ function withFFmpegLock<T>(fn: () => Promise<T>): Promise<T> {
   });
 }
 
+/** Threshold in bytes — files above this use VPS for audio extraction */
+const VPS_THRESHOLD = 50 * 1024 * 1024; // 50MB
+const VPS_URL = 'https://api.deploysites.online';
+
+/**
+ * Extract audio via VPS (native FFmpeg) — handles large files without memory issues.
+ */
+async function extractAudioViaVPS(videoFile: File): Promise<File> {
+  const sizeMB = videoFile.size / (1024 * 1024);
+  console.log(`[Transcriber] 🌐 VPS audio extraction for ${videoFile.name} (${sizeMB.toFixed(1)}MB)`);
+
+  const formData = new FormData();
+  formData.append('video', videoFile, videoFile.name);
+
+  const controller = new AbortController();
+  // Generous timeout: 60s base + 10s per 10MB
+  const timeoutMs = 60000 + Math.ceil(sizeMB / 10) * 10000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${VPS_URL}/extract-audio`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      throw new Error(`VPS error: ${data.error}`);
+    }
+    if (!res.ok) {
+      throw new Error(`VPS HTTP ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    if (blob.size < 100) {
+      throw new Error('VPS returned empty audio');
+    }
+
+    console.log(`[Transcriber] ✅ VPS audio: ${(blob.size / 1024).toFixed(0)}KB`);
+    const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return new File([blob], `audio_vps_${uid}.wav`, { type: 'audio/wav' });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
 /**
  * Extract audio from video as a lightweight WAV (mono 16kHz, ~200KB)
  * Used to avoid memory limits on the edge function.
  * Serialized via mutex to prevent concurrent FFmpeg corruption.
  */
 export async function extractAudioAsFile(videoFile: File): Promise<File> {
+  // For large files, use VPS to avoid WASM memory crash
+  if (videoFile.size > VPS_THRESHOLD) {
+    try {
+      return await extractAudioViaVPS(videoFile);
+    } catch (err) {
+      console.warn(`[Transcriber] VPS audio extraction failed, trying local WASM:`, err);
+      // Fall through to local extraction
+    }
+  }
+
   return withFFmpegLock(async () => {
     const { getFFmpeg } = await import('@/lib/video-processor');
     const { fetchFile } = await import('@ffmpeg/util');
@@ -107,9 +168,12 @@ export async function transcribeVideo(
   videoFile: File,
   onProgress?: (pct: number, status: string) => void,
 ): Promise<TranscriptionResult> {
-  onProgress?.(5, 'Extraindo áudio do vídeo...');
+  const sizeMB = (videoFile.size / (1024 * 1024)).toFixed(1);
+  onProgress?.(5, videoFile.size > VPS_THRESHOLD
+    ? `Extraindo áudio via servidor (${sizeMB}MB)...`
+    : 'Extraindo áudio do vídeo...');
 
-  // Extrair áudio leve (~200KB) via FFmpeg.wasm (já pré-carregado)
+  // Extrair áudio leve (~200KB) via VPS (large) ou FFmpeg.wasm (small)
   const audioFile = await extractAudioAsFile(videoFile);
   const formData = new FormData();
   formData.append('audio', audioFile);
