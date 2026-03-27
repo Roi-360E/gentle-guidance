@@ -626,7 +626,11 @@ const ShortsReels = () => {
                   onConnect={startConnection}
                   isConnecting={connectingFrom !== null} isConnectingFrom={connectingFrom === node.id}
                   imageCount={imageCount} onGenerate={handleGenerate}
+                  onAvatarGenerate={handleAvatarGenerate}
                   onRemove={removeNode} onUpdateData={updateNodeData}
+                  onUpdateNodeFile={(nodeId, key, file) => {
+                    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, data: { ...n.data, [key]: file, audioName: file.name } } : n));
+                  }}
                 />
               );
             }
