@@ -41,7 +41,6 @@ serve(async (req) => {
       );
     }
 
-    // Accept multipart form data with face image and audio
     const formData = await req.formData();
     const faceImage = formData.get("face_image") as File | null;
     const audioFile = formData.get("audio") as File | null;
@@ -55,14 +54,13 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[clone-avatar-local] user=${user.id}, face=${faceImage.name} (${faceImage.size}), audio=${audioFile?.name || "none"}, prompt="${prompt.substring(0, 50)}"`);
+    console.log(`[clone-avatar-local] user=${user.id}, face=${faceImage.name} (${faceImage.size}), audio=${audioFile?.name || "none"}`);
 
-    // Convert face image to base64 for AI script generation
+    // ── Step 1: Generate script via Lovable AI ──
     const faceBytes = new Uint8Array(await faceImage.arrayBuffer());
     const faceBase64 = btoa(String.fromCharCode(...faceBytes));
     const faceMime = faceImage.type || "image/jpeg";
 
-    // ── Step 1: Generate script via Lovable AI ──
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(
@@ -71,32 +69,30 @@ serve(async (req) => {
       );
     }
 
-    const scriptPrompt = `Analise esta imagem de rosto e crie um roteiro detalhado para um vídeo avatar/talking head.
+    const scriptPrompt = `Analise esta imagem de rosto e crie um roteiro para um vídeo avatar/talking head.
 
 Prompt do usuário: "${prompt || "Criar um vídeo com avatar falando"}"
 Proporção: ${aspect}
 
-Retorne um JSON com esta estrutura:
+Retorne APENAS JSON (sem markdown):
 {
   "title": "título do vídeo",
   "script_text": "texto completo que o avatar deve falar",
   "scenes": [
     {
       "scene_number": 1,
-      "description": "descrição visual da cena",
-      "dialogue": "fala do avatar nesta cena",
+      "description": "descrição visual",
+      "dialogue": "fala do avatar",
       "duration_seconds": 5,
-      "camera_angle": "close-up / meio-corpo",
-      "expression": "sorriso / sério / entusiasta"
+      "camera_angle": "close-up",
+      "expression": "sorriso"
     }
   ],
-  "style_notes": "notas sobre o estilo visual",
+  "style_notes": "notas de estilo",
   "total_duration_seconds": 30
-}
+}`;
 
-IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
-
-    console.log("[clone-avatar-local] Generating script via AI...");
+    console.log("[clone-avatar-local] Generating script...");
     const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -122,26 +118,24 @@ IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
     if (!scriptResponse.ok) {
       const status = scriptResponse.status;
       const errText = await scriptResponse.text();
-      console.error("[clone-avatar-local] Script generation failed:", status, errText);
+      console.error("[clone-avatar-local] Script failed:", status, errText);
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "Limite de requisições excedido, tente novamente em instantes." }), {
+        return new Response(JSON.stringify({ error: "Limite de requisições excedido, tente novamente." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos insuficientes. Adicione créditos ao workspace." }), {
+        return new Response(JSON.stringify({ error: "Créditos insuficientes." }), {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      return new Response(
-        JSON.stringify({ error: "Falha ao gerar roteiro do avatar" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Falha ao gerar roteiro" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const scriptResult = await scriptResponse.json();
     const rawScript = scriptResult.choices?.[0]?.message?.content || "";
-    console.log("[clone-avatar-local] Raw script:", rawScript.substring(0, 200));
 
     let parsedScript: any;
     try {
@@ -151,8 +145,10 @@ IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
       parsedScript = { title: "Avatar Video", script_text: rawScript, scenes: [] };
     }
 
-    // ── Step 2: Upload face image + audio to VPS temp folder ──
-    console.log("[clone-avatar-local] Uploading files to VPS...");
+    console.log("[clone-avatar-local] Script ready:", parsedScript.title);
+
+    // ── Step 2: Save files to VPS ──
+    console.log("[clone-avatar-local] Saving assets to VPS...");
     const vpsFormData = new FormData();
     vpsFormData.append("face_image", faceImage, faceImage.name);
     if (audioFile) {
@@ -161,28 +157,36 @@ IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
     vpsFormData.append("user_id", user.id);
     vpsFormData.append("script", JSON.stringify(parsedScript));
 
-    let vpsResult: any = null;
-    try {
-      const vpsResp = await fetch(`${VPS_BASE}/save-avatar-assets`, {
-        method: "POST",
-        body: vpsFormData,
-      });
+    const saveResp = await fetch(`${VPS_BASE}/save-avatar-assets`, {
+      method: "POST",
+      body: vpsFormData,
+    });
 
-      if (vpsResp.ok) {
-        vpsResult = await vpsResp.json();
-        console.log("[clone-avatar-local] VPS save result:", JSON.stringify(vpsResult));
-      } else {
-        const vpsErr = await vpsResp.text();
-        console.error("[clone-avatar-local] VPS save failed:", vpsResp.status, vpsErr);
-        vpsResult = { error: vpsErr, saved: false };
-      }
-    } catch (vpsErr) {
-      console.error("[clone-avatar-local] VPS connection error:", vpsErr);
-      vpsResult = { error: "VPS indisponível", saved: false };
+    if (!saveResp.ok) {
+      const errText = await saveResp.text();
+      console.error("[clone-avatar-local] VPS save failed:", errText);
+      return new Response(JSON.stringify({ error: "Falha ao salvar arquivos na VPS" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // ── Return script + VPS status ──
-    const result = {
+    const saveResult = await saveResp.json();
+    const jobId = saveResult.job_id;
+    console.log("[clone-avatar-local] Files saved, job_id:", jobId);
+
+    // ── Step 3: Trigger FFmpeg processing (async on VPS) ──
+    console.log("[clone-avatar-local] Triggering VPS processing...");
+    const processResp = await fetch(`${VPS_BASE}/process-avatar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId }),
+    });
+
+    const processResult = await processResp.json();
+    console.log("[clone-avatar-local] Process triggered:", JSON.stringify(processResult));
+
+    // ── Return immediately with job info ──
+    return new Response(JSON.stringify({
       creative: {
         title: parsedScript.title || "Avatar Video",
         script: parsedScript.script_text || "",
@@ -197,12 +201,11 @@ IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
         audio_filename: audioFile?.name || null,
         aspect,
       },
-      vps: vpsResult,
-    };
-
-    console.log(`[clone-avatar-local] Done! Script with ${parsedScript.scenes?.length || 0} scenes, VPS saved=${vpsResult?.saved ?? false}`);
-
-    return new Response(JSON.stringify(result), {
+      job_id: jobId,
+      status: "processing",
+      status_url: `${VPS_BASE}/avatar-status/${jobId}`,
+      download_url: `${VPS_BASE}/avatar-download/${jobId}`,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
