@@ -219,7 +219,6 @@ const ShortsReels = () => {
     const block = nodes.find(n => n.id === blockId);
     if (!block) return;
 
-    // Get connected face images
     const connectedImageIds = connections.filter(c => c.toId === blockId).map(c => c.fromId);
     const connectedImages = nodes.filter(n => connectedImageIds.includes(n.id) && n.type === "image" && n.data.file);
 
@@ -246,9 +245,7 @@ const ShortsReels = () => {
         `https://${projectId}.supabase.co/functions/v1/clone-avatar-local`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${session?.access_token || ""}`,
-          },
+          headers: { Authorization: `Bearer ${session?.access_token || ""}` },
           body: formData,
         }
       );
@@ -257,6 +254,9 @@ const ShortsReels = () => {
       if (!resp.ok || data.error) throw new Error(data.error || "Erro ao gerar avatar");
 
       const creative = data.creative;
+      const jobId = data.job_id;
+      const downloadUrl = data.download_url;
+      const statusUrl = data.status_url;
       const previewId = newId();
 
       setNodes(prev => {
@@ -268,14 +268,52 @@ const ShortsReels = () => {
             type: "preview" as const,
             x: block.x + (isMobile ? 20 : 380),
             y: block.y + (isMobile ? 450 : 0),
-            data: { label: "Avatar Preview", videoReady: true, creative },
+            data: {
+              label: "Avatar Preview",
+              videoReady: false,
+              creative,
+              avatarJobId: jobId,
+              avatarStatus: "processing",
+              avatarDownloadUrl: downloadUrl,
+            },
             parentBlockId: blockId,
           },
         ];
       });
 
       setConnections(prev => [...prev, { id: `conn-${Date.now()}`, fromId: blockId, toId: previewId }]);
-      toast.success("Avatar gerado com sucesso!");
+      toast.success("Roteiro gerado! Vídeo sendo processado na VPS...");
+
+      // Poll for completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResp = await fetch(statusUrl);
+          const statusData = await statusResp.json();
+
+          if (statusData.status === "completed") {
+            clearInterval(pollInterval);
+            setNodes(prev => prev.map(n =>
+              n.id === previewId
+                ? { ...n, data: { ...n.data, videoReady: true, avatarStatus: "completed", avatarDownloadUrl: downloadUrl } }
+                : n
+            ));
+            toast.success("Vídeo do avatar finalizado! Clique para baixar.");
+          } else if (statusData.status === "failed") {
+            clearInterval(pollInterval);
+            setNodes(prev => prev.map(n =>
+              n.id === previewId
+                ? { ...n, data: { ...n.data, avatarStatus: "failed" } }
+                : n
+            ));
+            toast.error("Falha ao processar vídeo: " + (statusData.error || "Erro desconhecido"));
+          }
+        } catch {
+          // Network error, keep polling
+        }
+      }, 5000);
+
+      // Stop polling after 5 minutes
+      setTimeout(() => clearInterval(pollInterval), 300000);
     } catch (err: any) {
       console.error("Avatar generation error:", err);
       setNodes(prev => prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n));
