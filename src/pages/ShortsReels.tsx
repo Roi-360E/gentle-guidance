@@ -1014,9 +1014,19 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
             </span>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
-              I.A ✓
-            </span>
+            {node.data.avatarStatus === "processing" ? (
+              <span className="bg-yellow-100 text-yellow-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium animate-pulse">
+                Processando...
+              </span>
+            ) : node.data.avatarStatus === "failed" ? (
+              <span className="bg-red-100 text-red-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
+                Falhou ✗
+              </span>
+            ) : (
+              <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
+                I.A ✓
+              </span>
+            )}
             <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100" title="Remover">
               <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-destructive" />
             </button>
