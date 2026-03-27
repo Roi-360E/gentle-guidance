@@ -743,10 +743,11 @@ interface CreationBlockProps {
 
 function CreationBlockNode({
   node, isMobile, onMouseDown, onTouchStart, onConnect, isConnecting, isConnectingFrom,
-  imageCount, onGenerate, onRemove, onUpdateData,
+  imageCount, onGenerate, onAvatarGenerate, onRemove, onUpdateData, onUpdateNodeFile,
 }: CreationBlockProps) {
-  const { prompt = "", model = "Rosto para vídeo (Alta qualidade)", aspect = "9:16 (Vertical)", generating } = node.data;
+  const { prompt = "", model = "Rosto para vídeo (Alta qualidade)", aspect = "9:16 (Vertical)", generating, audioName } = node.data;
   const w = isMobile ? 260 : 320;
+  const isRosto = model.toLowerCase().includes("rosto");
   const [showUgcAspects, setShowUgcAspects] = useState(false);
   const isUGC = model.toLowerCase().includes("ugc");
 
