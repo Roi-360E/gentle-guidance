@@ -26,6 +26,8 @@ interface NodeData {
   videoReady?: boolean;
   creative?: any;
   ugcAspects?: string[];
+  audioFile?: File;
+  audioName?: string;
 }
 
 interface CanvasNode {
