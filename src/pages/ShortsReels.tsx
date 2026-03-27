@@ -211,6 +211,75 @@ const ShortsReels = () => {
     }
   }, [nodes, connections, isMobile]);
 
+  /* ─── Generate avatar via clone-avatar-local ─── */
+  const handleAvatarGenerate = useCallback(async (blockId: string) => {
+    const block = nodes.find(n => n.id === blockId);
+    if (!block) return;
+
+    // Get connected face images
+    const connectedImageIds = connections.filter(c => c.toId === blockId).map(c => c.fromId);
+    const connectedImages = nodes.filter(n => connectedImageIds.includes(n.id) && n.type === "image" && n.data.file);
+
+    if (connectedImages.length === 0) {
+      toast.error("Conecte pelo menos uma imagem de rosto ao bloco");
+      return;
+    }
+
+    setNodes(prev => prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: true } } : n));
+
+    try {
+      const faceFile = connectedImages[0].data.file!;
+      const formData = new FormData();
+      formData.append("face_image", faceFile);
+      formData.append("prompt", block.data.prompt || "Criar um vídeo com avatar falando");
+      formData.append("aspect", block.data.aspect || "9:16");
+      if (block.data.audioFile) {
+        formData.append("audio", block.data.audioFile);
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const resp = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/clone-avatar-local`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session?.access_token || ""}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || "Erro ao gerar avatar");
+
+      const creative = data.creative;
+      const previewId = newId();
+
+      setNodes(prev => {
+        const updated = prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n);
+        return [
+          ...updated,
+          {
+            id: previewId,
+            type: "preview" as const,
+            x: block.x + (isMobile ? 20 : 380),
+            y: block.y + (isMobile ? 450 : 0),
+            data: { label: "Avatar Preview", videoReady: true, creative },
+            parentBlockId: blockId,
+          },
+        ];
+      });
+
+      setConnections(prev => [...prev, { id: `conn-${Date.now()}`, fromId: blockId, toId: previewId }]);
+      toast.success("Avatar gerado com sucesso!");
+    } catch (err: any) {
+      console.error("Avatar generation error:", err);
+      setNodes(prev => prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n));
+      toast.error(err?.message || "Erro ao gerar avatar");
+    }
+  }, [nodes, connections, isMobile]);
+
   /* ─── Upload image to node ─── */
   const handleImageUpload = useCallback((nodeId: string, file: File) => {
     const url = URL.createObjectURL(file);
