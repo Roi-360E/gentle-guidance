@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.generate-video-creative]
 verify_jwt = false
+
+[functions.clone-avatar-local]
+verify_jwt = false
