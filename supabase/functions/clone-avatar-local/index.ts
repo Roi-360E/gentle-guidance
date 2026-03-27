@@ -7,6 +7,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const VPS_BASE = "https://api.deploysites.online";
+
 function getSupabaseAdmin() {
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -53,23 +55,14 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[clone-avatar-local] user=${user.id}, face=${faceImage.name} (${faceImage.size}), audio=${audioFile?.name || 'none'}, prompt="${prompt.substring(0, 50)}"`);
+    console.log(`[clone-avatar-local] user=${user.id}, face=${faceImage.name} (${faceImage.size}), audio=${audioFile?.name || "none"}, prompt="${prompt.substring(0, 50)}"`);
 
-    // Convert face image to base64 for AI processing
+    // Convert face image to base64 for AI script generation
     const faceBytes = new Uint8Array(await faceImage.arrayBuffer());
     const faceBase64 = btoa(String.fromCharCode(...faceBytes));
     const faceMime = faceImage.type || "image/jpeg";
 
-    // Convert audio to base64 if provided
-    let audioBase64: string | null = null;
-    let audioMime: string | null = null;
-    if (audioFile) {
-      const audioBytes = new Uint8Array(await audioFile.arrayBuffer());
-      audioBase64 = btoa(String.fromCharCode(...audioBytes));
-      audioMime = audioFile.type || "audio/wav";
-    }
-
-    // Step 1: Use Lovable AI Gateway to generate a script based on face + prompt
+    // ── Step 1: Generate script via Lovable AI ──
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(
@@ -78,10 +71,9 @@ serve(async (req) => {
       );
     }
 
-    // Generate a detailed script analyzing the face image
     const scriptPrompt = `Analise esta imagem de rosto e crie um roteiro detalhado para um vídeo avatar/talking head.
 
-Prompt do usuário: "${prompt || 'Criar um vídeo com avatar falando'}"
+Prompt do usuário: "${prompt || "Criar um vídeo com avatar falando"}"
 Proporção: ${aspect}
 
 Retorne um JSON com esta estrutura:
@@ -104,37 +96,43 @@ Retorne um JSON com esta estrutura:
 
 IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
 
-    const scriptMessages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: scriptPrompt },
-          {
-            type: "image_url",
-            image_url: { url: `data:${faceMime};base64,${faceBase64}` },
-          },
-        ],
-      },
-    ];
-
     console.log("[clone-avatar-local] Generating script via AI...");
-    const scriptResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
+    const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: scriptMessages,
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: scriptPrompt },
+              { type: "image_url", image_url: { url: `data:${faceMime};base64,${faceBase64}` } },
+            ],
+          },
+        ],
         temperature: 0.7,
         max_tokens: 2000,
       }),
     });
 
     if (!scriptResponse.ok) {
+      const status = scriptResponse.status;
       const errText = await scriptResponse.text();
-      console.error("[clone-avatar-local] Script generation failed:", errText);
+      console.error("[clone-avatar-local] Script generation failed:", status, errText);
+      if (status === 429) {
+        return new Response(JSON.stringify({ error: "Limite de requisições excedido, tente novamente em instantes." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (status === 402) {
+        return new Response(JSON.stringify({ error: "Créditos insuficientes. Adicione créditos ao workspace." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(
         JSON.stringify({ error: "Falha ao gerar roteiro do avatar" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -145,7 +143,6 @@ IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
     const rawScript = scriptResult.choices?.[0]?.message?.content || "";
     console.log("[clone-avatar-local] Raw script:", rawScript.substring(0, 200));
 
-    // Parse the script JSON
     let parsedScript: any;
     try {
       const jsonMatch = rawScript.match(/\{[\s\S]*\}/);
@@ -154,84 +151,56 @@ IMPORTANTE: Retorne APENAS o JSON, sem markdown.`;
       parsedScript = { title: "Avatar Video", script_text: rawScript, scenes: [] };
     }
 
-    // Step 2: Generate avatar scene images using the face as reference
-    console.log("[clone-avatar-local] Generating avatar scene images...");
-    const scenes = parsedScript.scenes || [];
-    const generatedScenes = [];
+    // ── Step 2: Upload face image + audio to VPS temp folder ──
+    console.log("[clone-avatar-local] Uploading files to VPS...");
+    const vpsFormData = new FormData();
+    vpsFormData.append("face_image", faceImage, faceImage.name);
+    if (audioFile) {
+      vpsFormData.append("audio", audioFile, audioFile.name);
+    }
+    vpsFormData.append("user_id", user.id);
+    vpsFormData.append("script", JSON.stringify(parsedScript));
 
-    for (let i = 0; i < Math.min(scenes.length, 4); i++) {
-      const scene = scenes[i];
-      const imagePrompt = `Generate a photorealistic image of the person from the reference photo in this scene:
-Scene: ${scene.description || "Person talking to camera"}
-Expression: ${scene.expression || "natural"}
-Camera: ${scene.camera_angle || "close-up"}
-Style: Professional video frame, ${aspect} aspect ratio, cinematic lighting.
-The person should look exactly like the reference photo.`;
+    let vpsResult: any = null;
+    try {
+      const vpsResp = await fetch(`${VPS_BASE}/save-avatar-assets`, {
+        method: "POST",
+        body: vpsFormData,
+      });
 
-      try {
-        const imageResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "google/gemini-3.1-flash-image-preview",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: imagePrompt },
-                  {
-                    type: "image_url",
-                    image_url: { url: `data:${faceMime};base64,${faceBase64}` },
-                  },
-                ],
-              },
-            ],
-            temperature: 0.8,
-            max_tokens: 1000,
-          }),
-        });
-
-        if (imageResponse.ok) {
-          const imageResult = await imageResponse.json();
-          const content = imageResult.choices?.[0]?.message?.content || "";
-          // Extract base64 image from response if present
-          const imgMatch = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/);
-          
-          generatedScenes.push({
-            ...scene,
-            scene_number: i + 1,
-            generated_image: imgMatch ? imgMatch[0] : null,
-            dialogue: scene.dialogue || "",
-          });
-          console.log(`[clone-avatar-local] Scene ${i + 1} generated, has_image=${!!imgMatch}`);
-        } else {
-          const errText = await imageResponse.text();
-          console.error(`[clone-avatar-local] Scene ${i + 1} image failed:`, errText);
-          generatedScenes.push({ ...scene, scene_number: i + 1, generated_image: null });
-        }
-      } catch (err) {
-        console.error(`[clone-avatar-local] Scene ${i + 1} error:`, err);
-        generatedScenes.push({ ...scene, scene_number: i + 1, generated_image: null });
+      if (vpsResp.ok) {
+        vpsResult = await vpsResp.json();
+        console.log("[clone-avatar-local] VPS save result:", JSON.stringify(vpsResult));
+      } else {
+        const vpsErr = await vpsResp.text();
+        console.error("[clone-avatar-local] VPS save failed:", vpsResp.status, vpsErr);
+        vpsResult = { error: vpsErr, saved: false };
       }
+    } catch (vpsErr) {
+      console.error("[clone-avatar-local] VPS connection error:", vpsErr);
+      vpsResult = { error: "VPS indisponível", saved: false };
     }
 
+    // ── Return script + VPS status ──
     const result = {
       creative: {
         title: parsedScript.title || "Avatar Video",
         script: parsedScript.script_text || "",
-        scenes: generatedScenes,
+        scenes: (parsedScript.scenes || []).map((s: any, i: number) => ({
+          ...s,
+          scene_number: i + 1,
+          generated_image: null,
+        })),
         total_duration: parsedScript.total_duration_seconds || 30,
         style_notes: parsedScript.style_notes || "",
         has_audio: !!audioFile,
         audio_filename: audioFile?.name || null,
         aspect,
       },
+      vps: vpsResult,
     };
 
-    console.log(`[clone-avatar-local] Done! ${generatedScenes.length} scenes generated`);
+    console.log(`[clone-avatar-local] Done! Script with ${parsedScript.scenes?.length || 0} scenes, VPS saved=${vpsResult?.saved ?? false}`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
