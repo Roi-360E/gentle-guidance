@@ -26,6 +26,8 @@ interface NodeData {
   videoReady?: boolean;
   creative?: any;
   ugcAspects?: string[];
+  audioFile?: File;
+  audioName?: string;
 }
 
 interface CanvasNode {
@@ -206,6 +208,75 @@ const ShortsReels = () => {
         prev.map((n) => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n)
       );
       toast.error(err?.message || "Erro ao gerar criativo");
+    }
+  }, [nodes, connections, isMobile]);
+
+  /* ─── Generate avatar via clone-avatar-local ─── */
+  const handleAvatarGenerate = useCallback(async (blockId: string) => {
+    const block = nodes.find(n => n.id === blockId);
+    if (!block) return;
+
+    // Get connected face images
+    const connectedImageIds = connections.filter(c => c.toId === blockId).map(c => c.fromId);
+    const connectedImages = nodes.filter(n => connectedImageIds.includes(n.id) && n.type === "image" && n.data.file);
+
+    if (connectedImages.length === 0) {
+      toast.error("Conecte pelo menos uma imagem de rosto ao bloco");
+      return;
+    }
+
+    setNodes(prev => prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: true } } : n));
+
+    try {
+      const faceFile = connectedImages[0].data.file!;
+      const formData = new FormData();
+      formData.append("face_image", faceFile);
+      formData.append("prompt", block.data.prompt || "Criar um vídeo com avatar falando");
+      formData.append("aspect", block.data.aspect || "9:16");
+      if (block.data.audioFile) {
+        formData.append("audio", block.data.audioFile);
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const resp = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/clone-avatar-local`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session?.access_token || ""}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || "Erro ao gerar avatar");
+
+      const creative = data.creative;
+      const previewId = newId();
+
+      setNodes(prev => {
+        const updated = prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n);
+        return [
+          ...updated,
+          {
+            id: previewId,
+            type: "preview" as const,
+            x: block.x + (isMobile ? 20 : 380),
+            y: block.y + (isMobile ? 450 : 0),
+            data: { label: "Avatar Preview", videoReady: true, creative },
+            parentBlockId: blockId,
+          },
+        ];
+      });
+
+      setConnections(prev => [...prev, { id: `conn-${Date.now()}`, fromId: blockId, toId: previewId }]);
+      toast.success("Avatar gerado com sucesso!");
+    } catch (err: any) {
+      console.error("Avatar generation error:", err);
+      setNodes(prev => prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n));
+      toast.error(err?.message || "Erro ao gerar avatar");
     }
   }, [nodes, connections, isMobile]);
 
@@ -555,7 +626,11 @@ const ShortsReels = () => {
                   onConnect={startConnection}
                   isConnecting={connectingFrom !== null} isConnectingFrom={connectingFrom === node.id}
                   imageCount={imageCount} onGenerate={handleGenerate}
+                  onAvatarGenerate={handleAvatarGenerate}
                   onRemove={removeNode} onUpdateData={updateNodeData}
+                  onUpdateNodeFile={(nodeId, key, file) => {
+                    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, data: { ...n.data, [key]: file, audioName: file.name } } : n));
+                  }}
                 />
               );
             }
@@ -660,16 +735,19 @@ interface CreationBlockProps {
   isConnecting: boolean; isConnectingFrom: boolean;
   imageCount: number;
   onGenerate: (blockId: string) => void;
+  onAvatarGenerate: (blockId: string) => void;
   onRemove: (nodeId: string) => void;
   onUpdateData: (nodeId: string, key: string, value: string) => void;
+  onUpdateNodeFile: (nodeId: string, key: string, file: File) => void;
 }
 
 function CreationBlockNode({
   node, isMobile, onMouseDown, onTouchStart, onConnect, isConnecting, isConnectingFrom,
-  imageCount, onGenerate, onRemove, onUpdateData,
+  imageCount, onGenerate, onAvatarGenerate, onRemove, onUpdateData, onUpdateNodeFile,
 }: CreationBlockProps) {
-  const { prompt = "", model = "Rosto para vídeo (Alta qualidade)", aspect = "9:16 (Vertical)", generating } = node.data;
+  const { prompt = "", model = "Rosto para vídeo (Alta qualidade)", aspect = "9:16 (Vertical)", generating, audioName } = node.data;
   const w = isMobile ? 260 : 320;
+  const isRosto = model.toLowerCase().includes("rosto");
   const [showUgcAspects, setShowUgcAspects] = useState(false);
   const isUGC = model.toLowerCase().includes("ugc");
 
@@ -764,6 +842,49 @@ function CreationBlockNode({
             />
           </div>
 
+          {/* Audio upload for Rosto model */}
+          {isRosto && (
+            <div>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 block">Áudio (opcional)</label>
+              <label className="flex items-center gap-2 cursor-pointer bg-muted border border-border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-foreground hover:bg-accent transition-colors">
+                <Upload className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="truncate">{audioName || "Enviar áudio do avatar"}</span>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUpdateNodeFile(node.id, "audioFile", f);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </label>
+            </div>
+          )}
+
+          {/* Avatar button for Rosto model */}
+          {isRosto && (
+            <Button
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl h-9 sm:h-11 gap-2 text-xs sm:text-sm disabled:opacity-60"
+              onClick={(e) => { e.stopPropagation(); onAvatarGenerate(node.id); }}
+              disabled={!!generating}
+            >
+              {generating ? (
+                <>
+                  <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Gerando Avatar...
+                </>
+              ) : (
+                <>
+                  <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  Criar Avatar I.A
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Standard creative button */}
           <Button
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl h-9 sm:h-11 gap-2 text-xs sm:text-sm disabled:opacity-60"
             onClick={(e) => { e.stopPropagation(); onGenerate(node.id); }}
