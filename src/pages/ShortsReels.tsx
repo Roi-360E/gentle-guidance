@@ -731,8 +731,10 @@ interface CreationBlockProps {
   isConnecting: boolean; isConnectingFrom: boolean;
   imageCount: number;
   onGenerate: (blockId: string) => void;
+  onAvatarGenerate: (blockId: string) => void;
   onRemove: (nodeId: string) => void;
   onUpdateData: (nodeId: string, key: string, value: string) => void;
+  onUpdateNodeFile: (nodeId: string, key: string, file: File) => void;
 }
 
 function CreationBlockNode({
