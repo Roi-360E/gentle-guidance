@@ -842,6 +842,49 @@ function CreationBlockNode({
             />
           </div>
 
+          {/* Audio upload for Rosto model */}
+          {isRosto && (
+            <div>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 block">Áudio (opcional)</label>
+              <label className="flex items-center gap-2 cursor-pointer bg-muted border border-border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-foreground hover:bg-accent transition-colors">
+                <Upload className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="truncate">{audioName || "Enviar áudio do avatar"}</span>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUpdateNodeFile(node.id, "audioFile", f);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </label>
+            </div>
+          )}
+
+          {/* Avatar button for Rosto model */}
+          {isRosto && (
+            <Button
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl h-9 sm:h-11 gap-2 text-xs sm:text-sm disabled:opacity-60"
+              onClick={(e) => { e.stopPropagation(); onAvatarGenerate(node.id); }}
+              disabled={!!generating}
+            >
+              {generating ? (
+                <>
+                  <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Gerando Avatar...
+                </>
+              ) : (
+                <>
+                  <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  Criar Avatar I.A
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Standard creative button */}
           <Button
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl h-9 sm:h-11 gap-2 text-xs sm:text-sm disabled:opacity-60"
             onClick={(e) => { e.stopPropagation(); onGenerate(node.id); }}
