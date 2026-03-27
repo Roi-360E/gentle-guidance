@@ -1034,6 +1034,31 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
         </div>
 
         <div className="p-3 sm:p-4 space-y-3" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          {/* Avatar video download */}
+          {node.data.avatarStatus === "completed" && node.data.avatarDownloadUrl && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-green-800">🎬 Vídeo do Avatar pronto!</p>
+              <Button
+                size="sm"
+                className="w-full bg-green-600 hover:bg-green-700 text-white gap-2 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(node.data.avatarDownloadUrl, "_blank");
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Baixar Vídeo .mp4
+              </Button>
+            </div>
+          )}
+
+          {node.data.avatarStatus === "processing" && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-center gap-2">
+              <div className="h-4 w-4 border-2 border-yellow-400 border-t-yellow-700 rounded-full animate-spin" />
+              <p className="text-xs text-yellow-800">Processando vídeo na VPS...</p>
+            </div>
+          )}
+
           {creative && (
             <>
               {/* Video Player / Image Slideshow */}
