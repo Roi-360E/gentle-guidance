@@ -28,6 +28,9 @@ interface NodeData {
   ugcAspects?: string[];
   audioFile?: File;
   audioName?: string;
+  avatarJobId?: string;
+  avatarStatus?: string;
+  avatarDownloadUrl?: string;
 }
 
 interface CanvasNode {
@@ -216,7 +219,6 @@ const ShortsReels = () => {
     const block = nodes.find(n => n.id === blockId);
     if (!block) return;
 
-    // Get connected face images
     const connectedImageIds = connections.filter(c => c.toId === blockId).map(c => c.fromId);
     const connectedImages = nodes.filter(n => connectedImageIds.includes(n.id) && n.type === "image" && n.data.file);
 
@@ -243,9 +245,7 @@ const ShortsReels = () => {
         `https://${projectId}.supabase.co/functions/v1/clone-avatar-local`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${session?.access_token || ""}`,
-          },
+          headers: { Authorization: `Bearer ${session?.access_token || ""}` },
           body: formData,
         }
       );
@@ -254,6 +254,9 @@ const ShortsReels = () => {
       if (!resp.ok || data.error) throw new Error(data.error || "Erro ao gerar avatar");
 
       const creative = data.creative;
+      const jobId = data.job_id;
+      const downloadUrl = data.download_url;
+      const statusUrl = data.status_url;
       const previewId = newId();
 
       setNodes(prev => {
@@ -265,14 +268,52 @@ const ShortsReels = () => {
             type: "preview" as const,
             x: block.x + (isMobile ? 20 : 380),
             y: block.y + (isMobile ? 450 : 0),
-            data: { label: "Avatar Preview", videoReady: true, creative },
+            data: {
+              label: "Avatar Preview",
+              videoReady: false,
+              creative,
+              avatarJobId: jobId,
+              avatarStatus: "processing",
+              avatarDownloadUrl: downloadUrl,
+            },
             parentBlockId: blockId,
           },
         ];
       });
 
       setConnections(prev => [...prev, { id: `conn-${Date.now()}`, fromId: blockId, toId: previewId }]);
-      toast.success("Avatar gerado com sucesso!");
+      toast.success("Roteiro gerado! Vídeo sendo processado na VPS...");
+
+      // Poll for completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResp = await fetch(statusUrl);
+          const statusData = await statusResp.json();
+
+          if (statusData.status === "completed") {
+            clearInterval(pollInterval);
+            setNodes(prev => prev.map(n =>
+              n.id === previewId
+                ? { ...n, data: { ...n.data, videoReady: true, avatarStatus: "completed", avatarDownloadUrl: downloadUrl } }
+                : n
+            ));
+            toast.success("Vídeo do avatar finalizado! Clique para baixar.");
+          } else if (statusData.status === "failed") {
+            clearInterval(pollInterval);
+            setNodes(prev => prev.map(n =>
+              n.id === previewId
+                ? { ...n, data: { ...n.data, avatarStatus: "failed" } }
+                : n
+            ));
+            toast.error("Falha ao processar vídeo: " + (statusData.error || "Erro desconhecido"));
+          }
+        } catch {
+          // Network error, keep polling
+        }
+      }, 5000);
+
+      // Stop polling after 5 minutes
+      setTimeout(() => clearInterval(pollInterval), 300000);
     } catch (err: any) {
       console.error("Avatar generation error:", err);
       setNodes(prev => prev.map(n => n.id === blockId ? { ...n, data: { ...n.data, generating: false } } : n));
@@ -973,9 +1014,19 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
             </span>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
-              I.A ✓
-            </span>
+            {node.data.avatarStatus === "processing" ? (
+              <span className="bg-yellow-100 text-yellow-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium animate-pulse">
+                Processando...
+              </span>
+            ) : node.data.avatarStatus === "failed" ? (
+              <span className="bg-red-100 text-red-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
+                Falhou ✗
+              </span>
+            ) : (
+              <span className="bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium">
+                I.A ✓
+              </span>
+            )}
             <button onClick={(e) => { e.stopPropagation(); onRemove(node.id); }} className="p-1 rounded hover:bg-red-100" title="Remover">
               <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-destructive" />
             </button>
@@ -983,6 +1034,31 @@ function PreviewNode({ node, isMobile, onMouseDown, onTouchStart, onConnect, isC
         </div>
 
         <div className="p-3 sm:p-4 space-y-3" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          {/* Avatar video download */}
+          {node.data.avatarStatus === "completed" && node.data.avatarDownloadUrl && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-green-800">🎬 Vídeo do Avatar pronto!</p>
+              <Button
+                size="sm"
+                className="w-full bg-green-600 hover:bg-green-700 text-white gap-2 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(node.data.avatarDownloadUrl, "_blank");
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Baixar Vídeo .mp4
+              </Button>
+            </div>
+          )}
+
+          {node.data.avatarStatus === "processing" && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-center gap-2">
+              <div className="h-4 w-4 border-2 border-yellow-400 border-t-yellow-700 rounded-full animate-spin" />
+              <p className="text-xs text-yellow-800">Processando vídeo na VPS...</p>
+            </div>
+          )}
+
           {creative && (
             <>
               {/* Video Player / Image Slideshow */}
