@@ -28,6 +28,9 @@ interface NodeData {
   ugcAspects?: string[];
   audioFile?: File;
   audioName?: string;
+  avatarJobId?: string;
+  avatarStatus?: string;
+  avatarDownloadUrl?: string;
 }
 
 interface CanvasNode {
