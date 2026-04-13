@@ -301,6 +301,11 @@ const AutoSubtitles = () => {
     return carouselWordGroups.find(g => timeMs >= g.fromMs && timeMs <= g.toMs) || null;
   }, [previewTime, carouselWordGroups]);
 
+  const previewWordGroup = useMemo((): WordGroup | null => {
+    if (carouselWordGroups.length === 0) return null;
+    return activeWordGroup ?? carouselWordGroups[0] ?? null;
+  }, [activeWordGroup, carouselWordGroups]);
+
   // Eagerly pre-load FFmpeg on first file upload
   useEffect(() => {
     if (totalVideos > 0) {
@@ -1191,19 +1196,22 @@ const AutoSubtitles = () => {
                           }}
                         >
                           <video
+                            key={video.previewUrl}
                             ref={previewVideoRef}
                             src={video.previewUrl}
                             controls
                             playsInline
                             className="w-full h-full rounded-lg object-contain bg-black"
                             style={{ display: 'block', minHeight: '200px' }}
+                            onLoadedMetadata={(e) => setPreviewTime(e.currentTarget.currentTime || 0)}
                             onTimeUpdate={(e) => setPreviewTime(e.currentTarget.currentTime)}
+                            onSeeked={(e) => setPreviewTime(e.currentTarget.currentTime)}
                           />
                           {/* Overlay de legenda arrastável estilo CapCut */}
-                          {activeWordGroup && (
+                          {previewWordGroup && (
                             <DraggableSubtitle
-                              words={activeWordGroup.words}
-                              highlightIndex={activeWordGroup.highlightIndex}
+                              words={previewWordGroup.words}
+                              highlightIndex={previewWordGroup.highlightIndex}
                               positionY={subtitlePositionY}
                               fontSizePct={fontSizePct}
                               onPositionChange={(value) => currentCarouselMeta && updateVideoSubtitleSettings(currentCarouselMeta.si, currentCarouselMeta.vi, { positionY: value })}
