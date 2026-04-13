@@ -65,20 +65,24 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const transcriptionPrompt = `Transcribe this media into segments. For each segment of speech, provide the start time, end time, and text.
+    const transcriptionPrompt = `You are a precision subtitle transcriber. Transcribe this audio into tightly-timed segments.
 
-IMPORTANT RULES:
-- Detect the language automatically
-- Split into natural sentence segments (3-8 seconds each)
-- Timestamps must be accurate to the audio/video
-- Return ONLY valid JSON, no markdown
+CRITICAL TIMING RULES:
+- Each segment MUST start exactly when the speaker begins that phrase and end exactly when they finish.
+- Do NOT pad or round timestamps — use millisecond precision (e.g. 1.240, 3.871).
+- Split into SHORT segments of 1-4 seconds each (max 8 words per segment).
+- There must be NO gap between the end of one segment and the start of the next IF speech is continuous.
+- Silence gaps between phrases must be reflected: the previous segment ends when speech stops, the next starts when speech resumes.
+- Detect the language automatically.
+- Return ONLY valid JSON, no markdown, no explanation.
 
 Return this exact JSON format:
 {
   "language": "pt",
   "segments": [
-    {"start": 0.0, "end": 3.5, "text": "Olá, tudo bem?"},
-    {"start": 3.8, "end": 7.2, "text": "Hoje vamos falar sobre..."}
+    {"start": 0.120, "end": 1.450, "text": "Olá tudo bem"},
+    {"start": 1.480, "end": 3.210, "text": "hoje vamos falar sobre"},
+    {"start": 3.250, "end": 5.870, "text": "como fazer legendas perfeitas"}
   ]
 }`;
 
