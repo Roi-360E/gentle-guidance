@@ -79,6 +79,8 @@ export default function AdminPlans() {
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
   const [tokenEditUser, setTokenEditUser] = useState<string | null>(null);
   const [tokenEditValue, setTokenEditValue] = useState('');
+  const [deletingUser, setDeletingUser] = useState<UserRow | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Sales recovery state
   const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
@@ -1134,12 +1136,13 @@ export default function AdminPlans() {
                           <TableHead className="text-xs text-right">Alterar Plano</TableHead>
                           <TableHead className="text-xs text-center">Chat IA</TableHead>
                           <TableHead className="text-xs text-center">Status</TableHead>
+                          <TableHead className="text-xs text-center">Excluir</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredUsers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+                            <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
                               Nenhum usuário encontrado.
                             </TableCell>
                           </TableRow>
@@ -1230,6 +1233,16 @@ export default function AdminPlans() {
                                   ) : (
                                     <><ShieldCheck className="w-3 h-3" /> Ativo</>
                                   )}
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => { setDeletingUser(u); setDeleteConfirmOpen(true); }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </TableCell>
                             </TableRow>
