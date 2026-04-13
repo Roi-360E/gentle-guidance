@@ -79,6 +79,8 @@ export default function AdminPlans() {
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
   const [tokenEditUser, setTokenEditUser] = useState<string | null>(null);
   const [tokenEditValue, setTokenEditValue] = useState('');
+  const [deletingUser, setDeletingUser] = useState<UserRow | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Sales recovery state
   const [recoveryLeads, setRecoveryLeads] = useState<RecoveryLead[]>([]);
@@ -700,6 +702,25 @@ export default function AdminPlans() {
     setUpdatingUser(null);
   };
 
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return;
+    setUpdatingUser(deletingUser.user_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { user_id: deletingUser.user_id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setUsers(prev => prev.filter(u => u.user_id !== deletingUser.user_id));
+      toast.success('Usuário excluído com sucesso!');
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + err.message);
+    }
+    setUpdatingUser(null);
+    setDeleteConfirmOpen(false);
+    setDeletingUser(null);
+  };
+
   // Plan editor helpers
   const addPlan = () => {
     const newPlan: Plan = {
@@ -1134,12 +1155,13 @@ export default function AdminPlans() {
                           <TableHead className="text-xs text-right">Alterar Plano</TableHead>
                           <TableHead className="text-xs text-center">Chat IA</TableHead>
                           <TableHead className="text-xs text-center">Status</TableHead>
+                          <TableHead className="text-xs text-center">Excluir</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredUsers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+                            <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
                               Nenhum usuário encontrado.
                             </TableCell>
                           </TableRow>
@@ -1230,6 +1252,16 @@ export default function AdminPlans() {
                                   ) : (
                                     <><ShieldCheck className="w-3 h-3" /> Ativo</>
                                   )}
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => { setDeletingUser(u); setDeleteConfirmOpen(true); }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -2271,6 +2303,44 @@ export default function AdminPlans() {
             >
               {testingPixelId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
               Enviar Evento de Teste
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5" />
+              Excluir Usuário
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm">
+              Tem certeza que deseja excluir permanentemente o usuário?
+            </p>
+            <div className="bg-muted rounded-lg p-3 text-sm space-y-1">
+              <p><strong>E-mail:</strong> {deletingUser?.email || '—'}</p>
+              <p><strong>Nome:</strong> {deletingUser?.name || '—'}</p>
+            </div>
+            <p className="text-xs text-destructive font-medium">
+              ⚠️ Esta ação é irreversível. Todos os dados do usuário serão apagados.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteConfirmOpen(false); setDeletingUser(null); }}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteUser}
+              disabled={updatingUser === deletingUser?.user_id}
+              className="gap-2"
+            >
+              {updatingUser === deletingUser?.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Excluir
             </Button>
           </DialogFooter>
         </DialogContent>
