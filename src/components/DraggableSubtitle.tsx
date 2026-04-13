@@ -72,8 +72,9 @@ export function DraggableSubtitle({
   useEffect(() => {
     if (!isDragging && !isResizing) return;
 
-    const handleMove = (e: MouseEvent | TouchEvent) => {
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const handleMove = (e: PointerEvent) => {
+      e.preventDefault();
+      const clientY = e.clientY;
       const parent = containerRef.current?.parentElement;
       if (!parent) return;
       const parentRect = parent.getBoundingClientRect();
@@ -98,16 +99,17 @@ export function DraggableSubtitle({
       setIsResizing(false);
     };
 
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    window.addEventListener('touchmove', handleMove);
-    window.addEventListener('touchend', handleUp);
+    window.addEventListener('pointermove', handleMove, { passive: false });
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+    // Safety: also stop on blur (e.g. user switches tab)
+    window.addEventListener('blur', handleUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      window.removeEventListener('touchmove', handleMove);
-      window.removeEventListener('touchend', handleUp);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+      window.removeEventListener('blur', handleUp);
     };
   }, [isDragging, isResizing, onPositionChange, onFontSizeChange]);
 
