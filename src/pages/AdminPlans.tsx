@@ -2307,6 +2307,44 @@ export default function AdminPlans() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5" />
+              Excluir Usuário
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm">
+              Tem certeza que deseja excluir permanentemente o usuário?
+            </p>
+            <div className="bg-muted rounded-lg p-3 text-sm space-y-1">
+              <p><strong>E-mail:</strong> {deletingUser?.email || '—'}</p>
+              <p><strong>Nome:</strong> {deletingUser?.name || '—'}</p>
+            </div>
+            <p className="text-xs text-destructive font-medium">
+              ⚠️ Esta ação é irreversível. Todos os dados do usuário serão apagados.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteConfirmOpen(false); setDeletingUser(null); }}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteUser}
+              disabled={updatingUser === deletingUser?.user_id}
+              className="gap-2"
+            >
+              {updatingUser === deletingUser?.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
