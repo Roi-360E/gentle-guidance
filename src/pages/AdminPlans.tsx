@@ -702,6 +702,25 @@ export default function AdminPlans() {
     setUpdatingUser(null);
   };
 
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return;
+    setUpdatingUser(deletingUser.user_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { user_id: deletingUser.user_id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setUsers(prev => prev.filter(u => u.user_id !== deletingUser.user_id));
+      toast.success('Usuário excluído com sucesso!');
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + err.message);
+    }
+    setUpdatingUser(null);
+    setDeleteConfirmOpen(false);
+    setDeletingUser(null);
+  };
+
   // Plan editor helpers
   const addPlan = () => {
     const newPlan: Plan = {
