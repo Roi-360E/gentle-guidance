@@ -1255,14 +1255,16 @@ export default function AdminPlans() {
                                 </Button>
                               </TableCell>
                               <TableCell className="text-center">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => { setDeletingUser(u); setDeleteConfirmOpen(true); }}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                {u.email !== 'matheuslaurindo900@gmail.com' ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => { setDeletingUser(u); setDeleteConfirmOpen(true); }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                ) : null}
                               </TableCell>
                             </TableRow>
                           ))
