@@ -268,15 +268,13 @@ export async function burnSubtitlesIntoVideo(
   options: BurnOptions,
   onProgress?: (pct: number, status: string) => void,
 ): Promise<Blob> {
-  // For large files, try VPS first
-  if (videoFile.size > VPS_THRESHOLD) {
-    try {
-      console.log(`[SubtitleBurner] 🌐 Large file (${(videoFile.size / (1024 * 1024)).toFixed(1)}MB), using VPS`);
-      return await burnSubtitlesViaVPS(videoFile, options, onProgress);
-    } catch (err) {
-      console.warn('[SubtitleBurner] VPS burn failed, falling back to local WASM:', err);
-      onProgress?.(5, 'Servidor indisponível, processando localmente...');
-    }
+  // Always try VPS first for speed (native FFmpeg is much faster than WASM)
+  try {
+    console.log(`[SubtitleBurner] 🌐 VPS burn for ${videoFile.name} (${(videoFile.size / (1024 * 1024)).toFixed(1)}MB)`);
+    return await burnSubtitlesViaVPS(videoFile, options, onProgress);
+  } catch (err) {
+    console.warn('[SubtitleBurner] VPS burn failed, falling back to local WASM:', err);
+    onProgress?.(5, 'Servidor indisponível, processando localmente...');
   }
 
   // Local WASM processing
