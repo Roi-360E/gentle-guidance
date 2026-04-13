@@ -32,9 +32,12 @@ export interface BurnOptions {
 const FONT_PATH = '/fonts/Inter-Variable.ttf';
 const FONT_FS_NAME = 'subtitle_font.ttf';
 
-/** Threshold for VPS processing */
-const VPS_THRESHOLD = 50 * 1024 * 1024; // 50MB
+/** Threshold for VPS processing — lowered to route more files to native FFmpeg */
+const VPS_THRESHOLD = 20 * 1024 * 1024; // 20MB
 const VPS_URL = 'https://api.deploysites.online';
+
+/** Max concurrent VPS burn requests for batch processing */
+const VPS_CONCURRENCY = 3;
 
 /**
  * Sanitize text for FFmpeg drawtext
@@ -220,7 +223,8 @@ async function burnSubtitlesViaVPS(
   formData.append('filter', filterStr);
 
   const controller = new AbortController();
-  const timeoutMs = 120000 + Math.ceil(videoFile.size / (10 * 1024 * 1024)) * 15000;
+  // Generous timeout: 3min base + 15s per 10MB (158MB → ~6min)
+  const timeoutMs = 180000 + Math.ceil(videoFile.size / (10 * 1024 * 1024)) * 15000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   onProgress?.(15, 'Gravando legendas no servidor...');

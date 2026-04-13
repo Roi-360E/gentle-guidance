@@ -77,11 +77,12 @@ def burn_subtitles():
             'ffmpeg', '-i', input_path,
             '-vf', final_filter,
             '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode',
-            '-crf', '24', '-c:a', 'copy',
+            '-crf', '26', '-c:a', 'copy',
+            '-threads', '0',
             '-movflags', '+faststart',
             '-y', output_path
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
 
         if result.returncode != 0:
             # Fallback: copy without subtitles
