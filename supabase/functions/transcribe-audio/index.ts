@@ -1,10 +1,8 @@
 /**
- * transcribe-audio — Transcrição ultra-rápida via Gemini
+ * transcribe-audio — Transcrição via Lovable AI Gateway
  * 
- * Aceita vídeo ou áudio diretamente via FormData.
- * O Gemini processa o arquivo nativamente sem necessidade
- * de extração de áudio no cliente, reduzindo o tempo total
- * para < 3 segundos por vídeo.
+ * Aceita áudio via FormData, converte para base64 e envia ao
+ * Lovable AI Gateway (Gemini) para transcrição com timestamps.
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
@@ -32,7 +30,6 @@ serve(async (req) => {
     const audioFile = formData.get("audio") as File | null;
     const videoFile = formData.get("video") as File | null;
 
-    // Segurança de memória: nesta função aceitamos apenas áudio leve.
     if (!audioFile && videoFile) {
       return jsonResponse(
         {
@@ -48,7 +45,6 @@ serve(async (req) => {
       return jsonResponse({ error: "No audio file provided" }, 400);
     }
 
-    // Proteção contra OOM (Edge runtime)
     const maxBytes = 8 * 1024 * 1024;
     if (mediaFile.size > maxBytes) {
       return jsonResponse(
@@ -64,28 +60,12 @@ serve(async (req) => {
     const base64Media = base64Encode(mediaBytes as unknown as ArrayBuffer);
     const mimeType = mediaFile.type || "audio/wav";
 
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType,
-                    data: base64Media,
-                  },
-                },
-                {
-                  text: `Transcribe this media into segments. For each segment of speech, provide the start time, end time, and text.
+    const transcriptionPrompt = `Transcribe this media into segments. For each segment of speech, provide the start time, end time, and text.
 
 IMPORTANT RULES:
 - Detect the language automatically
@@ -100,27 +80,52 @@ Return this exact JSON format:
     {"start": 0.0, "end": 3.5, "text": "Olá, tudo bem?"},
     {"start": 3.8, "end": 7.2, "text": "Hoje vamos falar sobre..."}
   ]
-}`,
+}`;
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Media}`,
                 },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 8192,
+              },
+              {
+                type: "text",
+                text: transcriptionPrompt,
+              },
+            ],
           },
-        }),
-      }
-    );
+        ],
+        temperature: 0.1,
+        max_tokens: 8192,
+      }),
+    });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Gemini API error:", errText);
-      throw new Error(`Gemini API error: ${response.status}`);
+      console.error("AI Gateway error:", response.status, errText);
+      if (response.status === 429) {
+        return jsonResponse({ error: "Rate limit exceeded, please try again later." }, 429);
+      }
+      if (response.status === 402) {
+        return jsonResponse({ error: "AI credits exhausted." }, 402);
+      }
+      throw new Error(`AI Gateway error: ${response.status}`);
     }
 
     const data = await response.json();
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const textContent = data.choices?.[0]?.message?.content || "";
 
     let parsed;
     try {
