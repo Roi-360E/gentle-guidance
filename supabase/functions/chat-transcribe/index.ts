@@ -27,28 +27,32 @@ serve(async (req) => {
     const base64Audio = base64Encode(audioBytes as unknown as ArrayBuffer);
     const mimeType = audioFile.type || "audio/webm";
 
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType,
-                    data: base64Audio,
-                  },
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Audio}`,
                 },
-                {
-                  text: `Transcreva este áudio para texto em português brasileiro.
+              },
+              {
+                type: "text",
+                text: `Transcreva este áudio para texto em português brasileiro.
 
 REGRAS IMPORTANTES:
 - Retorne APENAS o texto falado, sem aspas, sem prefixos, sem explicações
@@ -57,21 +61,18 @@ REGRAS IMPORTANTES:
 - Se não entender alguma parte, escreva [inaudível]
 - NÃO invente palavras ou frases que não foram ditas
 - Seja 100% fiel ao que foi falado no áudio`,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.05,
-            maxOutputTokens: 4096,
+              },
+            ],
           },
-        }),
-      }
-    );
+        ],
+        temperature: 0.05,
+        max_tokens: 4096,
+      }),
+    });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Gemini API error:", response.status, errText);
+      console.error("AI Gateway error:", response.status, errText);
       return new Response(JSON.stringify({ error: "Erro ao transcrever áudio" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -79,7 +80,7 @@ REGRAS IMPORTANTES:
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    const text = data.choices?.[0]?.message?.content?.trim() || "";
 
     if (!text) {
       return new Response(JSON.stringify({ error: "Não foi possível entender o áudio" }), {
