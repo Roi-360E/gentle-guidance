@@ -568,7 +568,7 @@ const AutoSubtitles = () => {
     }
   }, [sections, totalVideos, updateVideo]);
 
-  /* ──── STEP 4: Burn legendas em batch ──── */
+  /* ──── STEP 4: Burn legendas em batch (paralelo via VPS) ──── */
   const handleBurnAll = useCallback(async () => {
     setMainStep('burning');
     setIsProcessing(true);
@@ -585,66 +585,80 @@ const AutoSubtitles = () => {
     });
 
     let completed = 0;
+    const total = videosToProcess.length;
+    const VPS_CONCURRENCY = 3;
 
-    for (const { si, vi, video } of videosToProcess) {
+    // Process in parallel batches of VPS_CONCURRENCY
+    for (let i = 0; i < total; i += VPS_CONCURRENCY) {
       if (cancelRef.current) break;
 
-      updateVideo(si, vi, {
-        status: 'burning',
-        progress: 5,
-        statusText: 'Gravando legendas...',
-      });
+      const batch = videosToProcess.slice(i, i + VPS_CONCURRENCY);
 
-      try {
-        const videoStyle = SUBTITLE_STYLES.find(s => s.id === video.subtitleSettings.styleId) || SUBTITLE_STYLES[0];
-        const videoColors = {
-          ...videoStyle.colors,
-          primary: video.subtitleSettings.customPrimaryColor || videoStyle.colors.primary,
-          highlight: video.subtitleSettings.customHighlightColor || videoStyle.colors.highlight,
-        };
-        const videoWordsPerGroup = video.subtitleSettings.maxLines === 1 ? 3 : video.subtitleSettings.maxLines === 3 ? 6 : 4;
-
-        const burnOptions = {
-          segments: video.transcription!.segments,
-          style: {
-            fontColor: videoColors.primary,
-            highlightColor: videoColors.highlight,
-            borderColor: videoColors.outline,
-            bgColor: videoColors.bg,
-            borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : video.subtitleSettings.styleId === 'pixel' ? 4 : 5,
-            bold: video.subtitleSettings.useBold,
-          },
-          fontSizePct: video.subtitleSettings.fontSizePct,
-          position: (video.subtitleSettings.positionY <= 30 ? 'top' : video.subtitleSettings.positionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
-          wordsPerGroup: videoWordsPerGroup,
-          maxLines: video.subtitleSettings.maxLines,
-          textAlign: video.subtitleSettings.textAlign,
-        };
-
-        const outputBlob = await burnSubtitlesIntoVideo(video.file, burnOptions, (pct, status) => {
-          updateVideo(si, vi, { progress: pct, statusText: status });
-        });
-
-        const url = URL.createObjectURL(outputBlob);
+      // Start all items in this batch
+      for (const { si, vi } of batch) {
         updateVideo(si, vi, {
-          status: 'done',
-          progress: 100,
-          statusText: 'Pronto!',
-          outputUrl: url,
-        });
-      } catch (err) {
-        console.error(`Burn error [${sections[si].label} #${vi + 1}]:`, err);
-        updateVideo(si, vi, {
-          status: 'error',
-          progress: 100,
-          statusText: 'Erro ao gravar legendas',
+          status: 'burning',
+          progress: 5,
+          statusText: 'Gravando legendas...',
         });
       }
 
-      completed++;
-      const pct = Math.round((completed / videosToProcess.length) * 100);
-      setOverallProgress(pct);
-      setOverallStatus(`Legendado ${completed}/${videosToProcess.length} vídeos`);
+      const promises = batch.map(async ({ si, vi, video }) => {
+        if (cancelRef.current) return;
+
+        try {
+          const videoStyle = SUBTITLE_STYLES.find(s => s.id === video.subtitleSettings.styleId) || SUBTITLE_STYLES[0];
+          const videoColors = {
+            ...videoStyle.colors,
+            primary: video.subtitleSettings.customPrimaryColor || videoStyle.colors.primary,
+            highlight: video.subtitleSettings.customHighlightColor || videoStyle.colors.highlight,
+          };
+          const videoWordsPerGroup = video.subtitleSettings.maxLines === 1 ? 3 : video.subtitleSettings.maxLines === 3 ? 6 : 4;
+
+          const burnOptions = {
+            segments: video.transcription!.segments,
+            style: {
+              fontColor: videoColors.primary,
+              highlightColor: videoColors.highlight,
+              borderColor: videoColors.outline,
+              bgColor: videoColors.bg,
+              borderW: video.subtitleSettings.styleId === 'minimal' ? 2 : video.subtitleSettings.styleId === 'neon' ? 7 : video.subtitleSettings.styleId === 'pixel' ? 4 : 5,
+              bold: video.subtitleSettings.useBold,
+            },
+            fontSizePct: video.subtitleSettings.fontSizePct,
+            position: (video.subtitleSettings.positionY <= 30 ? 'top' : video.subtitleSettings.positionY <= 60 ? 'center' : 'bottom') as 'top' | 'center' | 'bottom',
+            wordsPerGroup: videoWordsPerGroup,
+            maxLines: video.subtitleSettings.maxLines,
+            textAlign: video.subtitleSettings.textAlign,
+          };
+
+          const outputBlob = await burnSubtitlesIntoVideo(video.file, burnOptions, (pct, status) => {
+            updateVideo(si, vi, { progress: pct, statusText: status });
+          });
+
+          const url = URL.createObjectURL(outputBlob);
+          updateVideo(si, vi, {
+            status: 'done',
+            progress: 100,
+            statusText: 'Pronto!',
+            outputUrl: url,
+          });
+        } catch (err) {
+          console.error(`Burn error [${sections[si].label} #${vi + 1}]:`, err);
+          updateVideo(si, vi, {
+            status: 'error',
+            progress: 100,
+            statusText: 'Erro ao gravar legendas',
+          });
+        }
+
+        completed++;
+        const pct = Math.round((completed / total) * 100);
+        setOverallProgress(pct);
+        setOverallStatus(`Legendado ${completed}/${total} vídeos`);
+      });
+
+      await Promise.all(promises);
     }
 
     setIsProcessing(false);
