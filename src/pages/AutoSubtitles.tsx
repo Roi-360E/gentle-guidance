@@ -1183,18 +1183,20 @@ const AutoSubtitles = () => {
                           className="relative w-full"
                           style={{
                             maxHeight: '450px',
+                            minHeight: '200px',
                             maxWidth: '100%',
                             aspectRatio: video.dimensions
                               ? `${video.dimensions.width}/${video.dimensions.height}`
-                              : 'auto',
+                              : '9/16',
                           }}
                         >
                           <video
                             ref={previewVideoRef}
                             src={video.previewUrl}
                             controls
-                            className="w-full h-full rounded-lg"
-                            style={{ display: 'block' }}
+                            playsInline
+                            className="w-full h-full rounded-lg object-contain bg-black"
+                            style={{ display: 'block', minHeight: '200px' }}
                             onTimeUpdate={(e) => setPreviewTime(e.currentTarget.currentTime)}
                           />
                           {/* Overlay de legenda arrastável estilo CapCut */}
