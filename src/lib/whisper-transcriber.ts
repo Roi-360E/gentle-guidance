@@ -242,13 +242,18 @@ export async function transcribeVideo(
     throw new Error(result.error);
   }
 
+  // Gemini systematically delays timestamps — apply negative offset to compensate
+  const TIMING_OFFSET_MS = -300;
+  
   const segments: TranscriptionSegment[] = (result.segments || []).map((seg: any) => {
-    const fromMs = Math.round((seg.start || 0) * 1000);
-    const toMs = Math.round((seg.end || 0) * 1000);
+    const rawFromMs = Math.round((seg.start || 0) * 1000);
+    const rawToMs = Math.round((seg.end || 0) * 1000);
+    const fromMs = Math.max(0, rawFromMs + TIMING_OFFSET_MS);
+    const toMs = Math.max(fromMs + 50, rawToMs + TIMING_OFFSET_MS);
     return {
       text: (seg.text || '').trim(),
-      from: secondsToSrt(seg.start || 0),
-      to: secondsToSrt(seg.end || 0),
+      from: secondsToSrt(fromMs / 1000),
+      to: secondsToSrt(toMs / 1000),
       fromMs,
       toMs,
     };

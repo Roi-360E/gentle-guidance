@@ -65,24 +65,26 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const transcriptionPrompt = `You are a precision subtitle transcriber. Transcribe this audio into tightly-timed segments.
+    const transcriptionPrompt = `You are a precision subtitle transcriber optimized for EARLY timing. Transcribe this audio into tightly-timed segments.
 
-CRITICAL TIMING RULES:
-- Each segment MUST start exactly when the speaker begins that phrase and end exactly when they finish.
-- Do NOT pad or round timestamps — use millisecond precision (e.g. 1.240, 3.871).
-- Split into SHORT segments of 1-4 seconds each (max 8 words per segment).
-- There must be NO gap between the end of one segment and the start of the next IF speech is continuous.
-- Silence gaps between phrases must be reflected: the previous segment ends when speech stops, the next starts when speech resumes.
-- Detect the language automatically.
-- Return ONLY valid JSON, no markdown, no explanation.
+CRITICAL TIMING RULES — READ CAREFULLY:
+1. START each segment 0.1-0.2 seconds BEFORE the speaker actually begins the phrase. This compensates for playback latency.
+2. END each segment exactly when the speaker finishes that phrase — do NOT extend beyond speech.
+3. Use millisecond precision (e.g. 0.080, 1.340, 3.871). Never round to whole or half seconds.
+4. Split into SHORT segments: 1-3 seconds each, max 6 words per segment. Shorter is better.
+5. For continuous speech: the next segment starts slightly before (0.05s) the previous one ends — slight overlap is OK.
+6. For silence gaps: end the previous segment when speech stops, start the next when speech resumes.
+7. The FIRST segment should start at or very near 0.0 if speech begins immediately.
+8. Detect the language automatically.
+9. Return ONLY valid JSON, no markdown, no explanation.
 
 Return this exact JSON format:
 {
   "language": "pt",
   "segments": [
-    {"start": 0.120, "end": 1.450, "text": "Olá tudo bem"},
-    {"start": 1.480, "end": 3.210, "text": "hoje vamos falar sobre"},
-    {"start": 3.250, "end": 5.870, "text": "como fazer legendas perfeitas"}
+    {"start": 0.000, "end": 1.350, "text": "Olá tudo bem"},
+    {"start": 1.300, "end": 2.910, "text": "hoje vamos falar"},
+    {"start": 2.880, "end": 5.670, "text": "como fazer legendas perfeitas"}
   ]
 }`;
 
