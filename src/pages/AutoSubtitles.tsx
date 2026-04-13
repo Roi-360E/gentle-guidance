@@ -703,12 +703,6 @@ const AutoSubtitles = () => {
       if (lines.length === 0) return prev;
 
       const oldSegments = video.transcription.segments;
-      
-      // Usar o intervalo total do áudio original para redistribuir
-      const totalStartMs = oldSegments[0]?.fromMs ?? 0;
-      const totalEndMs = oldSegments[oldSegments.length - 1]?.toMs ?? 1000;
-      const totalDuration = totalEndMs - totalStartMs;
-      const sliceDuration = totalDuration / lines.length;
 
       // Helper para formatar ms → SRT timestamp
       const msToSrt = (ms: number) => {
@@ -719,22 +713,38 @@ const AutoSubtitles = () => {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(msPart).padStart(3, '0')}`;
       };
 
-      const newSegments = lines.map((line, i) => {
-        // Se o número de linhas não mudou, preservar timing original
-        if (lines.length === oldSegments.length && oldSegments[i]) {
-          return { ...oldSegments[i], text: line.trim() };
-        }
-        // Caso contrário, redistribuir uniformemente
-        const fromMs = Math.round(totalStartMs + i * sliceDuration);
-        const toMs = Math.round(totalStartMs + (i + 1) * sliceDuration);
-        return {
-          from: msToSrt(fromMs),
-          to: msToSrt(toMs),
-          fromMs,
-          toMs,
-          text: line.trim(),
-        };
-      });
+      let newSegments: typeof oldSegments;
+
+      if (lines.length === oldSegments.length) {
+        // Mesmo número de linhas: preservar timing original exato
+        newSegments = lines.map((line, i) => ({ ...oldSegments[i], text: line.trim() }));
+      } else {
+        // Número de linhas mudou: redistribuir proporcionalmente ao número de palavras
+        // para manter sync com o ritmo da fala
+        const totalStartMs = oldSegments[0]?.fromMs ?? 0;
+        const totalEndMs = oldSegments[oldSegments.length - 1]?.toMs ?? 1000;
+        const totalDuration = totalEndMs - totalStartMs;
+
+        // Calcular peso de cada linha pelo número de palavras (mais palavras = mais tempo)
+        const wordCounts = lines.map(l => l.trim().split(/\s+/).length);
+        const totalWords = wordCounts.reduce((a, b) => a + b, 0) || 1;
+
+        let currentMs = totalStartMs;
+        newSegments = lines.map((line, i) => {
+          const weight = wordCounts[i] / totalWords;
+          const segDuration = Math.round(totalDuration * weight);
+          const fromMs = currentMs;
+          const toMs = i === lines.length - 1 ? totalEndMs : currentMs + segDuration;
+          currentMs = toMs;
+          return {
+            from: msToSrt(fromMs),
+            to: msToSrt(toMs),
+            fromMs,
+            toMs,
+            text: line.trim(),
+          };
+        });
+      }
       
       videos[videoIdx] = {
         ...video,
