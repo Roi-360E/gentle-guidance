@@ -53,27 +53,28 @@ export function DraggableSubtitle({
   const dragStartRef = useRef({ y: 0, startPosY: 0 });
   const resizeStartRef = useRef({ y: 0, startSize: 0 });
 
-  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleDragStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    dragStartRef.current = { y: clientY, startPosY: positionY };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragStartRef.current = { y: e.clientY, startPosY: positionY };
     setIsDragging(true);
   }, [positionY]);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    resizeStartRef.current = { y: clientY, startSize: fontSizePct };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    resizeStartRef.current = { y: e.clientY, startSize: fontSizePct };
     setIsResizing(true);
   }, [fontSizePct]);
 
   useEffect(() => {
     if (!isDragging && !isResizing) return;
 
-    const handleMove = (e: MouseEvent | TouchEvent) => {
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const handleMove = (e: PointerEvent) => {
+      e.preventDefault();
+      const clientY = e.clientY;
       const parent = containerRef.current?.parentElement;
       if (!parent) return;
       const parentRect = parent.getBoundingClientRect();
@@ -98,16 +99,17 @@ export function DraggableSubtitle({
       setIsResizing(false);
     };
 
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    window.addEventListener('touchmove', handleMove);
-    window.addEventListener('touchend', handleUp);
+    window.addEventListener('pointermove', handleMove, { passive: false });
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+    // Safety: also stop on blur (e.g. user switches tab)
+    window.addEventListener('blur', handleUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      window.removeEventListener('touchmove', handleMove);
-      window.removeEventListener('touchend', handleUp);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+      window.removeEventListener('blur', handleUp);
     };
   }, [isDragging, isResizing, onPositionChange, onFontSizeChange]);
 
@@ -165,8 +167,7 @@ export function DraggableSubtitle({
           {showControls && (
             <div
               className="absolute -top-5 left-1/2 -translate-x-1/2 bg-primary rounded-full p-1 cursor-grab active:cursor-grabbing shadow-lg z-30"
-              onMouseDown={handleDragStart}
-              onTouchStart={handleDragStart}
+              onPointerDown={handleDragStart}
             >
               <Move className="w-3 h-3 text-primary-foreground" />
             </div>
@@ -176,15 +177,13 @@ export function DraggableSubtitle({
             <>
               <div
                 className="absolute -bottom-2 -left-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center cursor-ns-resize shadow-lg z-30"
-                onMouseDown={handleResizeStart}
-                onTouchStart={handleResizeStart}
+                onPointerDown={handleResizeStart}
               >
                 <Maximize2 className="w-2.5 h-2.5 text-primary-foreground" />
               </div>
               <div
                 className="absolute -bottom-2 -right-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center cursor-ns-resize shadow-lg z-30"
-                onMouseDown={handleResizeStart}
-                onTouchStart={handleResizeStart}
+                onPointerDown={handleResizeStart}
               >
                 <Maximize2 className="w-2.5 h-2.5 text-primary-foreground" />
               </div>
@@ -201,8 +200,7 @@ export function DraggableSubtitle({
               lineHeight: 1.1,
               alignItems: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
             }}
-            onMouseDown={handleDragStart}
-            onTouchStart={handleDragStart}
+            onPointerDown={handleDragStart}
           >
             {(() => {
               const isTypewriter = styleId === 'typewriter';
