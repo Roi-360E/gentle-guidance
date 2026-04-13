@@ -53,19 +53,19 @@ export function DraggableSubtitle({
   const dragStartRef = useRef({ y: 0, startPosY: 0 });
   const resizeStartRef = useRef({ y: 0, startSize: 0 });
 
-  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleDragStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    dragStartRef.current = { y: clientY, startPosY: positionY };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragStartRef.current = { y: e.clientY, startPosY: positionY };
     setIsDragging(true);
   }, [positionY]);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    resizeStartRef.current = { y: clientY, startSize: fontSizePct };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    resizeStartRef.current = { y: e.clientY, startSize: fontSizePct };
     setIsResizing(true);
   }, [fontSizePct]);
 
