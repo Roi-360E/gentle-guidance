@@ -52,7 +52,8 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    const msg = error.name === 'AbortError' ? 'VPS timeout (>60s)' : error.message;
+    const e = error as { name?: string; message?: string };
+    const msg = e.name === 'AbortError' ? 'VPS timeout (>60s)' : (e.message ?? String(error));
     return new Response(JSON.stringify({ error: msg }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
