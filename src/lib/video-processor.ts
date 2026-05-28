@@ -355,13 +355,14 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
 
     const controller = new AbortController();
     const sizeMB = file.size / (1024 * 1024);
-    // Hard UI budget: the pre-process step must never hold the app for >7s.
-    // If upload is still running after that, the caller releases the UI and the
-    // same in-flight promise is reused by concat (no duplicate upload).
-    const timeoutMs = PREPROCESS_UI_BUDGET_MS;
+    // Network safety timeout only. The visible UI budget is enforced by
+    // preProcessBatch with Promise.race, without aborting this upload.
+    const timeoutMs = scale
+      ? (120000 + Math.ceil(sizeMB / 10) * 15000)
+      : (120000 + Math.ceil(sizeMB / 10) * 10000);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB, ${scale ? 'scale='+scale : 'passthrough'}) ui-budget=${(timeoutMs/1000).toFixed(0)}s`);
+    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB, ${scale ? 'scale='+scale : 'passthrough'}) timeout=${(timeoutMs/1000).toFixed(0)}s`);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -408,7 +409,7 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
     const reason = err instanceof DOMException && err.name === 'AbortError' ? `TIMEOUT` : (err instanceof Error ? err.message : String(err));
-    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${reason} (${totalMs}ms) — releasing UI`);
+    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${reason} (${totalMs}ms)`);
     return null;
   }
 }
@@ -421,7 +422,11 @@ function getOrStartVpsPreprocess(file: File, settings: ProcessingSettings): Prom
   const inFlight = vpsPreprocessPromises.get(file);
   if (inFlight) return inFlight;
 
-  const promise = vpsPreprocessFile(file, settings).finally(() => {
+  const promise = vpsPreprocessFile(file, settings).then((result) => {
+    if (result?.type === 'id') vpsCacheIdMap.set(file, result.cacheId);
+    if (result?.type === 'file') vpsFileCache.set(file, result.file);
+    return result;
+  }).finally(() => {
     vpsPreprocessPromises.delete(file);
   });
   vpsPreprocessPromises.set(file, promise);
