@@ -6,7 +6,6 @@ import {
   type Combination,
   type ProcessingSettings,
 } from '@/lib/video-processor';
-import { processQueueCloud } from '@/lib/cloud-processor';
 import { calculateTokenCost, hasEnoughTokens } from '@/lib/token-calculator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -130,32 +129,8 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
     (async () => {
       try {
-        if (settings.useCloud) {
-          await processQueueCloud(combos, settings, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
-        } else {
-          await processQueue(combos, settings, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
-
-          const shouldUseCloudFallback = !controller.signal.aborted
-            && combos.length > 0
-            && combos.every(c => c.status !== 'done')
-            && combos.some(c => {
-              const msg = c.errorMessage || '';
-              return msg.includes('Servidor de vídeo') || msg.includes('VPS') || msg.includes('TIMEOUT') || msg.includes('tempo');
-            });
-
-          if (shouldUseCloudFallback) {
-            toast.warning('Servidor principal indisponível. Tentando processamento reserva automaticamente...');
-            combos.forEach(c => {
-              c.status = 'pending';
-              c.errorMessage = undefined;
-              c.outputUrl = undefined;
-            });
-            setCombinations([...combos]);
-            setCurrentProgress(0);
-            setProcessingPhase('Usando processamento reserva...');
-            await processQueueCloud(combos, settings, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
-          }
-        }
+        setProcessingPhase('Processando na VPS com FFmpeg...');
+        await processQueue(combos, { ...settings, useCloud: false }, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
       } catch (err) {
         console.error('[Processing] Error:', err);
       }
