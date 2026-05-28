@@ -41,7 +41,7 @@ async function tryVpsRemoval(
     onProgress?.(25, 'Processando no servidor...');
 
     const response = await fetch(
-      'https://api.deploysites.online/remove-subtitles',
+      'https://api.escalaxpro.com/remove-subtitles',
       {
         method: 'POST',
         body: formData,

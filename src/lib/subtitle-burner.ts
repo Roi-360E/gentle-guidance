@@ -34,7 +34,7 @@ const FONT_FS_NAME = 'subtitle_font.ttf';
 
 /** Threshold for VPS processing — lowered to route more files to native FFmpeg */
 const VPS_THRESHOLD = 20 * 1024 * 1024; // 20MB
-const VPS_URL = 'https://api.deploysites.online';
+const VPS_URL = 'https://api.escalaxpro.com';
 
 /** Max concurrent VPS burn requests for batch processing */
 const VPS_CONCURRENCY = 3;
