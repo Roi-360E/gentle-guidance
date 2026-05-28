@@ -48,6 +48,7 @@ def preprocess_video():
     preset = request.form.get('preset', 'ultrafast')
     crf = request.form.get('crf', '23')
     mode = request.form.get('mode', 'stream')  # 'cache' or 'stream' (legacy)
+    passthrough = request.form.get('passthrough') == '1'
 
     cache_id = uuid.uuid4().hex
     tmp_dir = tempfile.mkdtemp()
@@ -60,7 +61,16 @@ def preprocess_video():
     video.save(input_path)
 
     try:
-        if scale:
+        if passthrough and not scale:
+            # ⚡ ULTRA-FAST: pure remux, no re-encode. ~0.3-0.8s/file
+            cmd = [
+                'ffmpeg', '-i', input_path,
+                '-c', 'copy',
+                '-movflags', '+faststart+frag_keyframe+empty_moov',
+                '-avoid_negative_ts', 'make_zero',
+                '-y', output_path
+            ]
+        elif scale:
             w, h = scale.split(':')
             vf = f'scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1'
             cmd = [
