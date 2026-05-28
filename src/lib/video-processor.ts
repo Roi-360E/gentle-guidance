@@ -663,6 +663,11 @@ async function vpsConcatenateFiles(
   allowRawUpload = true,
 ): Promise<string | null> {
   try {
+    if (!(await isVpsReachable(2000))) {
+      console.warn(`[VPS-Concat] ⚠️ VPS indisponível; combo ${combination.id} não será enviado`);
+      return null;
+    }
+
     const formData = new FormData();
 
     // Always reuse in-flight VPS uploads (dedup): if another combo is already
@@ -725,8 +730,6 @@ async function vpsConcatenateFiles(
       formData.append('crf', '23');
     }
 
-    const url = 'https://api.deploysites.online/concat';
-
     onProgress?.(15);
 
     const controller = new AbortController();
@@ -746,7 +749,7 @@ async function vpsConcatenateFiles(
 
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await fetch(VPS_CONCAT_URL, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
