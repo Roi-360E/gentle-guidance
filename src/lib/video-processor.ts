@@ -161,6 +161,14 @@ function getScale(settings: ProcessingSettings): string | null {
   return formatResolutionMap[format]?.[settings.resolution] ?? null;
 }
 
+// Build a scale filter that preserves the original aspect ratio.
+// Uses scale+pad so vertical sources stay vertical (no stretching) and any
+// gap is filled with black bars instead of distorting the image.
+function buildScaleFilter(scale: string): string {
+  const [w, h] = scale.split(':');
+  return `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+}
+
 export function generateCombinations(
   hooks: VideoFile[],
   bodies: VideoFile[],
