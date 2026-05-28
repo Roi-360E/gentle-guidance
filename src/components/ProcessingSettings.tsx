@@ -61,7 +61,7 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
           <div className="flex items-center gap-3 pt-1">
             <Switch
               checked={settings.preProcess}
-              onCheckedChange={(v) => onChange({ ...settings, preProcess: v })}
+              onCheckedChange={(v) => onChange({ ...settings, preProcess: v, resolution: v ? 'original' : settings.resolution })}
               disabled={disabled}
             />
             <span className="text-sm text-muted-foreground">
