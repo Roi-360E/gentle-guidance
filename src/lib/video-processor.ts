@@ -598,24 +598,29 @@ async function vpsConcatenateFiles(
     onProgress?.(15);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    // Reduzido 120s → 25s: se a VPS estiver fora do ar, caímos pro WASM rápido
+    // em vez de travar o usuário em 85% por 2 minutos.
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-    // Start aggressive progress simulation while waiting for VPS
+    // Simulação suave: vai até 60% (não 85%) pra não dar falsa sensação de travamento.
     let simProgress = 15;
     const progressTimer = setInterval(() => {
-      simProgress = Math.min(simProgress + 8, 85);
+      simProgress = Math.min(simProgress + 3, 60);
       onProgress?.(simProgress);
-    }, 500);
+    }, 600);
 
-    const res = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal,
-    });
-
-    clearInterval(progressTimer);
-    clearTimeout(timeoutId);
-    onProgress?.(90);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+    } finally {
+      clearInterval(progressTimer);
+      clearTimeout(timeoutId);
+    }
+    onProgress?.(75);
 
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
@@ -638,7 +643,9 @@ async function vpsConcatenateFiles(
     onProgress?.(95);
     return URL.createObjectURL(blob);
   } catch (err) {
-    console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${err instanceof Error ? err.message : err}`);
+    const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${isTimeout ? 'TIMEOUT (VPS não respondeu em 25s — provavelmente offline)' : msg}`);
     return null;
   }
 }
