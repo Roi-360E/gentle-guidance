@@ -1000,16 +1000,18 @@ export async function processQueue(
       uniqueFiles.add(c.cta.file);
     }
     const uncachedFiles = Array.from(uniqueFiles).filter(f => !fetchFileCache.has(f));
-    if (uncachedFiles.length > 0) {
+    if (!settings.preProcess && uncachedFiles.length > 0) {
       console.log(`[VideoProcessor] 📦 Pre-loading ${uncachedFiles.length} uncached files...`);
       await Promise.all(uncachedFiles.map(f => fetchFileCached(f)));
+    } else if (settings.preProcess) {
+      console.log('[VideoProcessor] ⚡ Skipping local file pre-load — VPS background cache is the fast path');
     } else {
       console.log(`[VideoProcessor] ⚡ All ${uniqueFiles.size} files already in memory cache — skipping Phase 0`);
     }
 
     // Phase 1: Skip if VPS already pre-processed all unique files
     let ff: FFmpeg | null = null;
-    const allVpsCached = Array.from(uniqueFiles).every(f => vpsCacheIdMap.has(f) || vpsFileCache.has(f));
+    const allVpsCached = Array.from(uniqueFiles).every(f => vpsCacheIdMap.has(f) || vpsFileCache.has(f) || vpsPreprocessPromises.has(f));
     const allLocalCached = Array.from(uniqueFiles).every(f => preProcessCache.has(f));
 
     if (settings.preProcess && !allVpsCached && !allLocalCached) {
