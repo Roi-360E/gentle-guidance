@@ -1089,6 +1089,25 @@ export async function processQueue(
       }
     }
 
+    // Give the dedup uploads a bounded head start, but never let this phase eat
+    // the full minute. Once IDs are ready, every combination uses zero re-upload.
+    {
+      const pendingUploads = Array.from(uniqueFiles)
+        .filter(f => !vpsCacheIdMap.has(f) && !vpsFileCache.has(f))
+        .map(f => vpsPreprocessPromises.get(f))
+        .filter((p): p is Promise<VpsPreprocessResult> => !!p);
+      if (pendingUploads.length > 0) {
+        const uploadWaitMs = Math.min(40_000, Math.max(0, queueDeadlineAt - performance.now() - 15_000));
+        if (uploadWaitMs > 0) {
+          console.log(`[VideoProcessor] ⏱️ Aguardando cache VPS pronto por até ${Math.round(uploadWaitMs / 1000)}s para não re-upar por combo`);
+          const uploadResult = await waitForUiBudget(Promise.all(pendingUploads.map(p => p.catch(() => null))), uploadWaitMs);
+          if (uploadResult === 'budget-exceeded') {
+            console.warn('[VideoProcessor] ⏱️ Cache VPS ainda incompleto; combos sem cache serão interrompidos para respeitar 1 minuto');
+          }
+        }
+      }
+    }
+
     // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
     // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
     let useVpsSequential = true;
