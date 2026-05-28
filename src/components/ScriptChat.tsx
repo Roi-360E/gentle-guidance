@@ -1264,12 +1264,19 @@ export function ScriptChatFloat() {
                 onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
                 className="flex gap-2"
               >
-                <Input
+                <Textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Descreva seu vídeo..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="Descreva seu vídeo... (Shift+Enter para nova linha)"
                   disabled={isLoading || isRecording || isTranscribing}
-                  className="flex-1"
+                  rows={1}
+                  className="flex-1 min-h-[40px] max-h-[200px] resize-none py-2 leading-relaxed"
                 />
                 <Button
                   type="button"
