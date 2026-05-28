@@ -242,7 +242,7 @@ export async function preProcessInputCached(
     // ─── SCALE + RE-ENCODE during pre-processing so concat can use stream copy ───
     exitCode = await ff.exec([
       '-i', rawName,
-      '-vf', `scale=${scale},setsar=1`,
+      '-vf', buildScaleFilter(scale),
       '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main',
       '-pix_fmt', 'yuv420p', '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
       '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
@@ -256,7 +256,7 @@ export async function preProcessInputCached(
       console.warn(`[VideoProcessor] Scale+encode failed for ${file.name}, trying without audio...`);
       exitCode = await ff.exec([
         '-i', rawName,
-        '-vf', `scale=${scale},setsar=1`,
+        '-vf', buildScaleFilter(scale),
         '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
         '-crf', '23', '-an', '-movflags', '+faststart',
         '-y', outputName,
