@@ -958,51 +958,72 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
-    // ─── Try VPS concat SEQUENTIALLY (1, 2, 3...) for predictable ordering ───
-    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0; // VPS cache available = VPS is working
+    // ─── Try VPS concat in PARALLEL (cached IDs = zero upload, VPS does stream-copy ~1s each) ───
+    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0;
 
     if (useVpsSequential) {
-      console.log(`[VideoProcessor] ⚡ VPS sequential concat: processing ${combinations.length} combos one by one`);
-      
-      for (let i = 0; i < combinations.length; i++) {
-        checkAbort(abortSignal);
-        
-        const combo = combinations[i];
-        if (combo.status === 'done') continue;
+      const VPS_CONCURRENCY = 4; // 4 paralelos: VPS aguenta tranquilo com stream-copy
+      console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY}`);
 
-        combo.status = 'processing';
-        combo.errorMessage = undefined;
-        onUpdate([...combinations]);
+      let completed = 0;
+      let firstComboFailed = false;
+      let cursor = 0;
 
-        try {
-          console.log(`[VideoProcessor] 🎬 [${i + 1}/${combinations.length}] VPS concat: ${combo.outputName}`);
-          const url = await vpsConcatenateFiles(combo, settings);
-          if (url) {
-            combo.status = 'done';
-            combo.outputUrl = url;
-            console.log(`%c[VideoProcessor] ✅ [${i + 1}/${combinations.length}] ${combo.outputName} concluído (VPS)!`, 'color: #22c55e; font-weight: bold;');
-            onUpdate([...combinations]);
-            onProgressItem(Math.round(((i + 1) / combinations.length) * 100));
+      const worker = async (workerId: number): Promise<void> => {
+        while (true) {
+          if (firstComboFailed) return;
+          const i = cursor++;
+          if (i >= combinations.length) return;
+          checkAbort(abortSignal);
+
+          const combo = combinations[i];
+          if (combo.status === 'done') {
+            completed++;
             continue;
           }
-        } catch {
-          // VPS failed for this combo
-        }
 
-        // If first combo failed via VPS, fall back entirely
-        if (i === 0) {
-          console.log(`[VideoProcessor] 📦 VPS sequential concat failed on first combo, falling back to WASM`);
-          combo.status = 'pending';
-          useVpsSequential = false;
+          combo.status = 'processing';
+          combo.errorMessage = undefined;
           onUpdate([...combinations]);
-          break;
-        }
 
-        // Mark individual failure, continue with next
-        combo.status = 'pending'; // will be retried in WASM fallback below
-        onUpdate([...combinations]);
+          try {
+            console.log(`[VideoProcessor] 🎬 [W${workerId}] [${i + 1}/${combinations.length}] VPS concat: ${combo.outputName}`);
+            const url = await vpsConcatenateFiles(combo, settings);
+            if (url) {
+              combo.status = 'done';
+              combo.outputUrl = url;
+              completed++;
+              console.log(`%c[VideoProcessor] ✅ [${completed}/${combinations.length}] ${combo.outputName} (VPS)`, 'color: #22c55e; font-weight: bold;');
+              onUpdate([...combinations]);
+              onProgressItem(Math.round((completed / combinations.length) * 100));
+              continue;
+            }
+          } catch {
+            // VPS falhou para este combo
+          }
+
+          // Se o PRIMEIRO combo falhar via VPS, aborta todos os workers e cai pro WASM
+          if (i === 0) {
+            console.log(`[VideoProcessor] 📦 VPS falhou no primeiro combo, caindo para WASM`);
+            combo.status = 'pending';
+            firstComboFailed = true;
+            onUpdate([...combinations]);
+            return;
+          }
+
+          combo.status = 'pending'; // será retentado no fallback WASM
+          onUpdate([...combinations]);
+        }
+      };
+
+      const workers = Array.from({ length: Math.min(VPS_CONCURRENCY, combinations.length) }, (_, idx) => worker(idx + 1));
+      await Promise.all(workers);
+
+      if (firstComboFailed) {
+        useVpsSequential = false;
       }
     }
+
 
     // ─── Sequential fallback for remaining/failed combos ───
     const remaining = combinations.filter(c => c.status !== 'done');
