@@ -402,10 +402,10 @@ export async function preProcessBatch(
 ): Promise<void> {
   if (files.length === 0) return;
 
-  // Skip files already in VPS cache
+  // Skip files already in any cache (VPS ID, VPS legacy file, or local WASM)
   const uncachedIndices: number[] = [];
   for (let i = 0; i < files.length; i++) {
-    if (vpsFileCache.has(files[i]) || preProcessCache.has(files[i])) {
+    if (vpsCacheIdMap.has(files[i]) || vpsFileCache.has(files[i]) || preProcessCache.has(files[i])) {
       console.log(`[VideoProcessor] ⚡ Cache hit for "${files[i].name}" — skipping`);
       onFileProgress?.(i, 'done', 100);
     } else {
