@@ -1047,12 +1047,12 @@ export async function processQueue(
     );
 
     // ─── Try VPS concat in PARALLEL (cached IDs = zero upload, VPS does stream-copy ~1s each) ───
-    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0;
+    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0 || vpsPreprocessPromises.size > 0;
 
     if (useVpsSequential) {
       // Concat com IDs cacheados = stream-copy nativo (~1s cada).
       // 8 paralelos saturam a banda sem sobrecarregar a VPS.
-      const hasCacheIds = vpsCacheIdMap.size > 0;
+      const hasCacheIds = vpsCacheIdMap.size > 0 || vpsPreprocessPromises.size > 0;
       const VPS_CONCURRENCY = hasCacheIds ? 8 : 4;
       console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY} (cacheIds=${hasCacheIds})`);
 
