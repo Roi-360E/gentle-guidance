@@ -10,15 +10,11 @@ import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
 import {
   defaultSettings,
   getFFmpeg,
-  terminateFFmpeg,
-  preProcessInputCached,
   preProcessBatch,
   type Combination,
   type ProcessingSettings,
   type VideoFormat,
 } from '@/lib/video-processor';
-
-import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens } from '@/lib/token-calculator';
 import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Mic, Lock } from 'lucide-react';
