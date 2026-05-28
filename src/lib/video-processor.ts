@@ -194,8 +194,10 @@ function checkAbort(signal?: AbortSignal): void {
 
 // ─── Pre-processing cache ───────────────────────────────────────────────
 const preProcessCache = new Map<File, string>();
-// Cache of VPS-preprocessed File objects (to avoid sending raw files to VPS concat)
+// Cache of VPS-preprocessed File objects (legacy fallback for old VPS versions)
 const vpsFileCache = new Map<File, File>();
+// Cache of VPS-side IDs — when present, concat can be done by reference (no re-upload!)
+const vpsCacheIdMap = new Map<File, string>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
