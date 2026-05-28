@@ -892,6 +892,7 @@ async function clearCache(): Promise<void> {
   }
   preProcessCache.clear();
   vpsFileCache.clear();
+  vpsCacheIdMap.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
