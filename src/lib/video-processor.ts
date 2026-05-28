@@ -1027,7 +1027,6 @@ export async function processQueue(
     terminateFFmpeg();
   };
   abortSignal?.addEventListener('abort', onAbort, { once: true });
-  const queueDeadlineAt = performance.now() + CONCAT_QUEUE_BUDGET_MS;
 
   try {
     // Phase 0: Skip pre-loading if files already in cache (from preProcessBatch)
@@ -1070,6 +1069,7 @@ export async function processQueue(
       `%c[VideoProcessor] ═══ Phase 2: Concatenating ${expectedCount} combinations (ALL must succeed) ═══`,
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
+    const queueDeadlineAt = performance.now() + CONCAT_QUEUE_BUDGET_MS;
 
     // ─── IMPLICIT DEDUP UPLOAD: even when preProcess=false, upload each unique
     // file to VPS ONCE (fire-and-forget). Without this, every combo re-uploads
