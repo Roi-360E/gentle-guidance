@@ -419,9 +419,9 @@ export async function preProcessBatch(
   }
 
   const totalStart = performance.now();
-  // Concurrency limit: enviar todos os arquivos ao mesmo tempo satura a banda de upload
-  // do usuário e faz cada arquivo demorar muito mais. 3 em paralelo é o sweet spot.
-  const CONCURRENCY = 3;
+  // Concurrency: HTTP/1.1 permite ~6 conexões paralelas por host. Subimos para 6 para
+  // saturar a banda de upload disponível e reduzir o tempo total de pré-processamento.
+  const CONCURRENCY = 6;
   console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (concurrency=${CONCURRENCY})`);
 
   const failedIndices: number[] = [];
