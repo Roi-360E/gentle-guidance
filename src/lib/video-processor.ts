@@ -1092,6 +1092,7 @@ export async function processQueue(
     // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
     // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
     let useVpsSequential = true;
+    let vpsFailedCount = 0;
 
     if (useVpsSequential) {
       const hasCacheIds = vpsCacheIdMap.size > 0 || vpsPreprocessPromises.size > 0;
@@ -1149,6 +1150,7 @@ export async function processQueue(
 
       const workers = Array.from({ length: Math.min(VPS_CONCURRENCY, combinations.length) }, (_, idx) => worker(idx + 1));
       await Promise.all(workers);
+      vpsFailedCount = failedCount;
 
       if (failedCount >= FAIL_THRESHOLD) {
         console.log(`[VideoProcessor] 📦 VPS instável (${failedCount} falhas), restante via WASM`);
@@ -1163,7 +1165,7 @@ export async function processQueue(
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
       const timeLeft = queueDeadlineAt - performance.now();
-      if (timeLeft < 15_000 || failedCount > 0) {
+      if (timeLeft < 15_000 || vpsFailedCount > 0) {
         console.warn(`[VideoProcessor] ⏱️ Limite de 1 minuto protegido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
         for (const combo of remaining) {
           combo.status = 'error';
