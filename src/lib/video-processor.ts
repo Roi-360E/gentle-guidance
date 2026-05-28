@@ -309,11 +309,19 @@ export async function preProcessInputCached(
  * Attempt to pre-process a single file via VPS (native FFmpeg = ~1-2s).
  * Returns a File with the preprocessed video, or null on failure.
  */
-async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<File | null> {
+type VpsPreprocessResult =
+  | { type: 'id'; cacheId: string }
+  | { type: 'file'; file: File }
+  | null;
+
+async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<VpsPreprocessResult> {
   const fileStart = performance.now();
   try {
     const formData = new FormData();
     formData.append('video', file, file.name);
+    // Ask VPS to cache the result server-side and return only an ID (no download bytes).
+    // Old VPS versions ignore this and still stream bytes — handled below.
+    formData.append('mode', 'cache');
 
     if (settings) {
       const scale = getScale(settings);
@@ -325,7 +333,6 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    // Generous timeout: 60s base + 10s per 10MB (handles slow upload speeds)
     const sizeMB = file.size / (1024 * 1024);
     const timeoutMs = 60000 + Math.ceil(sizeMB / 10) * 10000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -341,11 +348,24 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     clearTimeout(timeoutId);
 
     const contentType = res.headers.get('content-type') || '';
+
+    // ─── New cache mode: VPS returns JSON with cache_id ───
     if (contentType.includes('application/json')) {
       const data = await res.json();
-      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error}`);
+      if (!res.ok || data.error) {
+        console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error || `HTTP ${res.status}`}`);
+        return null;
+      }
+      if (data.cache_id) {
+        const totalMs = (performance.now() - fileStart).toFixed(0);
+        console.log(`[VPS-Preprocess] ✅ ${file.name}: cached on VPS as ${data.cache_id} in ${totalMs}ms (no download)`);
+        return { type: 'id', cacheId: data.cache_id };
+      }
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: unexpected JSON response`);
       return null;
     }
+
+    // ─── Legacy mode: VPS returned binary (old version without cache support) ───
     if (!res.ok) {
       console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: HTTP ${res.status}`);
       return null;
@@ -359,8 +379,8 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
       return null;
     }
 
-    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${sizeMB.toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms`);
-    return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
+    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${sizeMB.toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms (legacy mode)`);
+    return { type: 'file', file: new File([blob], `vps_${file.name}`, { type: 'video/mp4' }) };
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
     const reason = err instanceof DOMException && err.name === 'AbortError' ? `TIMEOUT` : (err instanceof Error ? err.message : String(err));
