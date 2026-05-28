@@ -80,6 +80,7 @@ export async function terminateFFmpeg(): Promise<void> {
     preProcessCache.clear();
     vpsFileCache.clear();
     vpsCacheIdMap.clear();
+    vpsPreprocessPromises.clear();
     cacheCounter = 0;
     clearFetchFileCache();
     console.log('[VideoProcessor] 🔴 FFmpeg terminated');
@@ -625,6 +626,17 @@ async function vpsConcatenateFiles(
 ): Promise<string | null> {
   try {
     const formData = new FormData();
+
+    // If the 7s pre-process window released while uploads were still running,
+    // reuse those in-flight uploads here instead of uploading the same bytes again.
+    if (settings.preProcess) {
+      const comboFiles = [combination.hook.file, combination.body.file, combination.cta.file];
+      await Promise.all(comboFiles.map(async (file) => {
+        if (vpsCacheIdMap.has(file) || vpsFileCache.has(file)) return;
+        const pending = vpsPreprocessPromises.get(file);
+        if (pending) await pending.catch(() => null);
+      }));
+    }
 
     // ─── FAST PATH: all 3 files cached on VPS by ID → zero re-upload ───
     const hookId = vpsCacheIdMap.get(combination.hook.file);
