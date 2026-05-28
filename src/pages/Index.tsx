@@ -580,21 +580,19 @@ const Index = () => {
               })()}
             </div>
 
-            {/* Processing Settings */}
-            {preprocessingDone && (
-              <ProcessingSettingsPanel
-                settings={settings}
-                onChange={setSettings}
-                disabled={isProcessing}
-              />
-            )}
+            {/* Processing Settings - sempre visível, pré-processamento é opcional */}
+            <ProcessingSettingsPanel
+              settings={settings}
+              onChange={setSettings}
+              disabled={isProcessing}
+            />
 
             {/* Generate / Cancel buttons */}
             <div className="flex flex-col items-center gap-3">
               <Button
                 size="lg"
                 className="w-full px-12 py-6 text-base font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-xl gap-2 disabled:opacity-40"
-                disabled={!preprocessingDone || isProcessing}
+                disabled={!canProcess || isProcessing}
                 onClick={handleProcess}
               >
                 {isProcessing ? (
@@ -611,7 +609,7 @@ const Index = () => {
               </Button>
               {!preprocessingDone && canProcess && (
                 <p className="text-xs text-muted-foreground text-center">
-                  Pré-processe todas as seções acima para habilitar a geração
+                  O pré-processamento é opcional — clique em "Gerar Criativos" para começar direto.
                 </p>
               )}
               {isProcessing && (
