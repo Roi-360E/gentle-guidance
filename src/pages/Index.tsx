@@ -172,12 +172,12 @@ const Index = () => {
   // Turbo mode uses the VPS fast path; loading WASM here competes for bandwidth/CPU.
   useEffect(() => {
     const totalFiles = hooks.length + bodies.length + ctas.length;
-    if (totalFiles > 0 && !settings.useCloud && !settings.preProcess) {
+    if (totalFiles > 0 && !settings.preProcess) {
       getFFmpeg().then(() => {
         console.log('[Index] 🔥 FFmpeg eagerly pre-loaded for fast preprocessing');
       }).catch(() => {});
     }
-  }, [hooks.length > 0 || bodies.length > 0 || ctas.length > 0, settings.useCloud, settings.preProcess]);
+  }, [hooks.length > 0 || bodies.length > 0 || ctas.length > 0, settings.preProcess]);
 
   useEffect(() => {
     if (settings.preProcess && settings.resolution !== 'original') {
