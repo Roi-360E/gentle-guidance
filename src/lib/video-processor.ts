@@ -330,6 +330,8 @@ type VpsPreprocessResult =
   | null;
 
 const PREPROCESS_UI_BUDGET_MS = 7000;
+const CONCAT_QUEUE_BUDGET_MS = 55_000;
+const CONCAT_PENDING_UPLOAD_BUDGET_MS = 18_000;
 
 async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<VpsPreprocessResult> {
   const fileStart = performance.now();
@@ -623,6 +625,8 @@ async function vpsConcatenateFiles(
   combination: Combination,
   settings: ProcessingSettings,
   onProgress?: (progress: number) => void,
+  deadlineAt?: number,
+  allowRawUpload = true,
 ): Promise<string | null> {
   try {
     const formData = new FormData();
@@ -633,11 +637,20 @@ async function vpsConcatenateFiles(
     // uploads for unique files so each file is sent to VPS only ONCE.
     {
       const comboFiles = [combination.hook.file, combination.body.file, combination.cta.file];
-      await Promise.all(comboFiles.map(async (file) => {
+      const waitBudget = deadlineAt
+        ? Math.min(CONCAT_PENDING_UPLOAD_BUDGET_MS, Math.max(0, deadlineAt - performance.now()))
+        : CONCAT_PENDING_UPLOAD_BUDGET_MS;
+      if (waitBudget <= 0) return null;
+
+      const waitResults = await Promise.all(comboFiles.map(async (file) => {
         if (vpsCacheIdMap.has(file) || vpsFileCache.has(file)) return;
         const pending = vpsPreprocessPromises.get(file);
-        if (pending) await pending.catch(() => null);
+        if (pending) return waitForUiBudget(pending.catch(() => null), waitBudget);
       }));
+      if (waitResults.includes('budget-exceeded')) {
+        console.warn(`[VPS-Concat] ⏱️ combo ${combination.id}: upload cache ainda não terminou; pulando para manter limite de 1 minuto`);
+        return null;
+      }
     }
 
     // ─── FAST PATH: all 3 files cached on VPS by ID → zero re-upload ───
@@ -654,6 +667,12 @@ async function vpsConcatenateFiles(
       formData.append('crf', '23');
       console.log(`[VPS-Concat] ⚡ combo ${combination.id}: using cached IDs (no upload)`);
     } else {
+      const allCachedAsFiles = [combination.hook.file, combination.body.file, combination.cta.file].every(file => vpsFileCache.has(file));
+      if (!allowRawUpload && !allCachedAsFiles) {
+        console.warn(`[VPS-Concat] ⏭️ combo ${combination.id}: sem cache pronto; re-upload bruto bloqueado para não passar de 1 minuto`);
+        return null;
+      }
+
       // Fallback: send files (legacy/non-cached path)
       const hookFile = vpsFileCache.get(combination.hook.file) || combination.hook.file;
       const bodyFile = vpsFileCache.get(combination.body.file) || combination.body.file;
@@ -678,9 +697,9 @@ async function vpsConcatenateFiles(
 
     const controller = new AbortController();
     // FAST PATH (IDs cacheados, zero upload): 10s sobra de folga pro stream-copy nativo.
-    // SLOW PATH (upload de 3 arquivos): 90s pra dar margem em vídeos grandes
-    // (sem pré-processo, o usuário escolheu enviar bytes brutos por combo).
-    const timeoutMs = allCachedById ? 10000 : 90000;
+    // SLOW PATH: no máximo 45s e sempre limitado pelo orçamento global de 1 minuto.
+    const remainingQueueTime = deadlineAt ? Math.max(5_000, deadlineAt - performance.now()) : Infinity;
+    const timeoutMs = Math.min(allCachedById ? 10000 : 45000, remainingQueueTime);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     // Simulação suave: avança em passos menores e mais frequentes pra dar
@@ -727,7 +746,7 @@ async function vpsConcatenateFiles(
   } catch (err) {
     const isTimeout = err instanceof DOMException && err.name === 'AbortError';
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${isTimeout ? 'TIMEOUT (VPS não respondeu em 25s — provavelmente offline)' : msg}`);
+    console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${isTimeout ? 'TIMEOUT no orçamento de 1 minuto' : msg}`);
     return null;
   }
 }
@@ -1050,6 +1069,7 @@ export async function processQueue(
       `%c[VideoProcessor] ═══ Phase 2: Concatenating ${expectedCount} combinations (ALL must succeed) ═══`,
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
+    const queueDeadlineAt = performance.now() + CONCAT_QUEUE_BUDGET_MS;
 
     // ─── IMPLICIT DEDUP UPLOAD: even when preProcess=false, upload each unique
     // file to VPS ONCE (fire-and-forget). Without this, every combo re-uploads
@@ -1068,9 +1088,29 @@ export async function processQueue(
       }
     }
 
+    // Give the dedup uploads a bounded head start, but never let this phase eat
+    // the full minute. Once IDs are ready, every combination uses zero re-upload.
+    {
+      const pendingUploads = Array.from(uniqueFiles)
+        .filter(f => !vpsCacheIdMap.has(f) && !vpsFileCache.has(f))
+        .map(f => vpsPreprocessPromises.get(f))
+        .filter((p): p is Promise<VpsPreprocessResult> => !!p);
+      if (pendingUploads.length > 0) {
+        const uploadWaitMs = Math.min(40_000, Math.max(0, queueDeadlineAt - performance.now() - 15_000));
+        if (uploadWaitMs > 0) {
+          console.log(`[VideoProcessor] ⏱️ Aguardando cache VPS pronto por até ${Math.round(uploadWaitMs / 1000)}s para não re-upar por combo`);
+          const uploadResult = await waitForUiBudget(Promise.all(pendingUploads.map(p => p.catch(() => null))), uploadWaitMs);
+          if (uploadResult === 'budget-exceeded') {
+            console.warn('[VideoProcessor] ⏱️ Cache VPS ainda incompleto; combos sem cache serão interrompidos para respeitar 1 minuto');
+          }
+        }
+      }
+    }
+
     // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
     // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
     let useVpsSequential = true;
+    let vpsFailedCount = 0;
 
     if (useVpsSequential) {
       const hasCacheIds = vpsCacheIdMap.size > 0 || vpsPreprocessPromises.size > 0;
@@ -1105,7 +1145,8 @@ export async function processQueue(
 
           try {
             console.log(`[VideoProcessor] 🎬 [W${workerId}] [${i + 1}/${combinations.length}] VPS concat: ${combo.outputName}`);
-            const url = await vpsConcatenateFiles(combo, settings);
+            const allowRawUpload = combinations.length <= 1;
+            const url = await vpsConcatenateFiles(combo, settings, undefined, queueDeadlineAt, allowRawUpload);
             if (url) {
               combo.status = 'done';
               combo.outputUrl = url;
@@ -1127,6 +1168,7 @@ export async function processQueue(
 
       const workers = Array.from({ length: Math.min(VPS_CONCURRENCY, combinations.length) }, (_, idx) => worker(idx + 1));
       await Promise.all(workers);
+      vpsFailedCount = failedCount;
 
       if (failedCount >= FAIL_THRESHOLD) {
         console.log(`[VideoProcessor] 📦 VPS instável (${failedCount} falhas), restante via WASM`);
@@ -1140,7 +1182,17 @@ export async function processQueue(
     // ─── Sequential fallback for remaining/failed combos ───
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
-      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially`);
+      const timeLeft = queueDeadlineAt - performance.now();
+      if (timeLeft < 15_000 || vpsFailedCount > 0) {
+        console.warn(`[VideoProcessor] ⏱️ Limite de 1 minuto protegido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
+        for (const combo of remaining) {
+          combo.status = 'error';
+          combo.errorMessage = 'Tempo limite de 1 minuto protegido. Faça o pré-processamento/cache dos vídeos e tente novamente.';
+        }
+        onUpdate([...combinations]);
+        return;
+      }
+      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially (timeLeft=${Math.round(timeLeft / 1000)}s)`);
     }
 
     // Hydrate all VPS-preprocessed files to WASM cache once before sequential processing
