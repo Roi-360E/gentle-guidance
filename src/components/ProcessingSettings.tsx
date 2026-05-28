@@ -39,7 +39,7 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
           <Select
             value={settings.resolution}
             onValueChange={(v) => onChange({ ...settings, resolution: v as ResolutionPreset })}
-            disabled={disabled}
+            disabled={disabled || settings.preProcess}
           >
             <SelectTrigger>
               <SelectValue />
@@ -66,7 +66,7 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
             />
             <span className="text-sm text-muted-foreground">
               {settings.preProcess
-                ? 'Normalizar vídeos antes de concatenar (recomendado)'
+                ? 'Modo turbo: cache rápido em até 7s, sem reescalar vídeos'
                 : 'Concatenação direta (pode falhar com formatos diferentes)'}
             </span>
           </div>
