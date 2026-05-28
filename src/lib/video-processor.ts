@@ -330,7 +330,8 @@ type VpsPreprocessResult =
   | null;
 
 const PREPROCESS_UI_BUDGET_MS = 7000;
-const CONCAT_QUEUE_BUDGET_MS = 55_000;
+const CONCAT_QUEUE_TARGET_MS = 55_000;
+const CONCAT_QUEUE_HARD_LIMIT_MS = 120_000;
 const CONCAT_PENDING_UPLOAD_BUDGET_MS = 18_000;
 const VPS_BASE_URL = 'https://api.deploysites.online';
 const VPS_PREPROCESS_URL = `${VPS_BASE_URL}/preprocess`;
@@ -687,8 +688,11 @@ async function vpsConcatenateFiles(
         if (pending) return waitForUiBudget(pending.catch(() => null), waitBudget);
       }));
       if (waitResults.includes('budget-exceeded')) {
-        console.warn(`[VPS-Concat] ⏱️ combo ${combination.id}: upload cache ainda não terminou; pulando para manter limite de 1 minuto`);
-        return null;
+        if (!allowRawUpload) {
+          console.warn(`[VPS-Concat] ⏱️ combo ${combination.id}: upload cache ainda não terminou; pulando raw upload`);
+          return null;
+        }
+        console.warn(`[VPS-Concat] ⏱️ combo ${combination.id}: cache ainda não terminou; tentando upload direto para não gerar erro automático`);
       }
     }
 
@@ -1106,7 +1110,8 @@ export async function processQueue(
       `%c[VideoProcessor] ═══ Phase 2: Concatenating ${expectedCount} combinations (ALL must succeed) ═══`,
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
-    const queueDeadlineAt = performance.now() + CONCAT_QUEUE_BUDGET_MS;
+    const queueTargetAt = performance.now() + CONCAT_QUEUE_TARGET_MS;
+    const queueHardDeadlineAt = performance.now() + CONCAT_QUEUE_HARD_LIMIT_MS;
     const vpsAvailableAtStart = await isVpsReachable(2500, true);
 
     if (!vpsAvailableAtStart) {
@@ -1145,12 +1150,12 @@ export async function processQueue(
         .map(f => vpsPreprocessPromises.get(f))
         .filter((p): p is Promise<VpsPreprocessResult> => !!p);
       if (pendingUploads.length > 0) {
-        const uploadWaitMs = Math.min(40_000, Math.max(0, queueDeadlineAt - performance.now() - 15_000));
+        const uploadWaitMs = Math.min(40_000, Math.max(0, queueTargetAt - performance.now() - 15_000));
         if (uploadWaitMs > 0) {
           console.log(`[VideoProcessor] ⏱️ Aguardando cache VPS pronto por até ${Math.round(uploadWaitMs / 1000)}s para não re-upar por combo`);
           const uploadResult = await waitForUiBudget(Promise.all(pendingUploads.map(p => p.catch(() => null))), uploadWaitMs);
           if (uploadResult === 'budget-exceeded') {
-            console.warn('[VideoProcessor] ⏱️ Cache VPS ainda incompleto; combos sem cache serão interrompidos para respeitar 1 minuto');
+            console.warn('[VideoProcessor] ⏱️ Cache VPS ainda incompleto; combos sem cache tentarão upload direto em vez de erro imediato');
           }
         }
       }
@@ -1194,8 +1199,9 @@ export async function processQueue(
 
           try {
             console.log(`[VideoProcessor] 🎬 [W${workerId}] [${i + 1}/${combinations.length}] VPS concat: ${combo.outputName}`);
-            const allowRawUpload = combinations.length <= 1;
-            const url = await vpsConcatenateFiles(combo, settings, undefined, queueDeadlineAt, allowRawUpload);
+            // Keep raw-upload fallback enabled: when cache IDs are not ready, the
+            // combo must still be attempted instead of becoming an instant error.
+            const url = await vpsConcatenateFiles(combo, settings, undefined, queueHardDeadlineAt, true);
             if (url) {
               combo.status = 'done';
               combo.outputUrl = url;
@@ -1231,12 +1237,12 @@ export async function processQueue(
     // ─── Sequential fallback for remaining/failed combos ───
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
-      const timeLeft = queueDeadlineAt - performance.now();
-      if (timeLeft < 15_000 || vpsFailedCount > 0) {
-        console.warn(`[VideoProcessor] ⏱️ Limite de 1 minuto protegido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
+      const timeLeft = queueHardDeadlineAt - performance.now();
+      if (timeLeft < 15_000 || vpsFailedCount >= Math.max(3, Math.ceil(combinations.length * 0.5))) {
+        console.warn(`[VideoProcessor] ⏱️ Limite de segurança atingido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
         for (const combo of remaining) {
           combo.status = 'error';
-          combo.errorMessage = 'Tempo limite de 1 minuto protegido. Faça o pré-processamento/cache dos vídeos e tente novamente.';
+          combo.errorMessage = 'Servidor de vídeo não respondeu a tempo. Tente ativar o pré-processamento ou envie vídeos menores.';
         }
         onUpdate([...combinations]);
         return;

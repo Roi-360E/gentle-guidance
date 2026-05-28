@@ -137,7 +137,11 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
           const shouldUseCloudFallback = !controller.signal.aborted
             && combos.length > 0
-            && combos.every(c => c.status === 'error' && c.errorMessage?.includes('Servidor de vídeo indisponível'));
+            && combos.every(c => c.status !== 'done')
+            && combos.some(c => {
+              const msg = c.errorMessage || '';
+              return msg.includes('Servidor de vídeo') || msg.includes('VPS') || msg.includes('TIMEOUT') || msg.includes('tempo');
+            });
 
           if (shouldUseCloudFallback) {
             toast.warning('Servidor principal indisponível. Tentando processamento reserva automaticamente...');
