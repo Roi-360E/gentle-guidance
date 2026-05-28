@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { MessageSquare, Send, Loader2, Plus, Trash2, X, Copy, Check, Mic, Square, PhoneCall, PhoneOff, Volume2 } from 'lucide-react';
@@ -1264,12 +1265,19 @@ export function ScriptChatFloat() {
                 onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
                 className="flex gap-2"
               >
-                <Input
+                <Textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Descreva seu vídeo..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="Descreva seu vídeo... (Shift+Enter para nova linha)"
                   disabled={isLoading || isRecording || isTranscribing}
-                  className="flex-1"
+                  rows={1}
+                  className="flex-1 min-h-[40px] max-h-[200px] resize-none py-2 leading-relaxed"
                 />
                 <Button
                   type="button"
