@@ -131,7 +131,7 @@ export const defaultSettings: ProcessingSettings = {
   // to upload/cache only and lets VPS concat use the fast stream-copy path.
   resolution: 'original',
   batchSize: 3,
-  preProcess: true,
+  preProcess: false,
   videoFormat: '9:16',
 };
 
@@ -332,10 +332,48 @@ type VpsPreprocessResult =
 const PREPROCESS_UI_BUDGET_MS = 7000;
 const CONCAT_QUEUE_BUDGET_MS = 55_000;
 const CONCAT_PENDING_UPLOAD_BUDGET_MS = 18_000;
+const VPS_BASE_URL = 'https://api.deploysites.online';
+const VPS_PREPROCESS_URL = `${VPS_BASE_URL}/preprocess`;
+const VPS_CONCAT_URL = `${VPS_BASE_URL}/concat`;
+const VPS_HEALTH_CACHE_MS = 15_000;
+let vpsHealthCache: { ok: boolean; checkedAt: number } | null = null;
+
+async function isVpsReachable(timeoutMs = 2500, force = false): Promise<boolean> {
+  const now = performance.now();
+  if (!force && vpsHealthCache && now - vpsHealthCache.checkedAt < VPS_HEALTH_CACHE_MS) {
+    return vpsHealthCache.ok;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // Empty POST: healthy Flask returns a fast 400 (no video file). Network
+    // timeout/refused means the VPS/tunnel is down, so fail fast instead of
+    // spawning dozens of long /preprocess and /concat requests.
+    const res = await fetch(VPS_PREPROCESS_URL, {
+      method: 'POST',
+      body: new FormData(),
+      signal: controller.signal,
+    });
+    const ok = res.status < 500;
+    vpsHealthCache = { ok, checkedAt: performance.now() };
+    return ok;
+  } catch {
+    vpsHealthCache = { ok: false, checkedAt: performance.now() };
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<VpsPreprocessResult> {
   const fileStart = performance.now();
   try {
+    if (!(await isVpsReachable())) {
+      console.warn(`[VPS-Preprocess] ⚠️ VPS indisponível; não vou iniciar upload de ${file.name}`);
+      return null;
+    }
+
     const formData = new FormData();
     formData.append('video', file, file.name);
     // Ask VPS to cache the result server-side and return only an ID (no download bytes).
@@ -354,20 +392,16 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
       formData.append('preset', 'ultrafast');
     }
 
-    const url = 'https://api.deploysites.online/preprocess';
-
     const controller = new AbortController();
     const sizeMB = file.size / (1024 * 1024);
-    // Network safety timeout only. The visible UI budget is enforced by
-    // preProcessBatch with Promise.race, without aborting this upload.
-    const timeoutMs = scale
-      ? (120000 + Math.ceil(sizeMB / 10) * 15000)
-      : (120000 + Math.ceil(sizeMB / 10) * 10000);
+    // Keep background uploads bounded; if it cannot upload quickly, it cannot
+    // help the 1-minute concat target and should fail cleanly.
+    const timeoutMs = scale ? 45_000 : 30_000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB, ${scale ? 'scale='+scale : 'passthrough'}) timeout=${(timeoutMs/1000).toFixed(0)}s`);
 
-    const res = await fetch(url, {
+    const res = await fetch(VPS_PREPROCESS_URL, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
