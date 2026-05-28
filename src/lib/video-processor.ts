@@ -1155,7 +1155,7 @@ export async function processQueue(
           console.log(`[VideoProcessor] ⏱️ Aguardando cache VPS pronto por até ${Math.round(uploadWaitMs / 1000)}s para não re-upar por combo`);
           const uploadResult = await waitForUiBudget(Promise.all(pendingUploads.map(p => p.catch(() => null))), uploadWaitMs);
           if (uploadResult === 'budget-exceeded') {
-            console.warn('[VideoProcessor] ⏱️ Cache VPS ainda incompleto; combos sem cache serão interrompidos para respeitar 1 minuto');
+            console.warn('[VideoProcessor] ⏱️ Cache VPS ainda incompleto; combos sem cache tentarão upload direto em vez de erro imediato');
           }
         }
       }
