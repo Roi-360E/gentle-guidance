@@ -1,41 +1,60 @@
-name: Deploy na VPS Integrator
+name: Deploy Lovable via FTP na Hostinger
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      VITE_SUPABASE_URL: "https://agiazdqztkagivnenomq.supabase.co"
-      VITE_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnaWF6ZHF6dGthZ2l2bmVub21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5MjI5MTAsImV4cCI6MjA4NjQ5ODkxMH0.E78QYVqCO4KC_QQVjpkfiMYWDTC63ss0QcKyF2IOfUo"
-      VITE_SUPABASE_PROJECT_ID: "agiazdqztkagivnenomq"
+
     steps:
-      - name: Clonar o repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
-      - name: Instalar dependências
-        run: npm ci
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
 
-      - name: Build do projeto
+      - name: Build
         run: npm run build
-        timeout-minutes: 10
 
-      - name: Deploy via SSH na VPS
-        uses: appleboy/scp-action@v0.1.7
+      - name: Create SPA .htaccess
+        run: |
+          cat > dist/.htaccess << 'EOF'
+          <IfModule mod_rewrite.c>
+            RewriteEngine On
+            RewriteBase /
+            RewriteRule ^index\.html$ - [L]
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteCond %{REQUEST_FILENAME} !-d
+            RewriteRule . /index.html [L]
+          </IfModule>
+          EOF
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "dist/*"
-          target: "/var/www/app.escalaxpro.com/"
-          strip_components: 1
-          rm: true
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          protocol: ftp
+          port: 21
+          local-dir: dist/
+          server-dir: /
+          timeout: 120000
+          dangerous-clean-slate: false
+          dry-run: false
+          log-level: verbose
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
+
