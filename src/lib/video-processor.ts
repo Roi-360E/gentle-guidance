@@ -436,9 +436,9 @@ export async function preProcessBatch(
 
   const totalStart = performance.now();
   // Concurrency: a VPS está atrás de Cloudflare (HTTP/2 multiplexado) — sem limite
-  // de 6 conexões por host. Subimos para 12 paralelos pra saturar a banda de upload
-  // e reduzir drasticamente o tempo total quando há muitos arquivos pequenos.
-  const CONCURRENCY = Math.min(12, uncachedIndices.length);
+  // de 6 conexões por host. Subimos para 24 paralelos para saturar a banda de
+  // upload e reduzir drasticamente o tempo total quando há muitos arquivos.
+  const CONCURRENCY = Math.min(24, uncachedIndices.length);
   console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (concurrency=${CONCURRENCY})`);
 
   const failedIndices: number[] = [];
