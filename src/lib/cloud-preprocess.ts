@@ -4,6 +4,13 @@ import type { ProcessingSettings } from "./video-processor";
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transloadit-process`;
 const MAX_POLL_ATTEMPTS = 120; // 6 min max per file
 
+function getCloudPreprocessError(data: { error?: string; errorCode?: string; details?: string }) {
+  if (data.errorCode === "TRANSLOADIT_AUTH_ERROR") {
+    return "Pré-processamento em nuvem indisponível: a chave Transloadit configurada é de SmartCDN e não serve para processar vídeos.";
+  }
+  return data.error || data.details || "Pré-processamento em nuvem indisponível.";
+}
+
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Você precisa estar logado para usar o processamento em nuvem.");
@@ -51,6 +58,9 @@ async function pollPreprocessAssembly(
     }
 
     const data = await res.json();
+    if (data?.ok === false || data?.fallback === true) {
+      throw new Error(getCloudPreprocessError(data));
+    }
     if (data.progress) onProgress?.(data.progress);
 
     if (data.status === "ASSEMBLY_COMPLETED") {
@@ -133,7 +143,11 @@ export async function cloudPreprocessFiles(
     throw new Error(errData.error || `Preprocess creation failed: ${createRes.status}`);
   }
 
-  const { assemblies } = await createRes.json();
+  const createData = await createRes.json();
+  if (createData?.ok === false || createData?.fallback === true) {
+    throw new Error(getCloudPreprocessError(createData));
+  }
+  const { assemblies } = createData;
 
   // Phase 3: Poll all assemblies in parallel
   console.log(`[CloudPreprocess] 🔄 Waiting for ${assemblies.length} normalizations...`);
