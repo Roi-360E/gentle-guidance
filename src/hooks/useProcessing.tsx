@@ -128,17 +128,30 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
     abortRef.current = controller;
     const batchId = Date.now().toString();
 
-    const processFn = settings.useCloud ? processQueueCloud : processQueue;
-
     (async () => {
       try {
-        await processFn(
-          combos,
-          settings,
-          (updated) => setCombinations([...updated]),
-          (p) => setCurrentProgress(p),
-          controller.signal
-        );
+        if (settings.useCloud) {
+          await processQueueCloud(combos, settings, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
+        } else {
+          await processQueue(combos, settings, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
+
+          const shouldUseCloudFallback = !controller.signal.aborted
+            && combos.length > 0
+            && combos.every(c => c.status === 'error' && c.errorMessage?.includes('Servidor de vídeo indisponível'));
+
+          if (shouldUseCloudFallback) {
+            toast.warning('Servidor principal indisponível. Tentando processamento reserva automaticamente...');
+            combos.forEach(c => {
+              c.status = 'pending';
+              c.errorMessage = undefined;
+              c.outputUrl = undefined;
+            });
+            setCombinations([...combos]);
+            setCurrentProgress(0);
+            setProcessingPhase('Usando processamento reserva...');
+            await processQueueCloud(combos, settings, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
+          }
+        }
       } catch (err) {
         console.error('[Processing] Error:', err);
       }
