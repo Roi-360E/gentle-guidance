@@ -1028,6 +1028,7 @@ export async function processQueue(
     terminateFFmpeg();
   };
   abortSignal?.addEventListener('abort', onAbort, { once: true });
+  const queueDeadlineAt = performance.now() + CONCAT_QUEUE_BUDGET_MS;
 
   try {
     // Phase 0: Skip pre-loading if files already in cache (from preProcessBatch)
@@ -1125,7 +1126,8 @@ export async function processQueue(
 
           try {
             console.log(`[VideoProcessor] 🎬 [W${workerId}] [${i + 1}/${combinations.length}] VPS concat: ${combo.outputName}`);
-            const url = await vpsConcatenateFiles(combo, settings);
+            const allowRawUpload = combinations.length <= 1;
+            const url = await vpsConcatenateFiles(combo, settings, undefined, queueDeadlineAt, allowRawUpload);
             if (url) {
               combo.status = 'done';
               combo.outputUrl = url;
@@ -1160,7 +1162,17 @@ export async function processQueue(
     // ─── Sequential fallback for remaining/failed combos ───
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
-      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially`);
+      const timeLeft = queueDeadlineAt - performance.now();
+      if (timeLeft < 15_000 || failedCount > 0) {
+        console.warn(`[VideoProcessor] ⏱️ Limite de 1 minuto protegido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
+        for (const combo of remaining) {
+          combo.status = 'error';
+          combo.errorMessage = 'Tempo limite de 1 minuto protegido. Faça o pré-processamento/cache dos vídeos e tente novamente.';
+        }
+        onUpdate([...combinations]);
+        return;
+      }
+      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially (timeLeft=${Math.round(timeLeft / 1000)}s)`);
     }
 
     // Hydrate all VPS-preprocessed files to WASM cache once before sequential processing
