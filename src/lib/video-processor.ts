@@ -442,8 +442,11 @@ export async function preProcessBatch(
       onFileProgress?.(idx, 'processing', 15);
 
       const result = await vpsPreprocessFile(file, settings);
-      if (result) {
-        vpsFileCache.set(file, result);
+      if (result?.type === 'id') {
+        vpsCacheIdMap.set(file, result.cacheId);
+        onFileProgress?.(idx, 'done', 100);
+      } else if (result?.type === 'file') {
+        vpsFileCache.set(file, result.file);
         onFileProgress?.(idx, 'done', 100);
       } else {
         failedIndices.push(idx);
