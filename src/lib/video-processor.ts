@@ -936,7 +936,7 @@ export async function processQueue(
 
     // Phase 1: Skip if VPS already pre-processed all unique files
     let ff: FFmpeg | null = null;
-    const allVpsCached = Array.from(uniqueFiles).every(f => vpsFileCache.has(f));
+    const allVpsCached = Array.from(uniqueFiles).every(f => vpsCacheIdMap.has(f) || vpsFileCache.has(f));
     const allLocalCached = Array.from(uniqueFiles).every(f => preProcessCache.has(f));
 
     if (settings.preProcess && !allVpsCached && !allLocalCached) {
