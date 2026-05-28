@@ -328,24 +328,32 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const formData = new FormData();
     formData.append('video', file, file.name);
     // Ask VPS to cache the result server-side and return only an ID (no download bytes).
-    // Old VPS versions ignore this and still stream bytes — handled below.
     formData.append('mode', 'cache');
 
-    if (settings) {
-      const scale = getScale(settings);
-      if (scale) formData.append('scale', scale);
+    // ── OTIMIZAÇÃO: se não precisa re-escalar, manda passthrough (zero re-encode na VPS) ──
+    // Isso reduz o tempo do servidor de ~3-5s/arquivo para ~0.3-0.8s/arquivo (só I/O).
+    const scale = settings ? getScale(settings) : null;
+    if (scale) {
+      formData.append('scale', scale);
       formData.append('preset', 'ultrafast');
       formData.append('crf', '28');
+    } else {
+      // Sem reescala: VPS apenas remuxa pra MP4 fragmentado (rápido) ou copia direto.
+      formData.append('passthrough', '1');
+      formData.append('preset', 'ultrafast');
     }
 
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
     const sizeMB = file.size / (1024 * 1024);
-    const timeoutMs = 60000 + Math.ceil(sizeMB / 10) * 10000;
+    // Timeout adaptativo: 30s base + 5s por 10MB (passthrough é bem mais rápido).
+    const timeoutMs = scale
+      ? (60000 + Math.ceil(sizeMB / 10) * 10000)
+      : (30000 + Math.ceil(sizeMB / 10) * 5000);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB) timeout=${(timeoutMs/1000).toFixed(0)}s`);
+    console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB, ${scale ? 'scale='+scale : 'passthrough'}) timeout=${(timeoutMs/1000).toFixed(0)}s`);
 
     const res = await fetch(url, {
       method: 'POST',
