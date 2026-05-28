@@ -427,9 +427,10 @@ export async function preProcessBatch(
   }
 
   const totalStart = performance.now();
-  // Concurrency: HTTP/1.1 permite ~6 conexões paralelas por host. Subimos para 6 para
-  // saturar a banda de upload disponível e reduzir o tempo total de pré-processamento.
-  const CONCURRENCY = 6;
+  // Concurrency: a VPS está atrás de Cloudflare (HTTP/2 multiplexado) — sem limite
+  // de 6 conexões por host. Subimos para 12 paralelos pra saturar a banda de upload
+  // e reduzir drasticamente o tempo total quando há muitos arquivos pequenos.
+  const CONCURRENCY = Math.min(12, uncachedIndices.length);
   console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (concurrency=${CONCURRENCY})`);
 
   const failedIndices: number[] = [];
