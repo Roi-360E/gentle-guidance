@@ -15,7 +15,7 @@ interface VideoPreviewDialogProps {
 export function VideoPreviewDialog({ open, onOpenChange, videoUrl, title }: VideoPreviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-fit w-auto bg-background p-4">
         <DialogHeader>
           <DialogTitle className="text-sm font-mono">{title}</DialogTitle>
         </DialogHeader>
@@ -24,8 +24,8 @@ export function VideoPreviewDialog({ open, onOpenChange, videoUrl, title }: Vide
             src={videoUrl}
             controls
             autoPlay
-            className="w-full rounded-lg bg-black"
-            style={{ maxHeight: '70vh' }}
+            className="rounded-lg bg-black block"
+            style={{ maxHeight: '80vh', maxWidth: '90vw', height: 'auto', width: 'auto' }}
           />
         )}
       </DialogContent>
