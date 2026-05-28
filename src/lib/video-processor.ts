@@ -627,9 +627,11 @@ async function vpsConcatenateFiles(
   try {
     const formData = new FormData();
 
-    // If the 7s pre-process window released while uploads were still running,
-    // reuse those in-flight uploads here instead of uploading the same bytes again.
-    if (settings.preProcess) {
+    // Always reuse in-flight VPS uploads (dedup): if another combo is already
+    // uploading the same file, wait for it instead of uploading bytes again.
+    // This applies even when preProcess=false — the queue kicks off implicit
+    // uploads for unique files so each file is sent to VPS only ONCE.
+    {
       const comboFiles = [combination.hook.file, combination.body.file, combination.cta.file];
       await Promise.all(comboFiles.map(async (file) => {
         if (vpsCacheIdMap.has(file) || vpsFileCache.has(file)) return;
