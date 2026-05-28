@@ -1150,7 +1150,7 @@ export async function processQueue(
         .map(f => vpsPreprocessPromises.get(f))
         .filter((p): p is Promise<VpsPreprocessResult> => !!p);
       if (pendingUploads.length > 0) {
-          const uploadWaitMs = Math.min(40_000, Math.max(0, queueTargetAt - performance.now() - 15_000));
+        const uploadWaitMs = Math.min(40_000, Math.max(0, queueTargetAt - performance.now() - 15_000));
         if (uploadWaitMs > 0) {
           console.log(`[VideoProcessor] ⏱️ Aguardando cache VPS pronto por até ${Math.round(uploadWaitMs / 1000)}s para não re-upar por combo`);
           const uploadResult = await waitForUiBudget(Promise.all(pendingUploads.map(p => p.catch(() => null))), uploadWaitMs);
