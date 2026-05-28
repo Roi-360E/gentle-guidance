@@ -61,9 +61,11 @@ def preprocess_video():
 
     try:
         if scale:
+            w, h = scale.split(':')
+            vf = f'scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1'
             cmd = [
                 'ffmpeg', '-i', input_path,
-                '-vf', f'scale={scale},setsar=1',
+                '-vf', vf,
                 '-c:v', 'libx264', '-preset', preset, '-profile:v', 'main',
                 '-pix_fmt', 'yuv420p', '-crf', crf,
                 '-maxrate', '2500k', '-bufsize', '5000k',
