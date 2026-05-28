@@ -153,7 +153,9 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
           const doneCount = combos.filter(c => c.status === 'done').length;
           const errorCount = combos.filter(c => c.status === 'error').length;
 
-          // Save completed videos to downloads + IndexedDB
+          // Add completed videos to downloads immediately. Persisting large blobs in
+          // IndexedDB can take a long time, so it runs in the background and no
+          // longer keeps "Gerar Criativos" stuck after concat finishes.
           const newDownloads: DownloadedVideo[] = [];
 
           for (const c of combos) {
@@ -166,10 +168,14 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
                 batchId,
               };
               newDownloads.push(vid);
-
-              // Persist blob to IndexedDB
+            }
+          }
+          
+          if (newDownloads.length > 0) {
+            setDownloadedVideos(prev => [...newDownloads, ...prev]);
+            void Promise.allSettled(newDownloads.map(async (vid) => {
               try {
-                const response = await fetch(c.outputUrl);
+                const response = await fetch(vid.url);
                 const blob = await response.blob();
                 await saveVideoToDB({
                   id: vid.id,
@@ -179,13 +185,9 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
                   batchId: vid.batchId,
                 });
               } catch (err) {
-                console.warn(`[Downloads] Failed to persist ${c.outputName} to IndexedDB:`, err);
+                console.warn(`[Downloads] Failed to persist ${vid.name} to IndexedDB:`, err);
               }
-            }
-          }
-          
-          if (newDownloads.length > 0) {
-            setDownloadedVideos(prev => [...newDownloads, ...prev]);
+            }));
           }
 
           // Debit tokens
