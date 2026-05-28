@@ -627,9 +627,11 @@ async function vpsConcatenateFiles(
   try {
     const formData = new FormData();
 
-    // If the 7s pre-process window released while uploads were still running,
-    // reuse those in-flight uploads here instead of uploading the same bytes again.
-    if (settings.preProcess) {
+    // Always reuse in-flight VPS uploads (dedup): if another combo is already
+    // uploading the same file, wait for it instead of uploading bytes again.
+    // This applies even when preProcess=false — the queue kicks off implicit
+    // uploads for unique files so each file is sent to VPS only ONCE.
+    {
       const comboFiles = [combination.hook.file, combination.body.file, combination.cta.file];
       await Promise.all(comboFiles.map(async (file) => {
         if (vpsCacheIdMap.has(file) || vpsFileCache.has(file)) return;
@@ -1049,19 +1051,33 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
+    // ─── IMPLICIT DEDUP UPLOAD: even when preProcess=false, upload each unique
+    // file to VPS ONCE (fire-and-forget). Without this, every combo re-uploads
+    // the same 3 files → 18 combos × 3 = 54 uploads. With dedup, only N unique
+    // files are sent (e.g. 8), saving ~60s+ of bandwidth time.
+    {
+      const allUnique = Array.from(uniqueFiles).filter(
+        f => !vpsCacheIdMap.has(f) && !vpsFileCache.has(f) && !vpsPreprocessPromises.has(f)
+      );
+      if (allUnique.length > 0) {
+        console.log(`[VideoProcessor] 📤 Implicit dedup upload: ${allUnique.length} unique files → VPS (parallel)`);
+        // Fire-and-forget; vpsConcatenateFiles will await per-file in-flight promises.
+        for (const f of allUnique) {
+          getOrStartVpsPreprocess(f, settings).catch(() => null);
+        }
+      }
+    }
+
     // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
     // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
-    // Subimos a concorrência drasticamente pra reduzir o tempo total em ~60s
-    // em filas médias (10-20 combos): em vez de subir 3 arquivos por vez em
-    // séries de 4, agora subimos 16 combos em paralelo saturando a banda.
     let useVpsSequential = true;
 
     if (useVpsSequential) {
       const hasCacheIds = vpsCacheIdMap.size > 0 || vpsPreprocessPromises.size > 0;
-      // FAST PATH (IDs cacheados, zero upload na VPS): 16 paralelos.
-      // SLOW PATH (upload de 3 arquivos por combo): 12 paralelos —
-      // HTTP/2 multiplexa numa única conexão TCP, então mais workers = mais throughput.
-      const VPS_CONCURRENCY = hasCacheIds ? 16 : 12;
+      // FAST PATH (IDs cacheados, zero upload na VPS): 24 paralelos.
+      // SLOW PATH (ainda subindo): 20 paralelos — HTTP/2 multiplexa numa
+      // única conexão TCP, então mais workers saturam o pipe sem custo.
+      const VPS_CONCURRENCY = hasCacheIds ? 24 : 20;
       console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY} (cacheIds=${hasCacheIds})`);
 
       let completed = 0;
