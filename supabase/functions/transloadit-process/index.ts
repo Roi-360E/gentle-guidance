@@ -296,10 +296,7 @@ serve(async (req) => {
         if (!assemblyRes.ok) {
           const errText = await assemblyRes.text();
           console.error(`Transloadit assembly creation failed [${assemblyRes.status}]:`, errText);
-          return jsonResponse(
-            { error: `Transloadit error: ${assemblyRes.status}`, details: errText },
-            500
-          );
+          return transloaditFailureResponse("create-assembly", assemblyRes.status, errText);
         }
 
         const assemblyData = await assemblyRes.json();
@@ -325,7 +322,7 @@ serve(async (req) => {
 
       if (!statusRes.ok) {
         const errText = await statusRes.text();
-        return jsonResponse({ error: `Status check failed: ${statusRes.status}`, details: errText }, 500);
+        return transloaditFailureResponse("check-status", statusRes.status, errText);
       }
 
       const statusData = await statusRes.json();
@@ -389,8 +386,8 @@ serve(async (req) => {
   } catch (e) {
     console.error("transloadit-process error:", e);
     return jsonResponse(
-      { error: e instanceof Error ? e.message : "Unknown error" },
-      500
+      { ok: false, fallback: true, errorCode: "TRANSLOADIT_FUNCTION_ERROR", error: e instanceof Error ? e.message : "Unknown error" },
+      200
     );
   }
 });
