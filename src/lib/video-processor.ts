@@ -675,17 +675,19 @@ async function vpsConcatenateFiles(
     onProgress?.(15);
 
     const controller = new AbortController();
-    // FAST PATH (IDs cacheados, zero upload): 12s sobra pra stream-copy nativo.
-    // SLOW PATH (upload de arquivos): mantém 25s.
-    const timeoutMs = allCachedById ? 12000 : 25000;
+    // FAST PATH (IDs cacheados, zero upload): 10s sobra de folga pro stream-copy nativo.
+    // SLOW PATH (upload de 3 arquivos): 90s pra dar margem em vídeos grandes
+    // (sem pré-processo, o usuário escolheu enviar bytes brutos por combo).
+    const timeoutMs = allCachedById ? 10000 : 90000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    // Simulação suave: vai até 60% (não 85%) pra não dar falsa sensação de travamento.
+    // Simulação suave: avança em passos menores e mais frequentes pra dar
+    // sensação de fluidez sem chegar a 100% antes do fim real.
     let simProgress = 15;
     const progressTimer = setInterval(() => {
-      simProgress = Math.min(simProgress + 3, 60);
+      simProgress = Math.min(simProgress + 2, 70);
       onProgress?.(simProgress);
-    }, 600);
+    }, 300);
 
     let res: Response;
     try {
@@ -698,7 +700,7 @@ async function vpsConcatenateFiles(
       clearInterval(progressTimer);
       clearTimeout(timeoutId);
     }
-    onProgress?.(75);
+    onProgress?.(85);
 
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
