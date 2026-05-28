@@ -959,7 +959,7 @@ export async function processQueue(
     );
 
     // ─── Try VPS concat SEQUENTIALLY (1, 2, 3...) for predictable ordering ───
-    let useVpsSequential = vpsFileCache.size > 0; // VPS files available = VPS is working
+    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0; // VPS cache available = VPS is working
 
     if (useVpsSequential) {
       console.log(`[VideoProcessor] ⚡ VPS sequential concat: processing ${combinations.length} combos one by one`);
