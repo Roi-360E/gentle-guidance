@@ -79,6 +79,7 @@ export async function terminateFFmpeg(): Promise<void> {
     processedSinceRestart = 0;
     preProcessCache.clear();
     vpsFileCache.clear();
+    vpsCacheIdMap.clear();
     cacheCounter = 0;
     clearFetchFileCache();
     console.log('[VideoProcessor] 🔴 FFmpeg terminated');
@@ -194,8 +195,10 @@ function checkAbort(signal?: AbortSignal): void {
 
 // ─── Pre-processing cache ───────────────────────────────────────────────
 const preProcessCache = new Map<File, string>();
-// Cache of VPS-preprocessed File objects (to avoid sending raw files to VPS concat)
+// Cache of VPS-preprocessed File objects (legacy fallback for old VPS versions)
 const vpsFileCache = new Map<File, File>();
+// Cache of VPS-side IDs — when present, concat can be done by reference (no re-upload!)
+const vpsCacheIdMap = new Map<File, string>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
@@ -306,11 +309,19 @@ export async function preProcessInputCached(
  * Attempt to pre-process a single file via VPS (native FFmpeg = ~1-2s).
  * Returns a File with the preprocessed video, or null on failure.
  */
-async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<File | null> {
+type VpsPreprocessResult =
+  | { type: 'id'; cacheId: string }
+  | { type: 'file'; file: File }
+  | null;
+
+async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<VpsPreprocessResult> {
   const fileStart = performance.now();
   try {
     const formData = new FormData();
     formData.append('video', file, file.name);
+    // Ask VPS to cache the result server-side and return only an ID (no download bytes).
+    // Old VPS versions ignore this and still stream bytes — handled below.
+    formData.append('mode', 'cache');
 
     if (settings) {
       const scale = getScale(settings);
@@ -322,7 +333,6 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     const url = 'https://api.deploysites.online/preprocess';
 
     const controller = new AbortController();
-    // Generous timeout: 60s base + 10s per 10MB (handles slow upload speeds)
     const sizeMB = file.size / (1024 * 1024);
     const timeoutMs = 60000 + Math.ceil(sizeMB / 10) * 10000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -338,11 +348,24 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
     clearTimeout(timeoutId);
 
     const contentType = res.headers.get('content-type') || '';
+
+    // ─── New cache mode: VPS returns JSON with cache_id ───
     if (contentType.includes('application/json')) {
       const data = await res.json();
-      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error}`);
+      if (!res.ok || data.error) {
+        console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${data.error || `HTTP ${res.status}`}`);
+        return null;
+      }
+      if (data.cache_id) {
+        const totalMs = (performance.now() - fileStart).toFixed(0);
+        console.log(`[VPS-Preprocess] ✅ ${file.name}: cached on VPS as ${data.cache_id} in ${totalMs}ms (no download)`);
+        return { type: 'id', cacheId: data.cache_id };
+      }
+      console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: unexpected JSON response`);
       return null;
     }
+
+    // ─── Legacy mode: VPS returned binary (old version without cache support) ───
     if (!res.ok) {
       console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: HTTP ${res.status}`);
       return null;
@@ -356,8 +379,8 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
       return null;
     }
 
-    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${sizeMB.toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms`);
-    return new File([blob], `vps_${file.name}`, { type: 'video/mp4' });
+    console.log(`[VPS-Preprocess] ✅ ${file.name}: ${sizeMB.toFixed(1)}MB→${(blob.size/1024/1024).toFixed(1)}MB in ${totalMs}ms (legacy mode)`);
+    return { type: 'file', file: new File([blob], `vps_${file.name}`, { type: 'video/mp4' }) };
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
     const reason = err instanceof DOMException && err.name === 'AbortError' ? `TIMEOUT` : (err instanceof Error ? err.message : String(err));
@@ -379,10 +402,10 @@ export async function preProcessBatch(
 ): Promise<void> {
   if (files.length === 0) return;
 
-  // Skip files already in VPS cache
+  // Skip files already in any cache (VPS ID, VPS legacy file, or local WASM)
   const uncachedIndices: number[] = [];
   for (let i = 0; i < files.length; i++) {
-    if (vpsFileCache.has(files[i]) || preProcessCache.has(files[i])) {
+    if (vpsCacheIdMap.has(files[i]) || vpsFileCache.has(files[i]) || preProcessCache.has(files[i])) {
       console.log(`[VideoProcessor] ⚡ Cache hit for "${files[i].name}" — skipping`);
       onFileProgress?.(i, 'done', 100);
     } else {
@@ -419,8 +442,11 @@ export async function preProcessBatch(
       onFileProgress?.(idx, 'processing', 15);
 
       const result = await vpsPreprocessFile(file, settings);
-      if (result) {
-        vpsFileCache.set(file, result);
+      if (result?.type === 'id') {
+        vpsCacheIdMap.set(file, result.cacheId);
+        onFileProgress?.(idx, 'done', 100);
+      } else if (result?.type === 'file') {
+        vpsFileCache.set(file, result.file);
         onFileProgress?.(idx, 'done', 100);
       } else {
         failedIndices.push(idx);
@@ -534,25 +560,38 @@ async function vpsConcatenateFiles(
 ): Promise<string | null> {
   try {
     const formData = new FormData();
-    
-    // Use VPS-preprocessed files if available (already normalized), otherwise raw files
-    const hookFile = vpsFileCache.get(combination.hook.file) || combination.hook.file;
-    const bodyFile = vpsFileCache.get(combination.body.file) || combination.body.file;
-    const ctaFile = vpsFileCache.get(combination.cta.file) || combination.cta.file;
-    
-    formData.append('hook', hookFile, hookFile.name);
-    formData.append('body', bodyFile, bodyFile.name);
-    formData.append('cta', ctaFile, ctaFile.name);
 
-    // Only send scale if files weren't pre-processed (raw files need scaling)
-    const hasPreprocessed = vpsFileCache.has(combination.hook.file);
-    if (!hasPreprocessed) {
-      const scale = getScale(settings);
-      if (scale) formData.append('scale', scale);
+    // ─── FAST PATH: all 3 files cached on VPS by ID → zero re-upload ───
+    const hookId = vpsCacheIdMap.get(combination.hook.file);
+    const bodyId = vpsCacheIdMap.get(combination.body.file);
+    const ctaId = vpsCacheIdMap.get(combination.cta.file);
+    const allCachedById = !!(hookId && bodyId && ctaId);
+
+    if (allCachedById) {
+      formData.append('hook_id', hookId!);
+      formData.append('body_id', bodyId!);
+      formData.append('cta_id', ctaId!);
+      formData.append('preset', 'copy');
+      formData.append('crf', '23');
+      console.log(`[VPS-Concat] ⚡ combo ${combination.id}: using cached IDs (no upload)`);
+    } else {
+      // Fallback: send files (legacy/non-cached path)
+      const hookFile = vpsFileCache.get(combination.hook.file) || combination.hook.file;
+      const bodyFile = vpsFileCache.get(combination.body.file) || combination.body.file;
+      const ctaFile = vpsFileCache.get(combination.cta.file) || combination.cta.file;
+
+      formData.append('hook', hookFile, hookFile.name);
+      formData.append('body', bodyFile, bodyFile.name);
+      formData.append('cta', ctaFile, ctaFile.name);
+
+      const hasPreprocessed = vpsFileCache.has(combination.hook.file);
+      if (!hasPreprocessed) {
+        const scale = getScale(settings);
+        if (scale) formData.append('scale', scale);
+      }
+      formData.append('preset', hasPreprocessed ? 'copy' : 'ultrafast');
+      formData.append('crf', '23');
     }
-    // When files are pre-processed, tell VPS to use stream copy (no re-encode)
-    formData.append('preset', hasPreprocessed ? 'copy' : 'ultrafast');
-    formData.append('crf', '23');
 
     const url = 'https://api.deploysites.online/concat';
 
@@ -853,6 +892,7 @@ async function clearCache(): Promise<void> {
   }
   preProcessCache.clear();
   vpsFileCache.clear();
+  vpsCacheIdMap.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
@@ -896,7 +936,7 @@ export async function processQueue(
 
     // Phase 1: Skip if VPS already pre-processed all unique files
     let ff: FFmpeg | null = null;
-    const allVpsCached = Array.from(uniqueFiles).every(f => vpsFileCache.has(f));
+    const allVpsCached = Array.from(uniqueFiles).every(f => vpsCacheIdMap.has(f) || vpsFileCache.has(f));
     const allLocalCached = Array.from(uniqueFiles).every(f => preProcessCache.has(f));
 
     if (settings.preProcess && !allVpsCached && !allLocalCached) {
@@ -919,7 +959,7 @@ export async function processQueue(
     );
 
     // ─── Try VPS concat SEQUENTIALLY (1, 2, 3...) for predictable ordering ───
-    let useVpsSequential = vpsFileCache.size > 0; // VPS files available = VPS is working
+    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0; // VPS cache available = VPS is working
 
     if (useVpsSequential) {
       console.log(`[VideoProcessor] ⚡ VPS sequential concat: processing ${combinations.length} combos one by one`);
