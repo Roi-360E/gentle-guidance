@@ -80,6 +80,7 @@ export async function terminateFFmpeg(): Promise<void> {
     preProcessCache.clear();
     vpsFileCache.clear();
     vpsCacheIdMap.clear();
+    vpsPreprocessPromises.clear();
     cacheCounter = 0;
     clearFetchFileCache();
     console.log('[VideoProcessor] 🔴 FFmpeg terminated');
@@ -125,7 +126,10 @@ export interface ProcessingSettings {
 }
 
 export const defaultSettings: ProcessingSettings = {
-  resolution: '720p',
+  // Turbo default: never re-scale before concat unless the user explicitly asks.
+  // Re-encoding large videos is the main bottleneck; original keeps preprocessing
+  // to upload/cache only and lets VPS concat use the fast stream-copy path.
+  resolution: 'original',
   batchSize: 3,
   preProcess: true,
   videoFormat: '9:16',
@@ -207,6 +211,9 @@ const preProcessCache = new Map<File, string>();
 const vpsFileCache = new Map<File, File>();
 // Cache of VPS-side IDs — when present, concat can be done by reference (no re-upload!)
 const vpsCacheIdMap = new Map<File, string>();
+// In-flight VPS uploads. Prevents duplicate uploads when the user clicks "Gerar"
+// while the 7s UI preprocessing window has already released the button.
+const vpsPreprocessPromises = new Map<File, Promise<VpsPreprocessResult>>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
@@ -322,6 +329,8 @@ type VpsPreprocessResult =
   | { type: 'file'; file: File }
   | null;
 
+const PREPROCESS_UI_BUDGET_MS = 7000;
+
 async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Promise<VpsPreprocessResult> {
   const fileStart = performance.now();
   try {
@@ -347,10 +356,11 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
 
     const controller = new AbortController();
     const sizeMB = file.size / (1024 * 1024);
-    // Timeout adaptativo: 30s base + 5s por 10MB (passthrough é bem mais rápido).
+    // Network safety timeout only. The visible UI budget is enforced by
+    // preProcessBatch with Promise.race, without aborting this upload.
     const timeoutMs = scale
-      ? (60000 + Math.ceil(sizeMB / 10) * 10000)
-      : (30000 + Math.ceil(sizeMB / 10) * 5000);
+      ? (120000 + Math.ceil(sizeMB / 10) * 15000)
+      : (120000 + Math.ceil(sizeMB / 10) * 10000);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     console.log(`[VPS-Preprocess] ⬆️ Uploading ${file.name} (${sizeMB.toFixed(1)}MB, ${scale ? 'scale='+scale : 'passthrough'}) timeout=${(timeoutMs/1000).toFixed(0)}s`);
@@ -400,9 +410,35 @@ async function vpsPreprocessFile(file: File, settings?: ProcessingSettings): Pro
   } catch (err) {
     const totalMs = (performance.now() - fileStart).toFixed(0);
     const reason = err instanceof DOMException && err.name === 'AbortError' ? `TIMEOUT` : (err instanceof Error ? err.message : String(err));
-    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${reason} (${totalMs}ms) — falling back to local`);
+    console.warn(`[VPS-Preprocess] ⚠️ ${file.name}: ${reason} (${totalMs}ms)`);
     return null;
   }
+}
+
+function getOrStartVpsPreprocess(file: File, settings: ProcessingSettings): Promise<VpsPreprocessResult> {
+  const cachedId = vpsCacheIdMap.get(file);
+  if (cachedId) return Promise.resolve({ type: 'id', cacheId: cachedId });
+  const cachedFile = vpsFileCache.get(file);
+  if (cachedFile) return Promise.resolve({ type: 'file', file: cachedFile });
+  const inFlight = vpsPreprocessPromises.get(file);
+  if (inFlight) return inFlight;
+
+  const promise = vpsPreprocessFile(file, settings).then((result) => {
+    if (result?.type === 'id') vpsCacheIdMap.set(file, result.cacheId);
+    if (result?.type === 'file') vpsFileCache.set(file, result.file);
+    return result;
+  }).finally(() => {
+    vpsPreprocessPromises.delete(file);
+  });
+  vpsPreprocessPromises.set(file, promise);
+  return promise;
+}
+
+function waitForUiBudget<T>(promise: Promise<T>, budgetMs = PREPROCESS_UI_BUDGET_MS): Promise<T | 'budget-exceeded'> {
+  return Promise.race([
+    promise,
+    new Promise<'budget-exceeded'>((resolve) => setTimeout(() => resolve('budget-exceeded'), budgetMs)),
+  ]);
 }
 
 /**
@@ -435,6 +471,7 @@ export async function preProcessBatch(
   }
 
   const totalStart = performance.now();
+  const deadline = totalStart + PREPROCESS_UI_BUDGET_MS;
   // Concurrency: a VPS está atrás de Cloudflare (HTTP/2 multiplexado) — sem limite
   // de 6 conexões por host. Subimos para 24 paralelos para saturar a banda de
   // upload e reduzir drasticamente o tempo total quando há muitos arquivos.
@@ -442,6 +479,7 @@ export async function preProcessBatch(
   console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (concurrency=${CONCURRENCY})`);
 
   const failedIndices: number[] = [];
+  const stillUploadingIndices: number[] = [];
 
   // Mark all as queued/processing immediately for UI feedback
   uncachedIndices.forEach(idx => onFileProgress?.(idx, 'processing', 5));
@@ -458,7 +496,15 @@ export async function preProcessBatch(
       console.log(`[VideoProcessor] 📄 [${pos + 1}/${uncachedIndices.length}] VPS preprocess: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
       onFileProgress?.(idx, 'processing', 15);
 
-      const result = await vpsPreprocessFile(file, settings);
+      const uploadPromise = getOrStartVpsPreprocess(file, settings);
+      const remainingBudget = Math.max(0, deadline - performance.now());
+      const result = await waitForUiBudget(uploadPromise, remainingBudget);
+      if (result === 'budget-exceeded') {
+        stillUploadingIndices.push(idx);
+        onFileProgress?.(idx, 'done', 100);
+        console.log(`[VideoProcessor] ⏱️ ${file.name}: released pre-process UI at 7s; upload continues in background`);
+        continue;
+      }
       if (result?.type === 'id') {
         vpsCacheIdMap.set(file, result.cacheId);
         onFileProgress?.(idx, 'done', 100);
@@ -475,9 +521,12 @@ export async function preProcessBatch(
   await Promise.all(workers);
 
   if (failedIndices.length > 0) {
-    console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
-    const failedFiles = failedIndices.map(i => files[i]);
-    await localPreprocessFiles(failedFiles, failedIndices, sectionLabel, settings, onFileProgress, abortSignal);
+    console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS during the 7s window; they will retry on-demand during concat`);
+    failedIndices.forEach(idx => onFileProgress?.(idx, 'done', 100));
+  }
+
+  if (stillUploadingIndices.length > 0) {
+    console.log(`[VideoProcessor] ⏱️ ${stillUploadingIndices.length} heavy file(s) still uploading in background after the 7s pre-process budget`);
   }
 
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
@@ -577,6 +626,17 @@ async function vpsConcatenateFiles(
 ): Promise<string | null> {
   try {
     const formData = new FormData();
+
+    // If the 7s pre-process window released while uploads were still running,
+    // reuse those in-flight uploads here instead of uploading the same bytes again.
+    if (settings.preProcess) {
+      const comboFiles = [combination.hook.file, combination.body.file, combination.cta.file];
+      await Promise.all(comboFiles.map(async (file) => {
+        if (vpsCacheIdMap.has(file) || vpsFileCache.has(file)) return;
+        const pending = vpsPreprocessPromises.get(file);
+        if (pending) await pending.catch(() => null);
+      }));
+    }
 
     // ─── FAST PATH: all 3 files cached on VPS by ID → zero re-upload ───
     const hookId = vpsCacheIdMap.get(combination.hook.file);
@@ -911,13 +971,15 @@ export async function concatenateVideos(
 }
 
 async function clearCache(): Promise<void> {
-  if (!ffmpeg) return;
-  for (const [, filename] of preProcessCache) {
-    try { await ffmpeg.deleteFile(filename); } catch {}
+  if (ffmpeg) {
+    for (const [, filename] of preProcessCache) {
+      try { await ffmpeg.deleteFile(filename); } catch {}
+    }
   }
   preProcessCache.clear();
   vpsFileCache.clear();
   vpsCacheIdMap.clear();
+  vpsPreprocessPromises.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
@@ -952,21 +1014,23 @@ export async function processQueue(
       uniqueFiles.add(c.cta.file);
     }
     const uncachedFiles = Array.from(uniqueFiles).filter(f => !fetchFileCache.has(f));
-    if (uncachedFiles.length > 0) {
+    if (!settings.preProcess && uncachedFiles.length > 0) {
       console.log(`[VideoProcessor] 📦 Pre-loading ${uncachedFiles.length} uncached files...`);
       await Promise.all(uncachedFiles.map(f => fetchFileCached(f)));
+    } else if (settings.preProcess) {
+      console.log('[VideoProcessor] ⚡ Skipping local file pre-load — VPS background cache is the fast path');
     } else {
       console.log(`[VideoProcessor] ⚡ All ${uniqueFiles.size} files already in memory cache — skipping Phase 0`);
     }
 
     // Phase 1: Skip if VPS already pre-processed all unique files
     let ff: FFmpeg | null = null;
-    const allVpsCached = Array.from(uniqueFiles).every(f => vpsCacheIdMap.has(f) || vpsFileCache.has(f));
+    const allVpsCached = Array.from(uniqueFiles).every(f => vpsCacheIdMap.has(f) || vpsFileCache.has(f) || vpsPreprocessPromises.has(f));
     const allLocalCached = Array.from(uniqueFiles).every(f => preProcessCache.has(f));
 
     if (settings.preProcess && !allVpsCached && !allLocalCached) {
       console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
-      ff = await getFFmpeg();
+      // Do not load FFmpeg here in turbo mode; preProcessAllInputs uses VPS cache first.
       await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
         console.log(`[VideoProcessor] ${msg} (${pct}%)`);
       }, abortSignal);
@@ -984,12 +1048,12 @@ export async function processQueue(
     );
 
     // ─── Try VPS concat in PARALLEL (cached IDs = zero upload, VPS does stream-copy ~1s each) ───
-    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0;
+    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0 || vpsPreprocessPromises.size > 0;
 
     if (useVpsSequential) {
       // Concat com IDs cacheados = stream-copy nativo (~1s cada).
       // 8 paralelos saturam a banda sem sobrecarregar a VPS.
-      const hasCacheIds = vpsCacheIdMap.size > 0;
+      const hasCacheIds = vpsCacheIdMap.size > 0 || vpsPreprocessPromises.size > 0;
       const VPS_CONCURRENCY = hasCacheIds ? 8 : 4;
       console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY} (cacheIds=${hasCacheIds})`);
 

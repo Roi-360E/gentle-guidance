@@ -10,15 +10,11 @@ import { ProcessingSettingsPanel } from '@/components/ProcessingSettings';
 import {
   defaultSettings,
   getFFmpeg,
-  terminateFFmpeg,
-  preProcessInputCached,
   preProcessBatch,
   type Combination,
   type ProcessingSettings,
   type VideoFormat,
 } from '@/lib/video-processor';
-
-import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { calculateTokenCost, hasEnoughTokens } from '@/lib/token-calculator';
 import { Rocket, Zap, Square, Clapperboard, Home, Download, HelpCircle, LogOut, Type, Loader2, Smartphone, Monitor, LayoutGrid, Coins, Menu, X, Mic, Lock } from 'lucide-react';
@@ -172,15 +168,22 @@ const Index = () => {
     setCtasStarted(false);
   }, [ctas.length]);
 
-  // Eagerly pre-load FFmpeg on first file upload (so it's ready when user clicks preprocess)
+  // Eagerly pre-load FFmpeg only when the user disabled turbo pre-processing.
+  // Turbo mode uses the VPS fast path; loading WASM here competes for bandwidth/CPU.
   useEffect(() => {
     const totalFiles = hooks.length + bodies.length + ctas.length;
-    if (totalFiles > 0 && !settings.useCloud) {
+    if (totalFiles > 0 && !settings.useCloud && !settings.preProcess) {
       getFFmpeg().then(() => {
         console.log('[Index] 🔥 FFmpeg eagerly pre-loaded for fast preprocessing');
       }).catch(() => {});
     }
-  }, [hooks.length > 0 || bodies.length > 0 || ctas.length > 0, settings.useCloud]);
+  }, [hooks.length > 0 || bodies.length > 0 || ctas.length > 0, settings.useCloud, settings.preProcess]);
+
+  useEffect(() => {
+    if (settings.preProcess && settings.resolution !== 'original') {
+      setSettings(prev => ({ ...prev, resolution: 'original' }));
+    }
+  }, [settings.preProcess, settings.resolution]);
 
   // Sync videoFormat into settings
   useEffect(() => {
