@@ -606,9 +606,10 @@ async function vpsConcatenateFiles(
     onProgress?.(15);
 
     const controller = new AbortController();
-    // Reduzido 120s → 25s: se a VPS estiver fora do ar, caímos pro WASM rápido
-    // em vez de travar o usuário em 85% por 2 minutos.
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    // FAST PATH (IDs cacheados, zero upload): 12s sobra pra stream-copy nativo.
+    // SLOW PATH (upload de arquivos): mantém 25s.
+    const timeoutMs = allCachedById ? 12000 : 25000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     // Simulação suave: vai até 60% (não 85%) pra não dar falsa sensação de travamento.
     let simProgress = 15;
@@ -977,16 +978,21 @@ export async function processQueue(
     let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0;
 
     if (useVpsSequential) {
-      const VPS_CONCURRENCY = 4; // 4 paralelos: VPS aguenta tranquilo com stream-copy
-      console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY}`);
+      // Concat com IDs cacheados = stream-copy nativo (~1s cada).
+      // 8 paralelos saturam a banda sem sobrecarregar a VPS.
+      const hasCacheIds = vpsCacheIdMap.size > 0;
+      const VPS_CONCURRENCY = hasCacheIds ? 8 : 4;
+      console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY} (cacheIds=${hasCacheIds})`);
 
       let completed = 0;
-      let firstComboFailed = false;
+      let failedCount = 0;
       let cursor = 0;
+      // Aborta o caminho VPS só se 3+ combos falharem seguidos OU >50% falharem
+      const FAIL_THRESHOLD = Math.max(3, Math.ceil(combinations.length * 0.5));
 
       const worker = async (workerId: number): Promise<void> => {
         while (true) {
-          if (firstComboFailed) return;
+          if (failedCount >= FAIL_THRESHOLD) return;
           const i = cursor++;
           if (i >= combinations.length) return;
           checkAbort(abortSignal);
@@ -1017,15 +1023,7 @@ export async function processQueue(
             // VPS falhou para este combo
           }
 
-          // Se o PRIMEIRO combo falhar via VPS, aborta todos os workers e cai pro WASM
-          if (i === 0) {
-            console.log(`[VideoProcessor] 📦 VPS falhou no primeiro combo, caindo para WASM`);
-            combo.status = 'pending';
-            firstComboFailed = true;
-            onUpdate([...combinations]);
-            return;
-          }
-
+          failedCount++;
           combo.status = 'pending'; // será retentado no fallback WASM
           onUpdate([...combinations]);
         }
@@ -1034,8 +1032,11 @@ export async function processQueue(
       const workers = Array.from({ length: Math.min(VPS_CONCURRENCY, combinations.length) }, (_, idx) => worker(idx + 1));
       await Promise.all(workers);
 
-      if (firstComboFailed) {
+      if (failedCount >= FAIL_THRESHOLD) {
+        console.log(`[VideoProcessor] 📦 VPS instável (${failedCount} falhas), restante via WASM`);
         useVpsSequential = false;
+      } else if (failedCount > 0) {
+        console.log(`[VideoProcessor] ⚠️ VPS: ${completed}/${combinations.length} OK, ${failedCount} falhas → retry sequencial`);
       }
     }
 
