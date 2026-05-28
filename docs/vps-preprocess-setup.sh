@@ -61,9 +61,11 @@ def preprocess_video():
 
     try:
         if scale:
+            w, h = scale.split(':')
+            vf = f'scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1'
             cmd = [
                 'ffmpeg', '-i', input_path,
-                '-vf', f'scale={scale},setsar=1',
+                '-vf', vf,
                 '-c:v', 'libx264', '-preset', preset, '-profile:v', 'main',
                 '-pix_fmt', 'yuv420p', '-crf', crf,
                 '-maxrate', '2500k', '-bufsize', '5000k',
@@ -186,13 +188,15 @@ def concat_videos():
                 ]
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         elif scale:
+            w, h = scale.split(':')
+            vf_each = f'scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1'
             cmd = [
                 'ffmpeg',
                 '-i', hook_path, '-i', body_path, '-i', cta_path,
                 '-filter_complex',
-                f'[0:v]scale={scale},setsar=1[v0];'
-                f'[1:v]scale={scale},setsar=1[v1];'
-                f'[2:v]scale={scale},setsar=1[v2];'
+                f'[0:v]{vf_each}[v0];'
+                f'[1:v]{vf_each}[v1];'
+                f'[2:v]{vf_each}[v2];'
                 f'[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]',
                 '-map', '[outv]', '-map', '[outa]',
                 '-c:v', 'libx264', '-preset', preset, '-profile:v', 'main',

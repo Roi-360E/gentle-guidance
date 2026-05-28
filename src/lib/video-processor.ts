@@ -161,6 +161,14 @@ function getScale(settings: ProcessingSettings): string | null {
   return formatResolutionMap[format]?.[settings.resolution] ?? null;
 }
 
+// Build a scale filter that preserves the original aspect ratio.
+// Uses scale+pad so vertical sources stay vertical (no stretching) and any
+// gap is filled with black bars instead of distorting the image.
+function buildScaleFilter(scale: string): string {
+  const [w, h] = scale.split(':');
+  return `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+}
+
 export function generateCombinations(
   hooks: VideoFile[],
   bodies: VideoFile[],
@@ -234,7 +242,7 @@ export async function preProcessInputCached(
     // ─── SCALE + RE-ENCODE during pre-processing so concat can use stream copy ───
     exitCode = await ff.exec([
       '-i', rawName,
-      '-vf', `scale=${scale},setsar=1`,
+      '-vf', buildScaleFilter(scale),
       '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main',
       '-pix_fmt', 'yuv420p', '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
       '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
@@ -248,7 +256,7 @@ export async function preProcessInputCached(
       console.warn(`[VideoProcessor] Scale+encode failed for ${file.name}, trying without audio...`);
       exitCode = await ff.exec([
         '-i', rawName,
-        '-vf', `scale=${scale},setsar=1`,
+        '-vf', buildScaleFilter(scale),
         '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
         '-crf', '23', '-an', '-movflags', '+faststart',
         '-y', outputName,
@@ -822,9 +830,9 @@ export async function concatenateVideos(
         exitCode = await ff.exec([
           '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
           '-filter_complex',
-          `[0:v]scale=${scale},setsar=1[v0];` +
-          `[1:v]scale=${scale},setsar=1[v1];` +
-          `[2:v]scale=${scale},setsar=1[v2];` +
+          `[0:v]${buildScaleFilter(scale)}[v0];` +
+          `[1:v]${buildScaleFilter(scale)}[v1];` +
+          `[2:v]${buildScaleFilter(scale)}[v2];` +
           `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
           '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
@@ -851,9 +859,9 @@ export async function concatenateVideos(
           exitCode = await ff.exec([
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex',
-            `[0:v]scale=${scale},setsar=1[v0];` +
-            `[1:v]scale=${scale},setsar=1[v1];` +
-            `[2:v]scale=${scale},setsar=1[v2];` +
+            `[0:v]${buildScaleFilter(scale)}[v0];` +
+            `[1:v]${buildScaleFilter(scale)}[v1];` +
+            `[2:v]${buildScaleFilter(scale)}[v2];` +
             `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
             '-map', '[outv]',
             '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
