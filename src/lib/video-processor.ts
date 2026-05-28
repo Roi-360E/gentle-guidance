@@ -830,9 +830,9 @@ export async function concatenateVideos(
         exitCode = await ff.exec([
           '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
           '-filter_complex',
-          `[0:v]scale=${scale},setsar=1[v0];` +
-          `[1:v]scale=${scale},setsar=1[v1];` +
-          `[2:v]scale=${scale},setsar=1[v2];` +
+          `[0:v]${buildScaleFilter(scale)}[v0];` +
+          `[1:v]${buildScaleFilter(scale)}[v1];` +
+          `[2:v]${buildScaleFilter(scale)}[v2];` +
           `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
           '-map', '[outv]', '-map', '[outa]',
           '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
@@ -859,9 +859,9 @@ export async function concatenateVideos(
           exitCode = await ff.exec([
             '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
             '-filter_complex',
-            `[0:v]scale=${scale},setsar=1[v0];` +
-            `[1:v]scale=${scale},setsar=1[v1];` +
-            `[2:v]scale=${scale},setsar=1[v2];` +
+            `[0:v]${buildScaleFilter(scale)}[v0];` +
+            `[1:v]${buildScaleFilter(scale)}[v1];` +
+            `[2:v]${buildScaleFilter(scale)}[v2];` +
             `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
             '-map', '[outv]',
             '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
