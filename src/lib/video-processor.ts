@@ -697,8 +697,7 @@ async function vpsConcatenateFiles(
 
     const controller = new AbortController();
     // FAST PATH (IDs cacheados, zero upload): 10s sobra de folga pro stream-copy nativo.
-    // SLOW PATH (upload de 3 arquivos): 90s pra dar margem em vídeos grandes
-    // (sem pré-processo, o usuário escolheu enviar bytes brutos por combo).
+    // SLOW PATH: no máximo 45s e sempre limitado pelo orçamento global de 1 minuto.
     const remainingQueueTime = deadlineAt ? Math.max(5_000, deadlineAt - performance.now()) : Infinity;
     const timeoutMs = Math.min(allCachedById ? 10000 : 45000, remainingQueueTime);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -747,7 +746,7 @@ async function vpsConcatenateFiles(
   } catch (err) {
     const isTimeout = err instanceof DOMException && err.name === 'AbortError';
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${isTimeout ? 'TIMEOUT (VPS não respondeu em 25s — provavelmente offline)' : msg}`);
+    console.warn(`[VPS-Concat] ⚠️ combo ${combination.id}: ${isTimeout ? 'TIMEOUT no orçamento de 1 minuto' : msg}`);
     return null;
   }
 }
