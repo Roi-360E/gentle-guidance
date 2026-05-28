@@ -125,7 +125,10 @@ export interface ProcessingSettings {
 }
 
 export const defaultSettings: ProcessingSettings = {
-  resolution: '720p',
+  // Turbo default: never re-scale before concat unless the user explicitly asks.
+  // Re-encoding large videos is the main bottleneck; original keeps preprocessing
+  // to upload/cache only and lets VPS concat use the fast stream-copy path.
+  resolution: 'original',
   batchSize: 3,
   preProcess: true,
   videoFormat: '9:16',
@@ -207,6 +210,9 @@ const preProcessCache = new Map<File, string>();
 const vpsFileCache = new Map<File, File>();
 // Cache of VPS-side IDs — when present, concat can be done by reference (no re-upload!)
 const vpsCacheIdMap = new Map<File, string>();
+// In-flight VPS uploads. Prevents duplicate uploads when the user clicks "Gerar"
+// while the 7s UI preprocessing window has already released the button.
+const vpsPreprocessPromises = new Map<File, Promise<VpsPreprocessResult>>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
