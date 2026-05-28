@@ -470,6 +470,7 @@ export async function preProcessBatch(
   }
 
   const totalStart = performance.now();
+  const deadline = totalStart + PREPROCESS_UI_BUDGET_MS;
   // Concurrency: a VPS está atrás de Cloudflare (HTTP/2 multiplexado) — sem limite
   // de 6 conexões por host. Subimos para 24 paralelos para saturar a banda de
   // upload e reduzir drasticamente o tempo total quando há muitos arquivos.
@@ -477,6 +478,7 @@ export async function preProcessBatch(
   console.log(`[VideoProcessor] 🚀 Batch pre-processing ${uncachedIndices.length}/${files.length} files for "${sectionLabel}" (concurrency=${CONCURRENCY})`);
 
   const failedIndices: number[] = [];
+  const stillUploadingIndices: number[] = [];
 
   // Mark all as queued/processing immediately for UI feedback
   uncachedIndices.forEach(idx => onFileProgress?.(idx, 'processing', 5));
@@ -493,7 +495,15 @@ export async function preProcessBatch(
       console.log(`[VideoProcessor] 📄 [${pos + 1}/${uncachedIndices.length}] VPS preprocess: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
       onFileProgress?.(idx, 'processing', 15);
 
-      const result = await vpsPreprocessFile(file, settings);
+      const uploadPromise = getOrStartVpsPreprocess(file, settings);
+      const remainingBudget = Math.max(0, deadline - performance.now());
+      const result = await waitForUiBudget(uploadPromise, remainingBudget);
+      if (result === 'budget-exceeded') {
+        stillUploadingIndices.push(idx);
+        onFileProgress?.(idx, 'done', 100);
+        console.log(`[VideoProcessor] ⏱️ ${file.name}: released pre-process UI at 7s; upload continues in background`);
+        continue;
+      }
       if (result?.type === 'id') {
         vpsCacheIdMap.set(file, result.cacheId);
         onFileProgress?.(idx, 'done', 100);
@@ -510,9 +520,12 @@ export async function preProcessBatch(
   await Promise.all(workers);
 
   if (failedIndices.length > 0) {
-    console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS, falling back to local WASM`);
-    const failedFiles = failedIndices.map(i => files[i]);
-    await localPreprocessFiles(failedFiles, failedIndices, sectionLabel, settings, onFileProgress, abortSignal);
+    console.log(`[VideoProcessor] ⚠️ ${failedIndices.length} files failed VPS during the 7s window; they will retry on-demand during concat`);
+    failedIndices.forEach(idx => onFileProgress?.(idx, 'done', 100));
+  }
+
+  if (stillUploadingIndices.length > 0) {
+    console.log(`[VideoProcessor] ⏱️ ${stillUploadingIndices.length} heavy file(s) still uploading in background after the 7s pre-process budget`);
   }
 
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(2);
