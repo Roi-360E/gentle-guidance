@@ -971,9 +971,10 @@ export async function concatenateVideos(
 }
 
 async function clearCache(): Promise<void> {
-  if (!ffmpeg) return;
-  for (const [, filename] of preProcessCache) {
-    try { await ffmpeg.deleteFile(filename); } catch {}
+  if (ffmpeg) {
+    for (const [, filename] of preProcessCache) {
+      try { await ffmpeg.deleteFile(filename); } catch {}
+    }
   }
   preProcessCache.clear();
   vpsFileCache.clear();
@@ -1029,7 +1030,7 @@ export async function processQueue(
 
     if (settings.preProcess && !allVpsCached && !allLocalCached) {
       console.log('[VideoProcessor] ═══ Phase 1: Pre-processing unique files ═══');
-      ff = await getFFmpeg();
+      // Do not load FFmpeg here in turbo mode; preProcessAllInputs uses VPS cache first.
       await preProcessAllInputs(ff, combinations, settings, (msg, pct) => {
         console.log(`[VideoProcessor] ${msg} (${pct}%)`);
       }, abortSignal);
