@@ -1196,8 +1196,9 @@ export async function processQueue(
 
           try {
             console.log(`[VideoProcessor] 🎬 [W${workerId}] [${i + 1}/${combinations.length}] VPS concat: ${combo.outputName}`);
-            const allowRawUpload = combinations.length <= 1;
-            const url = await vpsConcatenateFiles(combo, settings, undefined, queueDeadlineAt, allowRawUpload);
+            // Keep raw-upload fallback enabled: when cache IDs are not ready, the
+            // combo must still be attempted instead of becoming an instant error.
+            const url = await vpsConcatenateFiles(combo, settings, undefined, queueHardDeadlineAt, true);
             if (url) {
               combo.status = 'done';
               combo.outputUrl = url;
@@ -1233,12 +1234,12 @@ export async function processQueue(
     // ─── Sequential fallback for remaining/failed combos ───
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
-      const timeLeft = queueDeadlineAt - performance.now();
-      if (timeLeft < 15_000 || vpsFailedCount > 0) {
-        console.warn(`[VideoProcessor] ⏱️ Limite de 1 minuto protegido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
+      const timeLeft = queueHardDeadlineAt - performance.now();
+      if (timeLeft < 15_000 || vpsFailedCount >= Math.max(3, Math.ceil(combinations.length * 0.5))) {
+        console.warn(`[VideoProcessor] ⏱️ Limite de segurança atingido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
         for (const combo of remaining) {
           combo.status = 'error';
-          combo.errorMessage = 'Tempo limite de 1 minuto protegido. Faça o pré-processamento/cache dos vídeos e tente novamente.';
+          combo.errorMessage = 'Servidor de vídeo não respondeu a tempo. Tente ativar o pré-processamento ou envie vídeos menores.';
         }
         onUpdate([...combinations]);
         return;
