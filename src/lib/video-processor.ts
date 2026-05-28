@@ -1107,12 +1107,24 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
     const queueDeadlineAt = performance.now() + CONCAT_QUEUE_BUDGET_MS;
+    const vpsAvailableAtStart = await isVpsReachable(2500, true);
+
+    if (!vpsAvailableAtStart) {
+      console.warn('[VideoProcessor] 🚨 VPS/túnel indisponível; bloqueando fila para evitar timeouts em massa');
+      for (const combo of combinations) {
+        combo.status = 'error';
+        combo.errorMessage = 'Servidor de vídeo indisponível no momento. Reinicie a VPS/Cloudflare Tunnel e tente novamente.';
+      }
+      onUpdate([...combinations]);
+      onProgressItem(0);
+      return;
+    }
 
     // ─── IMPLICIT DEDUP UPLOAD: even when preProcess=false, upload each unique
     // file to VPS ONCE (fire-and-forget). Without this, every combo re-uploads
     // the same 3 files → 18 combos × 3 = 54 uploads. With dedup, only N unique
     // files are sent (e.g. 8), saving ~60s+ of bandwidth time.
-    {
+    if (vpsAvailableAtStart) {
       const allUnique = Array.from(uniqueFiles).filter(
         f => !vpsCacheIdMap.has(f) && !vpsFileCache.has(f) && !vpsPreprocessPromises.has(f)
       );
