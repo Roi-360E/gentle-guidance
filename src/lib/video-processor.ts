@@ -688,8 +688,11 @@ async function vpsConcatenateFiles(
         if (pending) return waitForUiBudget(pending.catch(() => null), waitBudget);
       }));
       if (waitResults.includes('budget-exceeded')) {
-        console.warn(`[VPS-Concat] ⏱️ combo ${combination.id}: upload cache ainda não terminou; pulando para manter limite de 1 minuto`);
-        return null;
+        if (!allowRawUpload) {
+          console.warn(`[VPS-Concat] ⏱️ combo ${combination.id}: upload cache ainda não terminou; pulando raw upload`);
+          return null;
+        }
+        console.warn(`[VPS-Concat] ⏱️ combo ${combination.id}: cache ainda não terminou; tentando upload direto para não gerar erro automático`);
       }
     }
 
