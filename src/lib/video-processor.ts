@@ -675,17 +675,19 @@ async function vpsConcatenateFiles(
     onProgress?.(15);
 
     const controller = new AbortController();
-    // FAST PATH (IDs cacheados, zero upload): 12s sobra pra stream-copy nativo.
-    // SLOW PATH (upload de arquivos): mantém 25s.
-    const timeoutMs = allCachedById ? 12000 : 25000;
+    // FAST PATH (IDs cacheados, zero upload): 10s sobra de folga pro stream-copy nativo.
+    // SLOW PATH (upload de 3 arquivos): 90s pra dar margem em vídeos grandes
+    // (sem pré-processo, o usuário escolheu enviar bytes brutos por combo).
+    const timeoutMs = allCachedById ? 10000 : 90000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    // Simulação suave: vai até 60% (não 85%) pra não dar falsa sensação de travamento.
+    // Simulação suave: avança em passos menores e mais frequentes pra dar
+    // sensação de fluidez sem chegar a 100% antes do fim real.
     let simProgress = 15;
     const progressTimer = setInterval(() => {
-      simProgress = Math.min(simProgress + 3, 60);
+      simProgress = Math.min(simProgress + 2, 70);
       onProgress?.(simProgress);
-    }, 600);
+    }, 300);
 
     let res: Response;
     try {
@@ -698,7 +700,7 @@ async function vpsConcatenateFiles(
       clearInterval(progressTimer);
       clearTimeout(timeoutId);
     }
-    onProgress?.(75);
+    onProgress?.(85);
 
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
@@ -1047,14 +1049,19 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
-    // ─── Try VPS concat in PARALLEL (cached IDs = zero upload, VPS does stream-copy ~1s each) ───
-    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0 || vpsPreprocessPromises.size > 0;
+    // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
+    // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
+    // Subimos a concorrência drasticamente pra reduzir o tempo total em ~60s
+    // em filas médias (10-20 combos): em vez de subir 3 arquivos por vez em
+    // séries de 4, agora subimos 16 combos em paralelo saturando a banda.
+    let useVpsSequential = true;
 
     if (useVpsSequential) {
-      // Concat com IDs cacheados = stream-copy nativo (~1s cada).
-      // 8 paralelos saturam a banda sem sobrecarregar a VPS.
       const hasCacheIds = vpsCacheIdMap.size > 0 || vpsPreprocessPromises.size > 0;
-      const VPS_CONCURRENCY = hasCacheIds ? 8 : 4;
+      // FAST PATH (IDs cacheados, zero upload na VPS): 16 paralelos.
+      // SLOW PATH (upload de 3 arquivos por combo): 12 paralelos —
+      // HTTP/2 multiplexa numa única conexão TCP, então mais workers = mais throughput.
+      const VPS_CONCURRENCY = hasCacheIds ? 16 : 12;
       console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY} (cacheIds=${hasCacheIds})`);
 
       let completed = 0;
