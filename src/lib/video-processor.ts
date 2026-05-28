@@ -330,7 +330,8 @@ type VpsPreprocessResult =
   | null;
 
 const PREPROCESS_UI_BUDGET_MS = 7000;
-const CONCAT_QUEUE_BUDGET_MS = 55_000;
+const CONCAT_QUEUE_TARGET_MS = 55_000;
+const CONCAT_QUEUE_HARD_LIMIT_MS = 120_000;
 const CONCAT_PENDING_UPLOAD_BUDGET_MS = 18_000;
 const VPS_BASE_URL = 'https://api.deploysites.online';
 const VPS_PREPROCESS_URL = `${VPS_BASE_URL}/preprocess`;
@@ -1106,7 +1107,8 @@ export async function processQueue(
       `%c[VideoProcessor] ═══ Phase 2: Concatenating ${expectedCount} combinations (ALL must succeed) ═══`,
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
-    const queueDeadlineAt = performance.now() + CONCAT_QUEUE_BUDGET_MS;
+    const queueTargetAt = performance.now() + CONCAT_QUEUE_TARGET_MS;
+    const queueHardDeadlineAt = performance.now() + CONCAT_QUEUE_HARD_LIMIT_MS;
     const vpsAvailableAtStart = await isVpsReachable(2500, true);
 
     if (!vpsAvailableAtStart) {
@@ -1145,7 +1147,7 @@ export async function processQueue(
         .map(f => vpsPreprocessPromises.get(f))
         .filter((p): p is Promise<VpsPreprocessResult> => !!p);
       if (pendingUploads.length > 0) {
-        const uploadWaitMs = Math.min(40_000, Math.max(0, queueDeadlineAt - performance.now() - 15_000));
+          const uploadWaitMs = Math.min(40_000, Math.max(0, queueTargetAt - performance.now() - 15_000));
         if (uploadWaitMs > 0) {
           console.log(`[VideoProcessor] ⏱️ Aguardando cache VPS pronto por até ${Math.round(uploadWaitMs / 1000)}s para não re-upar por combo`);
           const uploadResult = await waitForUiBudget(Promise.all(pendingUploads.map(p => p.catch(() => null))), uploadWaitMs);
