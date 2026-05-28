@@ -5,6 +5,13 @@ const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transloa
 const MAX_POLL_ATTEMPTS = 120; // 120 * 3s = 6 min max
 const PARALLEL_UPLOADS = 4;
 
+function getCloudErrorMessage(data: { error?: string; errorCode?: string; details?: string }) {
+  if (data.errorCode === "TRANSLOADIT_AUTH_ERROR") {
+    return "Processamento reserva indisponível: a chave Transloadit configurada é de SmartCDN e não serve para processar vídeos.";
+  }
+  return data.error || data.details || "Processamento reserva indisponível.";
+}
+
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Você precisa estar logado para usar o processamento em nuvem.");
@@ -119,6 +126,9 @@ async function pollAssembly(
     }
 
     const data = await res.json();
+    if (data?.ok === false || data?.fallback === true) {
+      throw new Error(getCloudErrorMessage(data));
+    }
 
     if (data.progress) onProgress?.(data.progress);
 
@@ -207,7 +217,11 @@ export async function processQueueCloud(
         throw new Error(errData.error || `Assembly creation failed: ${createRes.status}`);
       }
 
-      const { assemblies } = await createRes.json();
+      const createData = await createRes.json();
+      if (createData?.ok === false || createData?.fallback === true) {
+        throw new Error(getCloudErrorMessage(createData));
+      }
+      const { assemblies } = createData;
 
       const promises = assemblies.map(
         async (a: { assemblyId: string; combinationIndex: number }) => {
