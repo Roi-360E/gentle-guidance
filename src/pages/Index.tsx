@@ -237,6 +237,30 @@ const Index = () => {
     }
   }, [settings]);
 
+  // ─── AUTO PRE-PROCESS: dispara em background assim que arquivos são adicionados ───
+  // Faz upload pra VPS antes mesmo do usuário clicar em "Processar", reduzindo o
+  // tempo percebido pra <1min. Cada seção dispara independentemente em paralelo.
+  useEffect(() => {
+    if (hooks.length > 0 && !hooksStarted && !hooksPreprocessed && preprocessingSection !== 'Gancho') {
+      handlePreprocessSection('Gancho', hooks, setHooks, setHooksPreprocessed, setHooksStarted);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hooks.length, hooksStarted, hooksPreprocessed]);
+
+  useEffect(() => {
+    if (bodies.length > 0 && !bodiesStarted && !bodiesPreprocessed && preprocessingSection !== 'Corpo') {
+      handlePreprocessSection('Corpo', bodies, setBodies, setBodiesPreprocessed, setBodiesStarted);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bodies.length, bodiesStarted, bodiesPreprocessed]);
+
+  useEffect(() => {
+    if (ctas.length > 0 && !ctasStarted && !ctasPreprocessed && preprocessingSection !== 'CTA') {
+      handlePreprocessSection('CTA', ctas, setCtas, setCtasPreprocessed, setCtasStarted);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctas.length, ctasStarted, ctasPreprocessed]);
+
   const handleProcess = useCallback(() => {
     if (!canProcess || !user) return;
 
