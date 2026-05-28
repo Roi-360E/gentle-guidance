@@ -16,6 +16,31 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function transloaditFailureResponse(action: string, status: number, details: string) {
+  let parsed: { error?: string; message?: string; reason?: string } | null = null;
+  try {
+    parsed = JSON.parse(details);
+  } catch {
+    parsed = null;
+  }
+
+  const isAuthError = parsed?.error === "GET_ACCOUNT_UNKNOWN_AUTH_KEY"
+    || details.includes("GET_ACCOUNT_UNKNOWN_AUTH_KEY")
+    || details.includes("SmartCDN");
+
+  return jsonResponse({
+    ok: false,
+    fallback: true,
+    action,
+    errorCode: isAuthError ? "TRANSLOADIT_AUTH_ERROR" : "TRANSLOADIT_SERVICE_ERROR",
+    error: isAuthError
+      ? "Credenciais do processamento reserva inválidas. O vídeo não será enviado para o fallback Transloadit."
+      : `Transloadit error: ${status}`,
+    details,
+    providerStatus: status,
+  });
+}
+
 // Generate Transloadit signature using Web Crypto API
 async function signParams(params: string, authSecret: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -59,10 +84,10 @@ serve(async (req) => {
     const TRANSLOADIT_AUTH_KEY = Deno.env.get("TRANSLOADIT_AUTH_KEY");
     const TRANSLOADIT_AUTH_SECRET = Deno.env.get("TRANSLOADIT_AUTH_SECRET");
     if (!TRANSLOADIT_AUTH_KEY) {
-      return jsonResponse({ error: "TRANSLOADIT_AUTH_KEY not configured" }, 500);
+      return jsonResponse({ ok: false, fallback: true, errorCode: "TRANSLOADIT_CONFIG_ERROR", error: "TRANSLOADIT_AUTH_KEY not configured" });
     }
     if (!TRANSLOADIT_AUTH_SECRET) {
-      return jsonResponse({ error: "TRANSLOADIT_AUTH_SECRET not configured" }, 500);
+      return jsonResponse({ ok: false, fallback: true, errorCode: "TRANSLOADIT_CONFIG_ERROR", error: "TRANSLOADIT_AUTH_SECRET not configured" });
     }
 
     const body = await req.json();
@@ -147,7 +172,7 @@ serve(async (req) => {
         if (!assemblyRes.ok) {
           const errText = await assemblyRes.text();
           console.error(`Transloadit preprocess assembly failed [${assemblyRes.status}]:`, errText);
-          return jsonResponse({ error: `Transloadit error: ${assemblyRes.status}`, details: errText }, 500);
+          return transloaditFailureResponse("preprocess", assemblyRes.status, errText);
         }
 
         const assemblyData = await assemblyRes.json();
