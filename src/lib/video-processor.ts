@@ -1049,14 +1049,19 @@ export async function processQueue(
       'color: #3b82f6; font-weight: bold; font-size: 14px;'
     );
 
-    // ─── Try VPS concat in PARALLEL (cached IDs = zero upload, VPS does stream-copy ~1s each) ───
-    let useVpsSequential = vpsCacheIdMap.size > 0 || vpsFileCache.size > 0 || vpsPreprocessPromises.size > 0;
+    // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
+    // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
+    // Subimos a concorrência drasticamente pra reduzir o tempo total em ~60s
+    // em filas médias (10-20 combos): em vez de subir 3 arquivos por vez em
+    // séries de 4, agora subimos 16 combos em paralelo saturando a banda.
+    let useVpsSequential = true;
 
     if (useVpsSequential) {
-      // Concat com IDs cacheados = stream-copy nativo (~1s cada).
-      // 8 paralelos saturam a banda sem sobrecarregar a VPS.
       const hasCacheIds = vpsCacheIdMap.size > 0 || vpsPreprocessPromises.size > 0;
-      const VPS_CONCURRENCY = hasCacheIds ? 8 : 4;
+      // FAST PATH (IDs cacheados, zero upload na VPS): 16 paralelos.
+      // SLOW PATH (upload de 3 arquivos por combo): 12 paralelos —
+      // HTTP/2 multiplexa numa única conexão TCP, então mais workers = mais throughput.
+      const VPS_CONCURRENCY = hasCacheIds ? 16 : 12;
       console.log(`[VideoProcessor] ⚡ VPS parallel concat: ${combinations.length} combos, concurrency=${VPS_CONCURRENCY} (cacheIds=${hasCacheIds})`);
 
       let completed = 0;
