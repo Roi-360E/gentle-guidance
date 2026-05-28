@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const VPS_BASE = "https://api.deploysites.online";
+const VPS_BASE = "https://api.escalaxpro.com";
 
 function getSupabaseAdmin() {
   return createClient(

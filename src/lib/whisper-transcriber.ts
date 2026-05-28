@@ -61,7 +61,7 @@ function withFFmpegLock<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Threshold in bytes — files above this use VPS for audio extraction */
 const VPS_THRESHOLD = 50 * 1024 * 1024; // 50MB
-const VPS_URL = 'https://api.deploysites.online';
+const VPS_URL = 'https://api.escalaxpro.com';
 
 /**
  * Extract audio via VPS (native FFmpeg) — handles large files without memory issues.

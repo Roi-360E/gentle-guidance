@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
           event_id: eventId,
           event_time: Math.floor(Date.now() / 1000),
           action_source: "website",
-          event_source_url: event_source_url || "https://deploysites.online/obrigado",
+          event_source_url: event_source_url || "https://escalaxpro.com/obrigado",
           user_data: userData,
           custom_data: {
             currency: "BRL",

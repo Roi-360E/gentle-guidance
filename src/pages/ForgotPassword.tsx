@@ -21,7 +21,7 @@ const ForgotPassword = () => {
       return;
     }
     setLoading(true);
-    const siteUrl = import.meta.env.PROD ? 'https://deploysites.online' : window.location.origin;
+    const siteUrl = import.meta.env.PROD ? 'https://escalaxpro.com' : window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${siteUrl}/reset-password`,
     });
