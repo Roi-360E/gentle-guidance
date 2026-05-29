@@ -342,7 +342,7 @@ const VPS_CONCAT_URL = `${VPS_BASE_URL}/concat`;
 const VPS_HEALTH_CACHE_MS = 15_000;
 let vpsHealthCache: { ok: boolean; checkedAt: number } | null = null;
 
-async function isVpsReachable(timeoutMs = 2500, force = false): Promise<boolean> {
+async function isVpsReachable(timeoutMs = 3000, force = false): Promise<boolean> {
   const now = performance.now();
   if (!force && vpsHealthCache && now - vpsHealthCache.checkedAt < VPS_HEALTH_CACHE_MS) {
     return vpsHealthCache.ok;
@@ -351,17 +351,19 @@ async function isVpsReachable(timeoutMs = 2500, force = false): Promise<boolean>
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    // Empty POST: healthy Flask returns a fast 400 (no video file). Network
-    // timeout/refused means the VPS/tunnel is down, so fail fast instead of
-    // spawning dozens of long /preprocess and /concat requests.
+    // Production parity: ANY HTTP response (incl. 404/405) means the tunnel
+    // is up and reachable. Only network errors / timeouts mark VPS as down.
+    // This matches the working build on escalaxpro.com which doesn't gate
+    // calls at all — we keep the health cache only to avoid pointless retries
+    // when the tunnel is genuinely offline.
     const res = await fetch(VPS_PREPROCESS_URL, {
       method: 'POST',
       body: new FormData(),
       signal: controller.signal,
     });
-    const ok = res.status === 200 || res.status === 400 || res.status === 422;
-    vpsHealthCache = { ok, checkedAt: performance.now() };
-    return ok;
+    void res; // any status = reachable
+    vpsHealthCache = { ok: true, checkedAt: performance.now() };
+    return true;
   } catch {
     vpsHealthCache = { ok: false, checkedAt: performance.now() };
     return false;
