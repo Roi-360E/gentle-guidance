@@ -129,7 +129,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
     (async () => {
       try {
-        setProcessingPhase('Processando na VPS com FFmpeg...');
+        setProcessingPhase('Processando com FFmpeg (VPS ou fallback local)...');
         await processQueue(combos, { ...settings, useCloud: false }, (updated) => setCombinations([...updated]), (p) => setCurrentProgress(p), controller.signal);
       } catch (err) {
         console.error('[Processing] Error:', err);

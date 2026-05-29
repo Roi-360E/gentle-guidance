@@ -214,6 +214,9 @@ const vpsCacheIdMap = new Map<File, string>();
 // In-flight VPS uploads. Prevents duplicate uploads when the user clicks "Gerar"
 // while the 7s UI preprocessing window has already released the button.
 const vpsPreprocessPromises = new Map<File, Promise<VpsPreprocessResult>>();
+// Local fallback cache for normalized concat inputs. This is used when the VPS
+// route/domain is down, avoiding fragile multi-input filter_complex commands.
+const localConcatCache = new Map<string, string>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
@@ -356,7 +359,7 @@ async function isVpsReachable(timeoutMs = 2500, force = false): Promise<boolean>
       body: new FormData(),
       signal: controller.signal,
     });
-    const ok = res.status < 500;
+    const ok = res.status === 200 || res.status === 400 || res.status === 422;
     vpsHealthCache = { ok, checkedAt: performance.now() };
     return ok;
   } catch {
@@ -817,6 +820,46 @@ async function hydrateWasmFromVpsCache(files: File[]): Promise<void> {
   }
 }
 
+async function getLocalConcatInput(
+  ff: FFmpeg,
+  file: File,
+  role: string,
+  settings: ProcessingSettings,
+  abortSignal?: AbortSignal,
+): Promise<string> {
+  const cached = localConcatCache.get(`${role}:${file.name}:${file.size}:${file.lastModified}:${settings.videoFormat}:${settings.resolution}`);
+  if (cached) return cached;
+
+  const safeRole = role.replace(/[^a-zA-Z0-9_]/g, '_');
+  const inputName = `local_${safeRole}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+  const outputName = `local_norm_${safeRole}_${Date.now()}.mp4`;
+  const data = await fetchFileCached(file);
+  await ff.writeFile(inputName, data);
+
+  const scale = getScale(settings);
+  const args = scale
+    ? ['-i', inputName, '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-vf', buildScaleFilter(scale), '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2', '-movflags', '+faststart', '-y', outputName]
+    : ['-i', inputName, '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2', '-movflags', '+faststart', '-y', outputName];
+
+  let exitCode = await ff.exec(args);
+  checkAbort(abortSignal);
+
+  if (exitCode !== 0) {
+    console.warn(`[VideoProcessor] ⚠️ ${role}: normalização com áudio silencioso falhou; tentando sem áudio`);
+    const videoOnlyArgs = scale
+      ? ['-i', inputName, '-vf', buildScaleFilter(scale), '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-an', '-movflags', '+faststart', '-y', outputName]
+      : ['-i', inputName, '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-an', '-movflags', '+faststart', '-y', outputName];
+    exitCode = await ff.exec(videoOnlyArgs);
+    checkAbort(abortSignal);
+  }
+
+  try { await ff.deleteFile(inputName); } catch {}
+  if (exitCode !== 0) throw new Error(`Falha ao normalizar ${role}: ${file.name}`);
+
+  localConcatCache.set(`${role}:${file.name}:${file.size}:${file.lastModified}:${settings.videoFormat}:${settings.resolution}`, outputName);
+  return outputName;
+}
+
 export async function concatenateVideos(
   combination: Combination,
   settings: ProcessingSettings,
@@ -949,71 +992,43 @@ export async function concatenateVideos(
       return URL.createObjectURL(blob);
 
     } else {
-      const hookData = await fetchFileCached(combination.hook.file);
-      const bodyData = await fetchFileCached(combination.body.file);
-      const ctaData = await fetchFileCached(combination.cta.file);
-      await ff.writeFile('hook_raw.mp4', hookData);
-      await ff.writeFile('body_raw.mp4', bodyData);
-      await ff.writeFile('cta_raw.mp4', ctaData);
+      const hookNorm = await getLocalConcatInput(ff, combination.hook.file, 'hook', settings, abortSignal);
+      const bodyNorm = await getLocalConcatInput(ff, combination.body.file, 'body', settings, abortSignal);
+      const ctaNorm = await getLocalConcatInput(ff, combination.cta.file, 'cta', settings, abortSignal);
 
-      const scale = getScale(settings);
-      const outputFile = 'output.mp4';
-      let exitCode: number;
+      const outputFile = `output_${combination.id}.mp4`;
+      const concatFile = `concat_${combination.id}.txt`;
+      await ff.writeFile(concatFile, `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`);
 
-      if (scale) {
-        exitCode = await ff.exec([
-          '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-          '-filter_complex',
-          `[0:v]${buildScaleFilter(scale)}[v0];` +
-          `[1:v]${buildScaleFilter(scale)}[v1];` +
-          `[2:v]${buildScaleFilter(scale)}[v2];` +
-          `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
-          '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
-          '-y', outputFile,
-        ]);
-      } else {
-        exitCode = await ff.exec([
-          '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-          '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
-          '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
-          '-y', outputFile,
-        ]);
-      }
+      let exitCode = await ff.exec([
+        '-f', 'concat', '-safe', '0', '-i', concatFile,
+        '-c', 'copy', '-movflags', '+faststart', '-y', outputFile,
+      ]);
       checkAbort(abortSignal);
 
       if (exitCode !== 0) {
-        console.warn('[VideoProcessor] Direct concat failed, trying video-only...');
-        if (scale) {
-          exitCode = await ff.exec([
-            '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-            '-filter_complex',
-            `[0:v]${buildScaleFilter(scale)}[v0];` +
-            `[1:v]${buildScaleFilter(scale)}[v1];` +
-            `[2:v]${buildScaleFilter(scale)}[v2];` +
-            `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
-            '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-            '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-            '-an', '-movflags', '+faststart',
-            '-y', outputFile,
-          ]);
-        } else {
-          exitCode = await ff.exec([
-            '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-            '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
-            '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-            '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-            '-an', '-movflags', '+faststart',
-            '-y', outputFile,
-          ]);
-        }
+        console.warn('[VideoProcessor] Demuxer concat failed, trying normalized filter concat...');
+        exitCode = await ff.exec([
+          '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+          '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
+          '-map', '[outv]', '-map', '[outa]',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
+          '-y', outputFile,
+        ]);
+        checkAbort(abortSignal);
+      }
+
+      if (exitCode !== 0) {
+        console.warn('[VideoProcessor] Normalized audio concat failed, trying video-only concat...');
+        exitCode = await ff.exec([
+          '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+          '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
+          '-map', '[outv]',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '28', '-an', '-movflags', '+faststart',
+          '-y', outputFile,
+        ]);
         checkAbort(abortSignal);
       }
 
@@ -1022,7 +1037,7 @@ export async function concatenateVideos(
       const data = await ff.readFile(outputFile);
       const blob = new Blob([new Uint8Array(data as Uint8Array)], { type: 'video/mp4' });
 
-      for (const f of ['hook_raw.mp4', 'body_raw.mp4', 'cta_raw.mp4', outputFile]) {
+      for (const f of [outputFile, concatFile]) {
         try { await ff.deleteFile(f); } catch {}
       }
 
@@ -1039,11 +1054,15 @@ async function clearCache(): Promise<void> {
     for (const [, filename] of preProcessCache) {
       try { await ffmpeg.deleteFile(filename); } catch {}
     }
+    for (const [, filename] of localConcatCache) {
+      try { await ffmpeg.deleteFile(filename); } catch {}
+    }
   }
   preProcessCache.clear();
   vpsFileCache.clear();
   vpsCacheIdMap.clear();
   vpsPreprocessPromises.clear();
+  localConcatCache.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
@@ -1115,14 +1134,8 @@ export async function processQueue(
     const vpsAvailableAtStart = await isVpsReachable(2500, true);
 
     if (!vpsAvailableAtStart) {
-      console.warn('[VideoProcessor] 🚨 VPS/túnel indisponível; bloqueando fila para evitar timeouts em massa');
-      for (const combo of combinations) {
-        combo.status = 'error';
-        combo.errorMessage = 'Servidor de vídeo indisponível no momento. Reinicie a VPS/Cloudflare Tunnel e tente novamente.';
-      }
-      onUpdate([...combinations]);
-      onProgressItem(0);
-      return;
+      console.warn('[VideoProcessor] 🚨 VPS/túnel indisponível; seguindo pelo fallback local robusto');
+      vpsConcat = 'unavailable';
     }
 
     // ─── IMPLICIT DEDUP UPLOAD: even when preProcess=false, upload each unique
@@ -1163,7 +1176,7 @@ export async function processQueue(
 
     // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
     // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
-    let useVpsSequential = true;
+    let useVpsSequential = vpsAvailableAtStart;
     let vpsFailedCount = 0;
 
     if (useVpsSequential) {
@@ -1238,16 +1251,7 @@ export async function processQueue(
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
       const timeLeft = queueHardDeadlineAt - performance.now();
-      if (timeLeft < 15_000 || vpsFailedCount >= Math.max(3, Math.ceil(combinations.length * 0.5))) {
-        console.warn(`[VideoProcessor] ⏱️ Limite de segurança atingido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
-        for (const combo of remaining) {
-          combo.status = 'error';
-          combo.errorMessage = 'Servidor de vídeo não respondeu a tempo. Tente ativar o pré-processamento ou envie vídeos menores.';
-        }
-        onUpdate([...combinations]);
-        return;
-      }
-      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially (timeLeft=${Math.round(timeLeft / 1000)}s)`);
+      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos with robust local fallback (timeLeft=${Math.round(timeLeft / 1000)}s, vpsFailed=${vpsFailedCount})`);
     }
 
     // Hydrate all VPS-preprocessed files to WASM cache once before sequential processing
