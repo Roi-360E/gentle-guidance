@@ -359,7 +359,7 @@ async function isVpsReachable(timeoutMs = 2500, force = false): Promise<boolean>
       body: new FormData(),
       signal: controller.signal,
     });
-    const ok = res.status < 500;
+    const ok = res.status === 200 || res.status === 400 || res.status === 422;
     vpsHealthCache = { ok, checkedAt: performance.now() };
     return ok;
   } catch {
