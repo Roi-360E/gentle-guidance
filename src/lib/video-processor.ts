@@ -1019,6 +1019,19 @@ export async function concatenateVideos(
         checkAbort(abortSignal);
       }
 
+      if (exitCode !== 0) {
+        console.warn('[VideoProcessor] Normalized audio concat failed, trying video-only concat...');
+        exitCode = await ff.exec([
+          '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+          '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
+          '-map', '[outv]',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '28', '-an', '-movflags', '+faststart',
+          '-y', outputFile,
+        ]);
+        checkAbort(abortSignal);
+      }
+
       if (exitCode !== 0) throw new Error(`Concatenation failed for combo ${combination.id}`);
 
       const data = await ff.readFile(outputFile);
