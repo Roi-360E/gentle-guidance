@@ -845,10 +845,10 @@ async function getLocalConcatInput(
   checkAbort(abortSignal);
 
   if (exitCode !== 0) {
-    console.warn(`[VideoProcessor] ⚠️ ${role}: normalização com áudio falhou; tentando sem áudio`);
+    console.warn(`[VideoProcessor] ⚠️ ${role}: normalização com áudio falhou; criando áudio silencioso`);
     const videoOnlyArgs = scale
-      ? ['-i', inputName, '-vf', buildScaleFilter(scale), '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-an', '-movflags', '+faststart', '-y', outputName]
-      : ['-i', inputName, '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-an', '-movflags', '+faststart', '-y', outputName];
+      ? ['-i', inputName, '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-vf', buildScaleFilter(scale), '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2', '-movflags', '+faststart', '-y', outputName]
+      : ['-i', inputName, '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2', '-movflags', '+faststart', '-y', outputName];
     exitCode = await ff.exec(videoOnlyArgs);
     checkAbort(abortSignal);
   }
