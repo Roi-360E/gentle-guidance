@@ -1024,7 +1024,7 @@ export async function concatenateVideos(
       const data = await ff.readFile(outputFile);
       const blob = new Blob([new Uint8Array(data as Uint8Array)], { type: 'video/mp4' });
 
-      for (const f of ['hook_raw.mp4', 'body_raw.mp4', 'cta_raw.mp4', outputFile]) {
+      for (const f of [outputFile, concatFile]) {
         try { await ff.deleteFile(f); } catch {}
       }
 
@@ -1046,7 +1046,7 @@ async function clearCache(): Promise<void> {
   vpsFileCache.clear();
   vpsCacheIdMap.clear();
   vpsPreprocessPromises.clear();
-    localConcatCache.clear();
+  localConcatCache.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
