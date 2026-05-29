@@ -1121,14 +1121,7 @@ export async function processQueue(
     const vpsAvailableAtStart = await isVpsReachable(2500, true);
 
     if (!vpsAvailableAtStart) {
-      console.warn('[VideoProcessor] 🚨 VPS/túnel indisponível; bloqueando fila para evitar timeouts em massa');
-      for (const combo of combinations) {
-        combo.status = 'error';
-        combo.errorMessage = 'Servidor de vídeo indisponível no momento. Reinicie a VPS/Cloudflare Tunnel e tente novamente.';
-      }
-      onUpdate([...combinations]);
-      onProgressItem(0);
-      return;
+      console.warn('[VideoProcessor] 🚨 VPS/túnel indisponível; seguindo pelo fallback local robusto');
     }
 
     // ─── IMPLICIT DEDUP UPLOAD: even when preProcess=false, upload each unique
@@ -1169,7 +1162,7 @@ export async function processQueue(
 
     // ─── VPS concat sempre paralelo (mesmo sem pré-processo). A VPS está atrás
     // de Cloudflare HTTP/2 multiplexado — não há limite de 6 conexões por host.
-    let useVpsSequential = true;
+    let useVpsSequential = vpsAvailableAtStart;
     let vpsFailedCount = 0;
 
     if (useVpsSequential) {
