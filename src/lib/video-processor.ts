@@ -820,6 +820,46 @@ async function hydrateWasmFromVpsCache(files: File[]): Promise<void> {
   }
 }
 
+async function getLocalConcatInput(
+  ff: FFmpeg,
+  file: File,
+  role: string,
+  settings: ProcessingSettings,
+  abortSignal?: AbortSignal,
+): Promise<string> {
+  const cached = localConcatCache.get(`${role}:${file.name}:${file.size}:${file.lastModified}:${settings.videoFormat}:${settings.resolution}`);
+  if (cached) return cached;
+
+  const safeRole = role.replace(/[^a-zA-Z0-9_]/g, '_');
+  const inputName = `local_${safeRole}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+  const outputName = `local_norm_${safeRole}_${Date.now()}.mp4`;
+  const data = await fetchFileCached(file);
+  await ff.writeFile(inputName, data);
+
+  const scale = getScale(settings);
+  const args = scale
+    ? ['-i', inputName, '-vf', buildScaleFilter(scale), '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2', '-movflags', '+faststart', '-y', outputName]
+    : ['-i', inputName, '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2', '-movflags', '+faststart', '-y', outputName];
+
+  let exitCode = await ff.exec(args);
+  checkAbort(abortSignal);
+
+  if (exitCode !== 0) {
+    console.warn(`[VideoProcessor] ⚠️ ${role}: normalização com áudio falhou; tentando sem áudio`);
+    const videoOnlyArgs = scale
+      ? ['-i', inputName, '-vf', buildScaleFilter(scale), '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-an', '-movflags', '+faststart', '-y', outputName]
+      : ['-i', inputName, '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-an', '-movflags', '+faststart', '-y', outputName];
+    exitCode = await ff.exec(videoOnlyArgs);
+    checkAbort(abortSignal);
+  }
+
+  try { await ff.deleteFile(inputName); } catch {}
+  if (exitCode !== 0) throw new Error(`Falha ao normalizar ${role}: ${file.name}`);
+
+  localConcatCache.set(`${role}:${file.name}:${file.size}:${file.lastModified}:${settings.videoFormat}:${settings.resolution}`, outputName);
+  return outputName;
+}
+
 export async function concatenateVideos(
   combination: Combination,
   settings: ProcessingSettings,
