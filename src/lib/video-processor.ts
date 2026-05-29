@@ -214,6 +214,9 @@ const vpsCacheIdMap = new Map<File, string>();
 // In-flight VPS uploads. Prevents duplicate uploads when the user clicks "Gerar"
 // while the 7s UI preprocessing window has already released the button.
 const vpsPreprocessPromises = new Map<File, Promise<VpsPreprocessResult>>();
+// Local fallback cache for normalized concat inputs. This is used when the VPS
+// route/domain is down, avoiding fragile multi-input filter_complex commands.
+const localConcatCache = new Map<string, string>();
 let cacheCounter = 0;
 
 function getCacheKey(file: File): string {
@@ -1044,6 +1047,7 @@ async function clearCache(): Promise<void> {
   vpsFileCache.clear();
   vpsCacheIdMap.clear();
   vpsPreprocessPromises.clear();
+    localConcatCache.clear();
   cacheCounter = 0;
   console.log('[VideoProcessor] Cache cleared');
 }
