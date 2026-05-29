@@ -992,71 +992,30 @@ export async function concatenateVideos(
       return URL.createObjectURL(blob);
 
     } else {
-      const hookData = await fetchFileCached(combination.hook.file);
-      const bodyData = await fetchFileCached(combination.body.file);
-      const ctaData = await fetchFileCached(combination.cta.file);
-      await ff.writeFile('hook_raw.mp4', hookData);
-      await ff.writeFile('body_raw.mp4', bodyData);
-      await ff.writeFile('cta_raw.mp4', ctaData);
+      const hookNorm = await getLocalConcatInput(ff, combination.hook.file, 'hook', settings, abortSignal);
+      const bodyNorm = await getLocalConcatInput(ff, combination.body.file, 'body', settings, abortSignal);
+      const ctaNorm = await getLocalConcatInput(ff, combination.cta.file, 'cta', settings, abortSignal);
 
-      const scale = getScale(settings);
-      const outputFile = 'output.mp4';
-      let exitCode: number;
+      const outputFile = `output_${combination.id}.mp4`;
+      const concatFile = `concat_${combination.id}.txt`;
+      await ff.writeFile(concatFile, `file '${hookNorm}'\nfile '${bodyNorm}'\nfile '${ctaNorm}'\n`);
 
-      if (scale) {
-        exitCode = await ff.exec([
-          '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-          '-filter_complex',
-          `[0:v]${buildScaleFilter(scale)}[v0];` +
-          `[1:v]${buildScaleFilter(scale)}[v1];` +
-          `[2:v]${buildScaleFilter(scale)}[v2];` +
-          `[v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]`,
-          '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
-          '-y', outputFile,
-        ]);
-      } else {
-        exitCode = await ff.exec([
-          '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-          '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
-          '-map', '[outv]', '-map', '[outa]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-          '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
-          '-y', outputFile,
-        ]);
-      }
+      let exitCode = await ff.exec([
+        '-f', 'concat', '-safe', '0', '-i', concatFile,
+        '-c', 'copy', '-movflags', '+faststart', '-y', outputFile,
+      ]);
       checkAbort(abortSignal);
 
       if (exitCode !== 0) {
-        console.warn('[VideoProcessor] Direct concat failed, trying video-only...');
-        if (scale) {
-          exitCode = await ff.exec([
-            '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-            '-filter_complex',
-            `[0:v]${buildScaleFilter(scale)}[v0];` +
-            `[1:v]${buildScaleFilter(scale)}[v1];` +
-            `[2:v]${buildScaleFilter(scale)}[v2];` +
-            `[v0][v1][v2]concat=n=3:v=1:a=0[outv]`,
-            '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-            '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-            '-an', '-movflags', '+faststart',
-            '-y', outputFile,
-          ]);
-        } else {
-          exitCode = await ff.exec([
-            '-i', 'hook_raw.mp4', '-i', 'body_raw.mp4', '-i', 'cta_raw.mp4',
-            '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]',
-            '-map', '[outv]',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
-            '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
-            '-an', '-movflags', '+faststart',
-            '-y', outputFile,
-          ]);
-        }
+        console.warn('[VideoProcessor] Demuxer concat failed, trying normalized filter concat...');
+        exitCode = await ff.exec([
+          '-i', hookNorm, '-i', bodyNorm, '-i', ctaNorm,
+          '-filter_complex', '[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[outv][outa]',
+          '-map', '[outv]', '-map', '[outa]',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+          '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
+          '-y', outputFile,
+        ]);
         checkAbort(abortSignal);
       }
 
