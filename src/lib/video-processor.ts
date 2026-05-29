@@ -1041,6 +1041,9 @@ async function clearCache(): Promise<void> {
     for (const [, filename] of preProcessCache) {
       try { await ffmpeg.deleteFile(filename); } catch {}
     }
+    for (const [, filename] of localConcatCache) {
+      try { await ffmpeg.deleteFile(filename); } catch {}
+    }
   }
   preProcessCache.clear();
   vpsFileCache.clear();
