@@ -1122,6 +1122,7 @@ export async function processQueue(
 
     if (!vpsAvailableAtStart) {
       console.warn('[VideoProcessor] 🚨 VPS/túnel indisponível; seguindo pelo fallback local robusto');
+      vpsConcat = 'unavailable';
     }
 
     // ─── IMPLICIT DEDUP UPLOAD: even when preProcess=false, upload each unique
@@ -1237,16 +1238,7 @@ export async function processQueue(
     const remaining = combinations.filter(c => c.status !== 'done');
     if (remaining.length > 0) {
       const timeLeft = queueHardDeadlineAt - performance.now();
-      if (timeLeft < 15_000 || vpsFailedCount >= Math.max(3, Math.ceil(combinations.length * 0.5))) {
-        console.warn(`[VideoProcessor] ⏱️ Limite de segurança atingido: ${remaining.length} combo(s) não irão para fallback WASM lento`);
-        for (const combo of remaining) {
-          combo.status = 'error';
-          combo.errorMessage = 'Servidor de vídeo não respondeu a tempo. Tente ativar o pré-processamento ou envie vídeos menores.';
-        }
-        onUpdate([...combinations]);
-        return;
-      }
-      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos sequentially (timeLeft=${Math.round(timeLeft / 1000)}s)`);
+      console.log(`[VideoProcessor] 🔄 Processing ${remaining.length} remaining combos with robust local fallback (timeLeft=${Math.round(timeLeft / 1000)}s, vpsFailed=${vpsFailedCount})`);
     }
 
     // Hydrate all VPS-preprocessed files to WASM cache once before sequential processing
