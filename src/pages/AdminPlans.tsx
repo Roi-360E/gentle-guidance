@@ -23,6 +23,9 @@ interface Plan {
   plan_key: string;
   name: string;
   price: number;
+  price_brl?: number | null;
+  price_usd?: number | null;
+  price_eur?: number | null;
   tokens: number;
   features: string[];
   icon: string;
@@ -36,6 +39,7 @@ interface Plan {
   has_voice_rewrite: boolean;
   has_shorts_reels: boolean;
 }
+
 
 interface UserRow {
   user_id: string;
