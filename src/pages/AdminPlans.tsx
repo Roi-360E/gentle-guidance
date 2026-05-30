@@ -804,6 +804,9 @@ export default function AdminPlans() {
           plan_key: plan.plan_key,
           name: plan.name,
           price: plan.price,
+          price_brl: plan.price_brl ?? plan.price ?? 0,
+          price_usd: plan.price_usd ?? null,
+          price_eur: plan.price_eur ?? null,
           tokens: plan.tokens,
           features: plan.features,
           icon: plan.icon,
@@ -817,6 +820,7 @@ export default function AdminPlans() {
           has_voice_rewrite: plan.has_voice_rewrite,
           has_shorts_reels: plan.has_shorts_reels,
         };
+
 
         if (plan.id) {
           const { error } = await supabase
