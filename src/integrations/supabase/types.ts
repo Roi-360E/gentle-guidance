@@ -309,6 +309,9 @@ export type Database = {
           name: string
           plan_key: string
           price: number
+          price_brl: number | null
+          price_eur: number | null
+          price_usd: number | null
           sort_order: number
           tokens: number
           updated_at: string
@@ -329,6 +332,9 @@ export type Database = {
           name: string
           plan_key: string
           price?: number
+          price_brl?: number | null
+          price_eur?: number | null
+          price_usd?: number | null
           sort_order?: number
           tokens?: number
           updated_at?: string
@@ -349,6 +355,9 @@ export type Database = {
           name?: string
           plan_key?: string
           price?: number
+          price_brl?: number | null
+          price_eur?: number | null
+          price_usd?: number | null
           sort_order?: number
           tokens?: number
           updated_at?: string
