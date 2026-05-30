@@ -23,6 +23,9 @@ interface Plan {
   plan_key: string;
   name: string;
   price: number;
+  price_brl?: number | null;
+  price_usd?: number | null;
+  price_eur?: number | null;
   tokens: number;
   features: string[];
   icon: string;
@@ -36,6 +39,7 @@ interface Plan {
   has_voice_rewrite: boolean;
   has_shorts_reels: boolean;
 }
+
 
 interface UserRow {
   user_id: string;
@@ -218,7 +222,11 @@ export default function AdminPlans() {
         has_auto_subtitles: p.has_auto_subtitles ?? false,
         has_voice_rewrite: p.has_voice_rewrite ?? false,
         has_shorts_reels: p.has_shorts_reels ?? false,
+        price_brl: p.price_brl ?? p.price ?? 0,
+        price_usd: p.price_usd ?? null,
+        price_eur: p.price_eur ?? null,
       })));
+
     }
     setLoading(false);
   };
@@ -796,6 +804,9 @@ export default function AdminPlans() {
           plan_key: plan.plan_key,
           name: plan.name,
           price: plan.price,
+          price_brl: plan.price_brl ?? plan.price ?? 0,
+          price_usd: plan.price_usd ?? null,
+          price_eur: plan.price_eur ?? null,
           tokens: plan.tokens,
           features: plan.features,
           icon: plan.icon,
@@ -809,6 +820,7 @@ export default function AdminPlans() {
           has_voice_rewrite: plan.has_voice_rewrite,
           has_shorts_reels: plan.has_shorts_reels,
         };
+
 
         if (plan.id) {
           const { error } = await supabase
@@ -983,13 +995,17 @@ export default function AdminPlans() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Preço (R$)</Label>
+                        <Label className="text-xs">Preço (R$ BRL)</Label>
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
                           value={plan.price}
-                          onChange={e => updatePlan(index, 'price', parseFloat(e.target.value) || 0)}
+                          onChange={e => {
+                            const v = parseFloat(e.target.value) || 0;
+                            updatePlan(index, 'price', v);
+                            updatePlan(index, 'price_brl', v);
+                          }}
                           className="text-sm"
                         />
                       </div>
@@ -1003,6 +1019,34 @@ export default function AdminPlans() {
                           className="text-sm"
                         />
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Preço ($ USD) <span className="text-muted-foreground font-normal">— opcional</span></Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Vazio = não disponível"
+                          value={plan.price_usd ?? ''}
+                          onChange={e => updatePlan(index, 'price_usd', e.target.value === '' ? null : (parseFloat(e.target.value) || 0))}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Preço (€ EUR) <span className="text-muted-foreground font-normal">— opcional</span></Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Vazio = não disponível"
+                          value={plan.price_eur ?? ''}
+                          onChange={e => updatePlan(index, 'price_eur', e.target.value === '' ? null : (parseFloat(e.target.value) || 0))}
+                          className="text-sm"
+                        />
+                      </div>
+
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 sm:gap-6">
