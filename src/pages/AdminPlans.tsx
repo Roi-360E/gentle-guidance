@@ -222,7 +222,11 @@ export default function AdminPlans() {
         has_auto_subtitles: p.has_auto_subtitles ?? false,
         has_voice_rewrite: p.has_voice_rewrite ?? false,
         has_shorts_reels: p.has_shorts_reels ?? false,
+        price_brl: p.price_brl ?? p.price ?? 0,
+        price_usd: p.price_usd ?? null,
+        price_eur: p.price_eur ?? null,
       })));
+
     }
     setLoading(false);
   };
