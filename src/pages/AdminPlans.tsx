@@ -995,13 +995,17 @@ export default function AdminPlans() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Preço (R$)</Label>
+                        <Label className="text-xs">Preço (R$ BRL)</Label>
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
                           value={plan.price}
-                          onChange={e => updatePlan(index, 'price', parseFloat(e.target.value) || 0)}
+                          onChange={e => {
+                            const v = parseFloat(e.target.value) || 0;
+                            updatePlan(index, 'price', v);
+                            updatePlan(index, 'price_brl', v);
+                          }}
                           className="text-sm"
                         />
                       </div>
@@ -1015,6 +1019,34 @@ export default function AdminPlans() {
                           className="text-sm"
                         />
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Preço ($ USD) <span className="text-muted-foreground font-normal">— opcional</span></Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Vazio = não disponível"
+                          value={plan.price_usd ?? ''}
+                          onChange={e => updatePlan(index, 'price_usd', e.target.value === '' ? null : (parseFloat(e.target.value) || 0))}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Preço (€ EUR) <span className="text-muted-foreground font-normal">— opcional</span></Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Vazio = não disponível"
+                          value={plan.price_eur ?? ''}
+                          onChange={e => updatePlan(index, 'price_eur', e.target.value === '' ? null : (parseFloat(e.target.value) || 0))}
+                          className="text-sm"
+                        />
+                      </div>
+
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 sm:gap-6">
