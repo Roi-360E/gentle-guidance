@@ -1,0 +1,78 @@
+{
+  "common": {
+    "loading": "Aguarde...",
+    "back": "Voltar",
+    "continue": "Continuar",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "close": "Fechar",
+    "submit": "Enviar",
+    "email": "Email",
+    "password": "Senha",
+    "name": "Nome",
+    "selectPlan": "Selecionar",
+    "month": "mês",
+    "alreadyHaveAccount": "Já tem conta? Entre",
+    "noAccount": "Não tem conta? Crie uma",
+    "errorGeneric": "Algo deu errado. Tente novamente."
+  },
+  "lang": {
+    "switcher": "Idioma",
+    "pt": "Português",
+    "es": "Español"
+  },
+  "auth": {
+    "brand": "EscalaXPro",
+    "loginTitle": "Entre na sua conta",
+    "emailPlaceholder": "seu@email.com",
+    "passwordPlaceholder": "••••••••",
+    "loginButton": "Entrar",
+    "loggingIn": "Aguarde...",
+    "loginSuccess": "Login realizado!",
+    "forgotPassword": "Esqueceu sua senha?"
+  },
+  "forgotPassword": {
+    "title": "Recuperar Senha",
+    "descIdle": "Digite seu email para receber o link de recuperação.",
+    "descSent": "Enviamos um link de recuperação para seu email.",
+    "submit": "Enviar Email de Recuperação",
+    "sending": "Enviando...",
+    "back": "Voltar para o Login",
+    "checkInbox": "Verifique sua caixa de entrada e spam. O link expira em alguns minutos.",
+    "successToast": "Email de recuperação enviado! Verifique sua caixa de entrada.",
+    "missingEmail": "Digite seu email."
+  },
+  "resetPassword": {
+    "title": "Nova Senha",
+    "description": "Digite sua nova senha abaixo",
+    "verifying": "Verificando link de recuperação...",
+    "newPassword": "Nova Senha",
+    "confirmPassword": "Confirmar Senha",
+    "submit": "Redefinir Senha",
+    "mismatch": "As senhas não coincidem.",
+    "tooShort": "A senha deve ter pelo menos 6 caracteres.",
+    "success": "Senha atualizada com sucesso!"
+  },
+  "plans": {
+    "title": "Escolha seu plano",
+    "subtitle": "Selecione o plano ideal e comece agora",
+    "currencyLabel": "Moeda:",
+    "comingSoonTitle": "Planos em {{currency}} em breve",
+    "comingSoonDesc": "Ainda não temos preços configurados nesta moeda. Você pode escolher outra ou nos contatar.",
+    "seeBRL": "Ver planos em Real",
+    "popular": "Popular",
+    "tokens": "{{count}} tokens",
+    "selectBRL": "Selecionar",
+    "selectStripe": "Pagar com Stripe em {{currency}}",
+    "loginNeeded": "Faça login para pagar em Dollar ou Euro.",
+    "checkoutError": "Erro ao iniciar checkout internacional."
+  },
+  "thankYou": {
+    "title": "Pagamento Confirmado! 🎉",
+    "subtitle": "Obrigado pela sua compra! Seu plano já está ativo.",
+    "activated": "Plano ativado com sucesso",
+    "cta": "Acessar o Aplicativo",
+    "perMonth": "/ mês"
+  }
+}
