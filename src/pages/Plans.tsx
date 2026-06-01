@@ -15,6 +15,7 @@ interface PlanData {
   plan_key: string;
   name: string;
   price: number;
+  price_eur?: number | null;
   tokens: number;
   features: string[];
   icon: string;
@@ -206,6 +207,37 @@ export default function Plans() {
                       {plan.price > 0 && (
                         <Button className="w-full" onClick={() => handleCheckout(plan.plan_key)}>
                           Assinar {plan.name}
+                        </Button>
+                      )}
+                      {plan.price_eur && Number(plan.price_eur) > 0 && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          disabled={loading === `stripe-${plan.plan_key}`}
+                          onClick={async () => {
+                            if (!user) { toast.error('Faça login para continuar.'); return; }
+                            setLoading(`stripe-${plan.plan_key}`);
+                            try {
+                              const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+                                body: { plan_key: plan.plan_key },
+                              });
+                              if (error) throw error;
+                              if (data?.url) {
+                                window.open(data.url, '_blank');
+                              } else {
+                                toast.error(data?.error || 'Erro ao iniciar checkout.');
+                              }
+                            } catch (e: any) {
+                              toast.error(e?.message || 'Erro ao iniciar checkout.');
+                            } finally {
+                              setLoading(null);
+                            }
+                          }}
+                        >
+                          {loading === `stripe-${plan.plan_key}` ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          ) : null}
+                          Pagar € {Number(plan.price_eur).toFixed(2).replace('.', ',')} (Stripe)
                         </Button>
                       )}
                     </div>
