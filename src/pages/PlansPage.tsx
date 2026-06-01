@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Rocket, Sparkles, Zap, Crown, Star, Check, ArrowRight, ArrowLeft, Loader2, Globe } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserCurrency, type Currency } from '@/hooks/useUserCurrency';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
 interface PlanData {
@@ -29,9 +30,11 @@ const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
 const PlansPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { currency, setCurrency, format } = useUserCurrency();
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -67,14 +70,40 @@ const PlansPage = () => {
     return price != null && price > 0;
   });
 
-  const handleSelect = (plan: PlanData) => {
+  const handleSelect = async (plan: PlanData) => {
     if (currency === 'BRL') {
       // Existing flow — unchanged
       navigate(`/cadastro/${plan.plan_key}`);
       return;
     }
-    // International — Stripe not yet enabled
-    toast.info('Pagamento internacional em breve! Por enquanto, contate-nos no WhatsApp.', { duration: 5000 });
+
+    if (!user) {
+      toast.error('Faça login para pagar em Dollar ou Euro.');
+      navigate('/auth?redirect=/planos');
+      return;
+    }
+
+    setCheckoutLoading(`${plan.plan_key}-${currency}`);
+    try {
+      const price = getPriceFor(plan, currency) || 0;
+      localStorage.setItem('checkout_plan_key', plan.plan_key);
+      localStorage.setItem('checkout_plan_name', plan.name);
+      localStorage.setItem('checkout_plan_value', String(price));
+      localStorage.setItem('checkout_method', `Stripe ${currency}`);
+
+      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+        body: { plan_key: plan.plan_key, currency },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error(data?.error || 'Erro ao iniciar checkout internacional.');
+      window.location.href = data.url;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao iniciar checkout internacional.';
+      toast.error(message);
+    } finally {
+      setCheckoutLoading(null);
+    }
   };
 
   return (
@@ -127,11 +156,11 @@ const PlansPage = () => {
             {visiblePlans.map((plan) => {
               const Icon = ICON_MAP[plan.icon] || Sparkles;
               const price = getPriceFor(plan, currency)!;
+              const isCheckingOut = checkoutLoading === `${plan.plan_key}-${currency}`;
               return (
                 <Card
                   key={plan.id}
-                  className="relative cursor-pointer border-2 transition-all hover:scale-[1.02] border-border hover:border-primary/50"
-                  onClick={() => handleSelect(plan)}
+                  className="relative border-2 transition-all hover:scale-[1.02] border-border hover:border-primary/50"
                 >
                   {plan.is_popular && (
                     <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2">
@@ -160,8 +189,14 @@ const PlansPage = () => {
                         </li>
                       ))}
                     </ul>
-                    <Button className="w-full" variant={plan.is_popular ? 'default' : 'outline'}>
-                      {currency === 'BRL' ? 'Selecionar' : 'Em breve'} <ArrowRight className="w-4 h-4 ml-1" />
+                    <Button
+                      className="w-full"
+                      variant={plan.is_popular ? 'default' : 'outline'}
+                      disabled={isCheckingOut}
+                      onClick={() => handleSelect(plan)}
+                    >
+                      {isCheckingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      {currency === 'BRL' ? 'Selecionar' : `Pagar com Stripe em ${currency}`} <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
                   </CardContent>
                 </Card>
