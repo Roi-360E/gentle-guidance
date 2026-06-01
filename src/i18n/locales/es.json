@@ -1,0 +1,78 @@
+{
+  "common": {
+    "loading": "Espera...",
+    "back": "Volver",
+    "continue": "Continuar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "close": "Cerrar",
+    "submit": "Enviar",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "name": "Nombre",
+    "selectPlan": "Seleccionar",
+    "month": "mes",
+    "alreadyHaveAccount": "¿Ya tienes cuenta? Inicia sesión",
+    "noAccount": "¿No tienes cuenta? Crea una",
+    "errorGeneric": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "lang": {
+    "switcher": "Idioma",
+    "pt": "Português",
+    "es": "Español"
+  },
+  "auth": {
+    "brand": "EscalaXPro",
+    "loginTitle": "Inicia sesión en tu cuenta",
+    "emailPlaceholder": "tu@correo.com",
+    "passwordPlaceholder": "••••••••",
+    "loginButton": "Iniciar sesión",
+    "loggingIn": "Cargando...",
+    "loginSuccess": "¡Sesión iniciada!",
+    "forgotPassword": "¿Olvidaste tu contraseña?"
+  },
+  "forgotPassword": {
+    "title": "Recuperar contraseña",
+    "descIdle": "Introduce tu correo para recibir el enlace de recuperación.",
+    "descSent": "Te enviamos un enlace de recuperación a tu correo.",
+    "submit": "Enviar enlace de recuperación",
+    "sending": "Enviando...",
+    "back": "Volver al inicio de sesión",
+    "checkInbox": "Revisa tu bandeja de entrada y spam. El enlace caduca en unos minutos.",
+    "successToast": "¡Correo de recuperación enviado! Revisa tu bandeja de entrada.",
+    "missingEmail": "Introduce tu correo."
+  },
+  "resetPassword": {
+    "title": "Nueva contraseña",
+    "description": "Introduce tu nueva contraseña a continuación",
+    "verifying": "Verificando enlace de recuperación...",
+    "newPassword": "Nueva contraseña",
+    "confirmPassword": "Confirmar contraseña",
+    "submit": "Restablecer contraseña",
+    "mismatch": "Las contraseñas no coinciden.",
+    "tooShort": "La contraseña debe tener al menos 6 caracteres.",
+    "success": "¡Contraseña actualizada con éxito!"
+  },
+  "plans": {
+    "title": "Elige tu plan",
+    "subtitle": "Selecciona el plan ideal y empieza ahora",
+    "currencyLabel": "Moneda:",
+    "comingSoonTitle": "Planes en {{currency}} próximamente",
+    "comingSoonDesc": "Aún no tenemos precios configurados en esta moneda. Puedes elegir otra o contactarnos.",
+    "seeBRL": "Ver planes en Real",
+    "popular": "Popular",
+    "tokens": "{{count}} tokens",
+    "selectBRL": "Seleccionar",
+    "selectStripe": "Pagar con Stripe en {{currency}}",
+    "loginNeeded": "Inicia sesión para pagar en Dólares o Euros.",
+    "checkoutError": "Error al iniciar el pago internacional."
+  },
+  "thankYou": {
+    "title": "¡Pago confirmado! 🎉",
+    "subtitle": "¡Gracias por tu compra! Tu plan ya está activo.",
+    "activated": "Plan activado con éxito",
+    "cta": "Acceder a la aplicación",
+    "perMonth": "/ mes"
+  }
+}

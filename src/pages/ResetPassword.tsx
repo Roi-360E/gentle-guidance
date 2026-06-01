@@ -7,8 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Lock, Rocket } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 const ResetPassword = () => {
+  const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,12 +18,10 @@ const ResetPassword = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for recovery token in URL hash
     const hash = window.location.hash;
     if (hash.includes('type=recovery')) {
       setReady(true);
     } else {
-      // Listen for PASSWORD_RECOVERY event
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
         if (event === 'PASSWORD_RECOVERY') {
           setReady(true);
@@ -35,12 +35,12 @@ const ResetPassword = () => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
-      toast.error('As senhas não coincidem.');
+      toast.error(t('resetPassword.mismatch'));
       return;
     }
 
     if (password.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres.');
+      toast.error(t('resetPassword.tooShort'));
       return;
     }
 
@@ -50,7 +50,7 @@ const ResetPassword = () => {
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success('Senha atualizada com sucesso!');
+      toast.success(t('resetPassword.success'));
       navigate('/');
     }
     setLoading(false);
@@ -61,7 +61,7 @@ const ResetPassword = () => {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md border-border bg-card">
           <CardContent className="pt-6 text-center text-muted-foreground">
-            Verificando link de recuperação...
+            {t('resetPassword.verifying')}
           </CardContent>
         </Card>
       </div>
@@ -78,14 +78,14 @@ const ResetPassword = () => {
             </div>
           </div>
           <CardTitle className="text-2xl font-extrabold text-primary uppercase tracking-tight">
-            Nova Senha
+            {t('resetPassword.title')}
           </CardTitle>
-          <CardDescription>Digite sua nova senha abaixo</CardDescription>
+          <CardDescription>{t('resetPassword.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">Nova Senha</Label>
+              <Label htmlFor="password">{t('resetPassword.newPassword')}</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -101,7 +101,7 @@ const ResetPassword = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+              <Label htmlFor="confirmPassword">{t('resetPassword.confirmPassword')}</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -121,7 +121,7 @@ const ResetPassword = () => {
               disabled={loading}
               className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-full"
             >
-              {loading ? 'Aguarde...' : 'Redefinir Senha'}
+              {loading ? t('common.loading') : t('resetPassword.submit')}
             </Button>
           </form>
         </CardContent>

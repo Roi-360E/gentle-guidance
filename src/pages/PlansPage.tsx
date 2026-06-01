@@ -9,6 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useUserCurrency, type Currency } from '@/hooks/useUserCurrency';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 interface PlanData {
   id: string;
@@ -29,6 +31,7 @@ interface PlanData {
 const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
 const PlansPage = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency, setCurrency, format } = useUserCurrency();
@@ -72,13 +75,12 @@ const PlansPage = () => {
 
   const handleSelect = async (plan: PlanData) => {
     if (currency === 'BRL') {
-      // Existing flow — unchanged
       navigate(`/cadastro/${plan.plan_key}`);
       return;
     }
 
     if (!user) {
-      toast.error('Faça login para pagar em Dollar ou Euro.');
+      toast.error(t('plans.loginNeeded'));
       navigate('/auth?redirect=/planos');
       return;
     }
@@ -96,10 +98,10 @@ const PlansPage = () => {
       });
 
       if (error) throw error;
-      if (!data?.url) throw new Error(data?.error || 'Erro ao iniciar checkout internacional.');
+      if (!data?.url) throw new Error(data?.error || t('plans.checkoutError'));
       window.location.href = data.url;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao iniciar checkout internacional.';
+      const message = err instanceof Error ? err.message : t('plans.checkoutError');
       toast.error(message);
     } finally {
       setCheckoutLoading(null);
@@ -109,20 +111,23 @@ const PlansPage = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-3xl">
+        <div className="flex justify-end mb-2">
+          <LanguageSwitcher />
+        </div>
         <div className="text-center mb-6">
           <div className="flex justify-center mb-3">
             <div className="bg-primary/20 rounded-xl p-3">
               <Rocket className="w-8 h-8 text-primary" />
             </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground">Escolha seu plano</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground">{t('plans.title')}</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Selecione o plano ideal e comece agora
+            {t('plans.subtitle')}
           </p>
 
           <div className="mt-4 inline-flex items-center gap-2 bg-muted/30 border border-border rounded-lg px-3 py-1.5">
             <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Moeda:</span>
+            <span className="text-xs text-muted-foreground">{t('plans.currencyLabel')}</span>
             <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
               <SelectTrigger className="h-7 w-[120px] text-xs border-0 bg-transparent focus:ring-0">
                 <SelectValue />
@@ -143,12 +148,12 @@ const PlansPage = () => {
         ) : visiblePlans.length === 0 ? (
           <div className="text-center py-12 px-6 bg-muted/30 rounded-xl border border-border">
             <Globe className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <h3 className="font-bold text-foreground mb-1">Planos em {currency} em breve</h3>
+            <h3 className="font-bold text-foreground mb-1">{t('plans.comingSoonTitle', { currency })}</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Ainda não temos preços configurados nesta moeda. Você pode escolher Real (R$) ou nos contatar.
+              {t('plans.comingSoonDesc')}
             </p>
             <Button variant="outline" size="sm" onClick={() => setCurrency('BRL')}>
-              Ver planos em Real
+              {t('plans.seeBRL')}
             </Button>
           </div>
         ) : (
@@ -164,7 +169,7 @@ const PlansPage = () => {
                 >
                   {plan.is_popular && (
                     <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2">
-                      <Star className="w-3 h-3 mr-1" /> Popular
+                      <Star className="w-3 h-3 mr-1" /> {t('plans.popular')}
                     </Badge>
                   )}
                   <CardContent className="p-5 space-y-4">
@@ -174,12 +179,12 @@ const PlansPage = () => {
                       </div>
                       <div>
                         <h3 className="font-bold text-foreground">{plan.name}</h3>
-                        <p className="text-xs text-muted-foreground">{plan.tokens} tokens</p>
+                        <p className="text-xs text-muted-foreground">{t('plans.tokens', { count: plan.tokens })}</p>
                       </div>
                     </div>
                     <div className="text-2xl font-extrabold text-foreground">
                       {format(price)}
-                      <span className="text-xs text-muted-foreground font-normal">/mês</span>
+                      <span className="text-xs text-muted-foreground font-normal">/{t('common.month')}</span>
                     </div>
                     <ul className="space-y-1.5">
                       {(plan.features as string[]).slice(0, 4).map((f, i) => (
@@ -196,7 +201,7 @@ const PlansPage = () => {
                       onClick={() => handleSelect(plan)}
                     >
                       {isCheckingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                      {currency === 'BRL' ? 'Selecionar' : `Pagar com Stripe em ${currency}`} <ArrowRight className="w-4 h-4 ml-1" />
+                      {currency === 'BRL' ? t('plans.selectBRL') : t('plans.selectStripe', { currency })} <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
                   </CardContent>
                 </Card>
@@ -212,7 +217,7 @@ const PlansPage = () => {
             className="text-sm text-primary hover:underline"
           >
             <ArrowLeft className="w-3 h-3 inline mr-1" />
-            Já tem conta? Entre
+            {t('common.alreadyHaveAccount')}
           </button>
         </div>
       </div>
