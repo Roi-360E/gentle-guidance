@@ -79,7 +79,7 @@ const PlansPage = () => {
 
     if (!user) {
       toast.error('Faça login para pagar em Dollar ou Euro.');
-      navigate('/auth');
+      navigate('/auth?redirect=/planos');
       return;
     }
 
