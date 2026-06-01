@@ -9,6 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useUserCurrency, type Currency } from '@/hooks/useUserCurrency';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 interface PlanData {
   id: string;
@@ -29,6 +31,7 @@ interface PlanData {
 const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
 const PlansPage = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency, setCurrency, format } = useUserCurrency();
@@ -72,13 +75,12 @@ const PlansPage = () => {
 
   const handleSelect = async (plan: PlanData) => {
     if (currency === 'BRL') {
-      // Existing flow — unchanged
       navigate(`/cadastro/${plan.plan_key}`);
       return;
     }
 
     if (!user) {
-      toast.error('Faça login para pagar em Dollar ou Euro.');
+      toast.error(t('plans.loginNeeded'));
       navigate('/auth?redirect=/planos');
       return;
     }
@@ -96,15 +98,134 @@ const PlansPage = () => {
       });
 
       if (error) throw error;
-      if (!data?.url) throw new Error(data?.error || 'Erro ao iniciar checkout internacional.');
+      if (!data?.url) throw new Error(data?.error || t('plans.checkoutError'));
       window.location.href = data.url;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao iniciar checkout internacional.';
+      const message = err instanceof Error ? err.message : t('plans.checkoutError');
       toast.error(message);
     } finally {
       setCheckoutLoading(null);
     }
   };
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-3xl">
+        <div className="flex justify-end mb-2">
+          <LanguageSwitcher />
+        </div>
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-3">
+            <div className="bg-primary/20 rounded-xl p-3">
+              <Rocket className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground">{t('plans.title')}</h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            {t('plans.subtitle')}
+          </p>
+
+          <div className="mt-4 inline-flex items-center gap-2 bg-muted/30 border border-border rounded-lg px-3 py-1.5">
+            <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{t('plans.currencyLabel')}</span>
+            <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
+              <SelectTrigger className="h-7 w-[120px] text-xs border-0 bg-transparent focus:ring-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="BRL">🇧🇷 Real (R$)</SelectItem>
+                <SelectItem value="USD">🇺🇸 Dollar ($)</SelectItem>
+                <SelectItem value="EUR">🇪🇺 Euro (€)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {plansLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : visiblePlans.length === 0 ? (
+          <div className="text-center py-12 px-6 bg-muted/30 rounded-xl border border-border">
+            <Globe className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <h3 className="font-bold text-foreground mb-1">{t('plans.comingSoonTitle', { currency })}</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {t('plans.comingSoonDesc')}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => setCurrency('BRL')}>
+              {t('plans.seeBRL')}
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visiblePlans.map((plan) => {
+              const Icon = ICON_MAP[plan.icon] || Sparkles;
+              const price = getPriceFor(plan, currency)!;
+              const isCheckingOut = checkoutLoading === `${plan.plan_key}-${currency}`;
+              return (
+                <Card
+                  key={plan.id}
+                  className="relative border-2 transition-all hover:scale-[1.02] border-border hover:border-primary/50"
+                >
+                  {plan.is_popular && (
+                    <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2">
+                      <Star className="w-3 h-3 mr-1" /> {t('plans.popular')}
+                    </Badge>
+                  )}
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${plan.bg_color}`}>
+                        <Icon className={`w-5 h-5 ${plan.color}`} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-foreground">{plan.name}</h3>
+                        <p className="text-xs text-muted-foreground">{t('plans.tokens', { count: plan.tokens })}</p>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-extrabold text-foreground">
+                      {format(price)}
+                      <span className="text-xs text-muted-foreground font-normal">/{t('common.month')}</span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {(plan.features as string[]).slice(0, 4).map((f, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      className="w-full"
+                      variant={plan.is_popular ? 'default' : 'outline'}
+                      disabled={isCheckingOut}
+                      onClick={() => handleSelect(plan)}
+                    >
+                      {isCheckingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      {currency === 'BRL' ? t('plans.selectBRL') : t('plans.selectStripe', { currency })} <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => navigate('/auth')}
+            className="text-sm text-primary hover:underline"
+          >
+            <ArrowLeft className="w-3 h-3 inline mr-1" />
+            {t('common.alreadyHaveAccount')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PlansPage;
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
