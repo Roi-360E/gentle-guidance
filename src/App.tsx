@@ -14,7 +14,6 @@ import Auth from "./pages/Auth";
 import PlansPage from "./pages/PlansPage";
 import SignupPage from "./pages/SignupPage";
 import SubtitleEditor from "./pages/SubtitleEditor";
-import Plans from "./pages/Plans";
 import Downloads from "./pages/Downloads";
 import NotFound from "./pages/NotFound";
 import Sales from "./pages/Sales";
@@ -54,7 +53,7 @@ const App = () => (
               <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/subtitles" element={<ProtectedRoute><SubtitleEditor /></ProtectedRoute>} />
-              <Route path="/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
+              <Route path="/plans" element={<Navigate to="/planos" replace />} />
               <Route path="/checkout" element={<Navigate to="/planos" replace />} />
               <Route path="/admin/plans" element={<ProtectedRoute><AdminPlans /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
