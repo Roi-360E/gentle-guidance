@@ -6,6 +6,8 @@ import { CheckCircle2, Home, Sparkles, Crown, Zap } from 'lucide-react';
 import { trackPixelEvent } from '@/lib/pixel-tracker';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
+import { useTranslation } from 'react-i18next';
+import { useUserCurrency } from '@/hooks/useUserCurrency';
 
 const TEST_PLANS = [
   { name: 'Plano Starter', value: 27.00, key: 'starter' },
@@ -34,6 +36,8 @@ async function fireCAPI(plan: { name: string; value: number; key: string }, user
 }
 
 export default function ThankYou() {
+  const { t } = useTranslation();
+  const { format } = useUserCurrency();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -167,10 +171,10 @@ export default function ThankYou() {
 
         <div className="space-y-3">
           <h1 className="text-3xl font-bold text-foreground">
-            Pagamento Confirmado! 🎉
+            {t('thankYou.title')}
           </h1>
           <p className="text-muted-foreground text-lg">
-            Obrigado pela sua compra! Seu plano já está ativo.
+            {t('thankYou.subtitle')}
           </p>
         </div>
 
@@ -189,13 +193,13 @@ export default function ThankYou() {
               <div className="text-left">
                 <p className="text-lg font-bold text-foreground">{purchasedPlan.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  R$ {purchasedPlan.value.toFixed(2).replace('.', ',')} / mês
+                  {format(purchasedPlan.value)} {t('thankYou.perMonth')}
                 </p>
               </div>
             </div>
             <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Plano ativado com sucesso</span>
+              <span>{t('thankYou.activated')}</span>
             </div>
           </motion.div>
         )}
@@ -227,7 +231,7 @@ export default function ThankYou() {
             className="w-full gap-2 text-lg py-6"
           >
             <Home className="w-5 h-5" />
-            Acessar o Aplicativo
+            {t('thankYou.cta')}
           </Button>
         </motion.div>
       </motion.div>
