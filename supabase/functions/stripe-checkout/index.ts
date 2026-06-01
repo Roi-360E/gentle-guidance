@@ -11,6 +11,24 @@ const corsHeaders = {
 const log = (s: string, d?: unknown) =>
   console.log(`[stripe-checkout] ${s}${d ? ` ${JSON.stringify(d)}` : ""}`);
 
+type CheckoutCurrency = "eur" | "usd";
+
+const toCheckoutCurrency = (value: unknown): CheckoutCurrency => {
+  const currency = typeof value === "string" ? value.toLowerCase() : "eur";
+  if (currency !== "eur" && currency !== "usd") {
+    throw new Error("Currency must be EUR or USD");
+  }
+  return currency;
+};
+
+const centsFromPrice = (value: unknown, currency: CheckoutCurrency): number => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(`Plan has no ${currency.toUpperCase()} price configured`);
+  }
+  return Math.round(amount * 100);
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -36,8 +54,11 @@ serve(async (req) => {
     log("user", { id: user.id, email: user.email });
 
     // Parse body
-    const { plan_key } = await req.json();
-    if (!plan_key || typeof plan_key !== "string") throw new Error("plan_key required");
+    const { plan_key, currency: rawCurrency } = await req.json();
+    if (!plan_key || typeof plan_key !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(plan_key)) {
+      throw new Error("plan_key required");
+    }
+    const currency = toCheckoutCurrency(rawCurrency);
 
     // Service client for DB writes
     const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
@@ -52,19 +73,15 @@ serve(async (req) => {
       .eq("is_active", true)
       .single();
     if (planErr || !plan) throw new Error("Plan not found");
-    if (!plan.price_eur || Number(plan.price_eur) <= 0)
-      throw new Error("Plan has no EUR price configured");
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     // ===== Lazy sync: ensure Stripe product + price match current DB price =====
-    const currentPriceEur = Number(plan.price_eur);
-    const currentAmountCents = Math.round(currentPriceEur * 100);
+    const configuredPrice = currency === "eur" ? plan.price_eur : plan.price_usd;
+    const currentAmountCents = centsFromPrice(configuredPrice, currency);
+    const currentPrice = Number(configuredPrice);
     let productId: string | null = plan.stripe_product_id ?? null;
-    let priceId: string | null = plan.stripe_price_id ?? null;
-    const syncedPrice = plan.stripe_synced_price_eur != null
-      ? Number(plan.stripe_synced_price_eur)
-      : null;
+    let priceId: string | null = null;
 
     // Create product if missing
     if (!productId) {
