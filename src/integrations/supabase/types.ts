@@ -313,6 +313,9 @@ export type Database = {
           price_eur: number | null
           price_usd: number | null
           sort_order: number
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          stripe_synced_price_eur: number | null
           tokens: number
           updated_at: string
         }
@@ -336,6 +339,9 @@ export type Database = {
           price_eur?: number | null
           price_usd?: number | null
           sort_order?: number
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_synced_price_eur?: number | null
           tokens?: number
           updated_at?: string
         }
@@ -359,6 +365,9 @@ export type Database = {
           price_eur?: number | null
           price_usd?: number | null
           sort_order?: number
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_synced_price_eur?: number | null
           tokens?: number
           updated_at?: string
         }
