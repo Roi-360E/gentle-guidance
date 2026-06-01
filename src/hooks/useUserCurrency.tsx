@@ -14,14 +14,17 @@ const EUR_LOCALES = ['de', 'fr', 'es', 'it', 'nl', 'pt-PT', 'pt-pt', 'el', 'fi',
 
 function detectFromBrowser(): Currency {
   try {
+    // App language preference takes priority over browser locale
+    const appLang = (localStorage.getItem('app_language') || '').toLowerCase();
+    if (appLang.startsWith('es')) return 'EUR';
+    if (appLang.startsWith('pt')) return 'BRL';
+
     const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]).map(l => l.toLowerCase());
     for (const lang of langs) {
       if (lang.startsWith('pt-br') || lang === 'pt') return 'BRL';
+      if (lang.startsWith('es')) return 'EUR'; // Spanish users default to EUR
       if (EUR_LOCALES.some(p => lang.startsWith(p))) return 'EUR';
-      if (lang.startsWith('en') || lang.startsWith('es-')) {
-        // English / non-EU Spanish → default USD (Brazilian Spanish is rare; pt-br already matched above)
-        return 'USD';
-      }
+      if (lang.startsWith('en')) return 'USD';
     }
   } catch {}
   return 'BRL';
