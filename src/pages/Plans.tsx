@@ -15,6 +15,7 @@ interface PlanData {
   plan_key: string;
   name: string;
   price: number;
+  price_eur?: number | null;
   tokens: number;
   features: string[];
   icon: string;
