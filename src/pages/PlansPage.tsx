@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Rocket, Sparkles, Zap, Crown, Star, Check, ArrowRight, ArrowLeft, Loader2, Globe } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserCurrency, type Currency } from '@/hooks/useUserCurrency';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
 interface PlanData {
@@ -29,9 +30,11 @@ const ICON_MAP: Record<string, any> = { Sparkles, Zap, Crown };
 
 const PlansPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { currency, setCurrency, format } = useUserCurrency();
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -67,14 +70,40 @@ const PlansPage = () => {
     return price != null && price > 0;
   });
 
-  const handleSelect = (plan: PlanData) => {
+  const handleSelect = async (plan: PlanData) => {
     if (currency === 'BRL') {
       // Existing flow — unchanged
       navigate(`/cadastro/${plan.plan_key}`);
       return;
     }
-    // International — Stripe not yet enabled
-    toast.info('Pagamento internacional em breve! Por enquanto, contate-nos no WhatsApp.', { duration: 5000 });
+
+    if (!user) {
+      toast.error('Faça login para pagar em Dollar ou Euro.');
+      navigate('/auth');
+      return;
+    }
+
+    setCheckoutLoading(`${plan.plan_key}-${currency}`);
+    try {
+      const price = getPriceFor(plan, currency) || 0;
+      localStorage.setItem('checkout_plan_key', plan.plan_key);
+      localStorage.setItem('checkout_plan_name', plan.name);
+      localStorage.setItem('checkout_plan_value', String(price));
+      localStorage.setItem('checkout_method', `Stripe ${currency}`);
+
+      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+        body: { plan_key: plan.plan_key, currency },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error(data?.error || 'Erro ao iniciar checkout internacional.');
+      window.location.href = data.url;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao iniciar checkout internacional.';
+      toast.error(message);
+    } finally {
+      setCheckoutLoading(null);
+    }
   };
 
   return (
