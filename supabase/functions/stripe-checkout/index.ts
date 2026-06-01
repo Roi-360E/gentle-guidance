@@ -100,37 +100,40 @@ serve(async (req) => {
       }
     }
 
-    // Create or rotate price if missing or amount changed
-    const priceChanged = syncedPrice == null || syncedPrice !== currentPriceEur;
-    if (!priceId || priceChanged) {
+    // Reuse an active monthly Stripe price for the selected currency/amount, or create one.
+    const existingPrices = await stripe.prices.list({
+      product: productId,
+      currency,
+      active: true,
+      limit: 100,
+    });
+
+    priceId = existingPrices.data.find((price) =>
+      price.unit_amount === currentAmountCents &&
+      price.currency === currency &&
+      price.recurring?.interval === "month"
+    )?.id ?? null;
+
+    if (!priceId) {
       const newPrice = await stripe.prices.create({
         product: productId,
         unit_amount: currentAmountCents,
-        currency: "eur",
+        currency,
         recurring: { interval: "month" },
-        metadata: { plan_key: plan.plan_key },
+        metadata: { plan_key: plan.plan_key, currency },
       });
-
-      // Archive the old one
-      if (priceId && priceId !== newPrice.id) {
-        try {
-          await stripe.prices.update(priceId, { active: false });
-        } catch (e) {
-          log("old price archive failed (continuing)", { e: String(e) });
-        }
-      }
       priceId = newPrice.id;
-
-      await admin
-        .from("subscription_plans")
-        .update({
-          stripe_product_id: productId,
-          stripe_price_id: priceId,
-          stripe_synced_price_eur: currentPriceEur,
-        })
-        .eq("id", plan.id);
-      log("price synced", { priceId, currentPriceEur });
+      log("created price", { priceId, currentPrice, currency });
     }
+
+    const planUpdate: Record<string, unknown> = { stripe_product_id: productId };
+    if (currency === "eur") {
+      planUpdate.stripe_price_id = priceId;
+      planUpdate.stripe_synced_price_eur = currentPrice;
+    }
+
+    await admin.from("subscription_plans").update(planUpdate).eq("id", plan.id);
+    log("price ready", { priceId, currentPrice, currency });
 
     // Find or create Stripe customer for this user
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
@@ -144,7 +147,7 @@ serve(async (req) => {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/planos`,
-      metadata: { user_id: user.id, plan_key: plan.plan_key },
+      metadata: { user_id: user.id, plan_key: plan.plan_key, currency },
     });
 
     log("session created", { id: session.id });
