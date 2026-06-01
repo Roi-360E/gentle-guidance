@@ -156,11 +156,11 @@ const PlansPage = () => {
             {visiblePlans.map((plan) => {
               const Icon = ICON_MAP[plan.icon] || Sparkles;
               const price = getPriceFor(plan, currency)!;
+              const isCheckingOut = checkoutLoading === `${plan.plan_key}-${currency}`;
               return (
                 <Card
                   key={plan.id}
-                  className="relative cursor-pointer border-2 transition-all hover:scale-[1.02] border-border hover:border-primary/50"
-                  onClick={() => handleSelect(plan)}
+                  className="relative border-2 transition-all hover:scale-[1.02] border-border hover:border-primary/50"
                 >
                   {plan.is_popular && (
                     <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2">
@@ -189,8 +189,14 @@ const PlansPage = () => {
                         </li>
                       ))}
                     </ul>
-                    <Button className="w-full" variant={plan.is_popular ? 'default' : 'outline'}>
-                      {currency === 'BRL' ? 'Selecionar' : 'Em breve'} <ArrowRight className="w-4 h-4 ml-1" />
+                    <Button
+                      className="w-full"
+                      variant={plan.is_popular ? 'default' : 'outline'}
+                      disabled={isCheckingOut}
+                      onClick={() => handleSelect(plan)}
+                    >
+                      {isCheckingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      {currency === 'BRL' ? 'Selecionar' : `Pagar com Stripe em ${currency}`} <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
                   </CardContent>
                 </Card>
