@@ -3,7 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.3.3';
+const APP_VERSION = '2.3.4';
 
 // Cache-busting: limpa caches antigos preservando auth
 try {
@@ -31,7 +31,8 @@ try {
   }
 } catch {}
 
-// Source protection — only in production, outside iframes
+// Source protection removed to fix preview issues
+/*
 try {
   const isSandbox = window.location.hostname.includes('lovableproject.com') || 
                     window.location.hostname.includes('lovable.app') ||
@@ -42,6 +43,7 @@ try {
     import("./lib/source-protection").then(m => m.enableSourceProtection()).catch(() => {});
   }
 } catch {}
+*/
 
 try {
   const container = document.getElementById("root");
