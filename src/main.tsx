@@ -9,15 +9,19 @@ const APP_VERSION = '2.3.0';
 try {
   const storedVersion = localStorage.getItem('app_version');
   if (storedVersion !== APP_VERSION) {
-    console.log(`[App] Atualizando versão ${storedVersion} → ${APP_VERSION}`);
-    const keysToKeep: string[] = [];
+    console.log(`[App] Updating version ${storedVersion} → ${APP_VERSION}`);
+    const keysToKeep = ['app_language', 'user_currency_override', 'app_version'];
+    const saved: [string, string][] = [];
+    
+    // Preserve Supabase and essential app keys
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-        keysToKeep.push(key);
+      if (key && (key.startsWith('sb-') || key.includes('supabase') || keysToKeep.includes(key))) {
+        const val = localStorage.getItem(key);
+        if (val !== null) saved.push([key, val]);
       }
     }
-    const saved = keysToKeep.map(k => [k, localStorage.getItem(k)!]);
+    
     localStorage.clear();
     saved.forEach(([k, v]) => localStorage.setItem(k, v));
     localStorage.setItem('app_version', APP_VERSION);
