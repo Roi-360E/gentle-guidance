@@ -74,5 +74,32 @@
     "activated": "Plano ativado com sucesso",
     "cta": "Acessar o Aplicativo",
     "perMonth": "/ mês"
+  },
+  "dashboard": {
+    "tagline": "Feito para escalar seus criativos de vídeo",
+    "welcome": "Olá, {{name}}! 👋",
+    "welcomeSub": "Bem-vindo(a) de volta ao EscalaXPro. Pronto(a) para escalar seus criativos?",
+    "description": "Otimize sua produção de criativos em vídeo. Faça upload das peças e gere todas as combinações possíveis automaticamente.",
+    "tokensRemaining": "{{count}} tokens restantes",
+    "upgrade": "Upgrade",
+    "format": "Formato do Vídeo",
+    "vertical": "Vertical",
+    "horizontal": "Horizontal",
+    "feed": "Feed",
+    "stats": {
+      "toGenerate": "Vídeos a gerar",
+      "sent": "Vídeos enviados",
+      "processed": "Processados"
+    },
+    "nav": {
+      "home": "Home",
+      "plans": "Planos",
+      "admin": "Painel Admin",
+      "downloads": "Meus Downloads",
+      "autoSub": "Legendas Auto",
+      "voiceRewrite": "Voice Rewrite",
+      "news": "Novidades",
+      "logout": "Sair"
+    }
   }
 }
