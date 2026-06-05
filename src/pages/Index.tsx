@@ -349,32 +349,38 @@ const Index = () => {
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-border bg-background px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200">
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/plans'); setMobileMenuOpen(false); }}>
-              <Coins className="w-4 h-4" /> Planos
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/planos'); setMobileMenuOpen(false); }}>
+              <Coins className="w-4 h-4" /> {t('dashboard.nav.plans')}
             </Button>
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setMobileMenuOpen(false)}>
-              <Home className="w-4 h-4" /> Home
+              <Home className="w-4 h-4" /> {t('dashboard.nav.home')}
             </Button>
             {isAdmin && (
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/admin/plans'); setMobileMenuOpen(false); }}>
-                <Zap className="w-4 h-4" /> Painel Admin
+                <Zap className="w-4 h-4" /> {t('dashboard.nav.admin')}
               </Button>
             )}
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/downloads'); setMobileMenuOpen(false); }}>
-              <Download className="w-4 h-4" /> Meus Downloads
+              <Download className="w-4 h-4" /> {t('dashboard.nav.downloads')}
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasAutoSubtitles) { navigate('/auto-subtitles'); } else { setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' }); } setMobileMenuOpen(false); }}>
-              <Type className="w-4 h-4" /> Legendas Automáticas
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasAutoSubtitles) { navigate('/auto-subtitles'); } else { setUpsellFeature({ key: 'has_auto_subtitles', name: t('dashboard.nav.autoSub') }); } setMobileMenuOpen(false); }}>
+              <Type className="w-4 h-4" /> {t('dashboard.nav.autoSub')}
               {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasVoiceRewrite) { navigate('/voice-rewrite'); } else { setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' }); } setMobileMenuOpen(false); }}>
-              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasVoiceRewrite) { navigate('/voice-rewrite'); } else { setUpsellFeature({ key: 'has_voice_rewrite', name: t('dashboard.nav.voiceRewrite') }); } setMobileMenuOpen(false); }}>
+              <Mic className="w-4 h-4" /> {t('dashboard.nav.voiceRewrite')} <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { if (hasShortsReels) { navigate('/shorts-reels'); } else { setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' }); } setMobileMenuOpen(false); }}>
-              🚀 Novas funcionalidades
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { if (hasShortsReels) { navigate('/shorts-reels'); } else { setUpsellFeature({ key: 'has_shorts_reels', name: t('dashboard.nav.news') }); } setMobileMenuOpen(false); }}>
+              🚀 {t('dashboard.nav.news')}
               {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <div className="pt-2 border-t border-border">
+              <LanguageSwitcher />
+            </div>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground" onClick={() => signOut()}>
+              <LogOut className="w-4 h-4" /> {t('dashboard.nav.logout')}
             </Button>
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
