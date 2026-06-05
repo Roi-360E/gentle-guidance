@@ -127,6 +127,20 @@
       "combinationsError": "Error: se esperaban {{expected}} combinaciones pero se generaron {{actual}}.",
       "successMessage": "¡{{count}} video(s) generado(s) y guardados en Mis Descargas! ✅",
       "errorMessage": "Completado con {{count}} error(es). {{done}} video(s) guardado(s) en Mis Descargas."
+    },
+    "generate": {
+      "totalTitle": "Total de Creativos que serán generados:",
+      "summary": "{{hooks}} gancho(s) × {{bodies}} cuerpo(s) × {{ctas}} CTA(s)",
+      "cost": "Costo: {{total}} tokens",
+      "balance": "Saldo: {{balance}}",
+      "insufficient": "¡Insuficiente!",
+      "settings": "Ajustes de Procesamiento",
+      "button": "Generar Creativos",
+      "processing": "Procesando...",
+      "optional": "El preprocesamiento es opcional — haz clic en \"Generar Creativos\" para comenzar directamente.",
+      "cancel": "Cancelar",
+      "preparing": "Preparando...",
+      "newFeatures": "Nuevas Funcionalidades"
     }
   }
 }
