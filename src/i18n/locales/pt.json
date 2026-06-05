@@ -74,5 +74,104 @@
     "activated": "Plano ativado com sucesso",
     "cta": "Acessar o Aplicativo",
     "perMonth": "/ mês"
+  },
+  "dashboard": {
+    "tagline": "Feito para escalar seus criativos de vídeo",
+    "welcome": "Olá, {{name}}! 👋",
+    "welcomeSub": "Bem-vindo(a) de volta ao EscalaXPro. Pronto(a) para escalar seus criativos?",
+    "description": "Otimize sua produção de criativos em vídeo. Faça upload das peças e gere todas as combinações possíveis automaticamente.",
+    "tokensRemaining": "{{count}} tokens restantes",
+    "upgrade": "Upgrade",
+    "format": "Formato do Vídeo",
+    "vertical": "Vertical",
+    "horizontal": "Horizontal",
+    "feed": "Feed",
+    "stats": {
+      "toGenerate": "Vídeos a gerar",
+      "sent": "Vídeos enviados",
+      "processed": "Processados"
+    },
+    "nav": {
+      "home": "Home",
+      "plans": "Planos",
+      "admin": "Painel Admin",
+      "downloads": "Meus Downloads",
+      "autoSub": "Legendas Auto",
+      "voiceRewrite": "Voice Rewrite",
+      "news": "Novidades",
+      "logout": "Sair"
+    },
+    "zones": {
+      "hooks": {
+        "title": "Ganchos",
+        "desc": "Até 10 vídeos de abertura",
+        "preprocessing": "Pré-processando ganchos..."
+      },
+      "body": {
+        "title": "Corpo",
+        "desc": "Até 5 vídeos de conteúdo",
+        "preprocessing": "Pré-processando corpos..."
+      },
+      "cta": {
+        "title": "CTA",
+        "desc": "Até 2 vídeos de fechamento",
+        "preprocessing": "Pré-processando CTAs..."
+      }
+    },
+    "actions": {
+      "preprocessSuccess": "{{section}}: {{count}} vídeo(s) processados em {{time}}s! ✅",
+      "preprocessWarning": "{{section}}: processamento concluído com avisos.",
+      "insufficientTokens": "Tokens insuficientes! Custo: {{cost}} tokens, saldo: {{balance}}.",
+      "processingStarted": "Processamento iniciado...",
+      "processingCanceled": "Processamento cancelado.",
+      "combinationsError": "Erro: esperado {{expected}} combinações mas gerou {{actual}}.",
+      "successMessage": "{{count}} vídeo(s) gerado(s) e salvos em Meus Downloads! ✅",
+      "errorMessage": "Concluído com {{count}} erro(s). {{done}} vídeo(s) salvo(s) em Meus Downloads."
+    },
+    "generate": {
+      "totalTitle": "Total de Criativos que serão gerados:",
+      "summary": "{{hooks}} gancho(s) × {{bodies}} corpo(s) × {{ctas}} CTA(s)",
+      "cost": "Custo: {{total}} tokens",
+      "balance": "Saldo: {{balance}}",
+      "insufficient": "Insuficiente!",
+      "settings": "Configurações de Processamento",
+      "button": "Gerar Criativos",
+      "processing": "Processando...",
+      "optional": "O pré-processamento é opcional — clique em \"Gerar Criativos\" para começar direto.",
+      "cancel": "Cancelar",
+      "preparing": "Preparando...",
+      "newFeatures": "Novas Funcionalidades"
+    },
+    "combinations": {
+      "title": "Combinações ({{count}} vídeos)",
+      "stats": "{{done}} concluído(s) · {{remaining}} restante(s)",
+      "errors": "{{count}} erro(s) · ",
+      "downloadAll": "Baixar Todos ({{count}})",
+      "overallProgress": "Progresso geral",
+      "generating": "Gerando: {{name}}",
+      "starting": "Iniciando...",
+      "videoOf": "Vídeo {{current}} de {{total}} • {{progress}}% concluído",
+      "view": "Visualizar",
+      "share": "Compartilhar",
+      "shareSuccess": "Compartilhado com sucesso!",
+      "shareError": "Não foi possível compartilhar.",
+      "downloaded": "Vídeo baixado! Abra o Instagram e poste manualmente.",
+      "creatorStudio": "Vídeo baixado! Abrindo Creator Studio...",
+      "downloadNow": "Baixar agora",
+      "checkVideo": "Confira este vídeo! 🎬"
+    },
+    "settings": {
+      "title": "Configurações de Processamento",
+      "resolution": "Resolução de saída",
+      "resOriginal": "Original",
+      "resOriginalDesc": "Sem alteração",
+      "res1080pDesc": "Full HD – maior qualidade",
+      "res720pDesc": "HD – equilíbrio ideal",
+      "res480pDesc": "SD – mais rápido",
+      "res360pDesc": "Baixa – ultra rápido",
+      "preProcess": "Pré-processamento",
+      "turbo": "Modo turbo: cache rápido em até 7s, sem reescalar vídeos",
+      "direct": "Concatenação direta (pode falhar com formatos diferentes)"
+    }
   }
 }

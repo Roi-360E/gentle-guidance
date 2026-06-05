@@ -27,8 +27,11 @@ import { trackPixelEvent, trackCustomEvent } from '@/lib/pixel-tracker';
 import { useUtmCapture } from '@/hooks/useUtmCapture';
 import { NewUserWelcomePopup } from '@/components/NewUserWelcomePopup';
 import { usePowerUserTracking } from '@/hooks/useAudienceEvents';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 const Index = () => {
+  const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -228,13 +231,13 @@ const Index = () => {
 
       setDone(true);
       const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
-      toast.success(`${sectionLabel}: ${files.length} vídeo(s) processados em ${elapsed}s! ✅`);
+      toast.success(t('dashboard.actions.preprocessSuccess', { section: sectionLabel, count: files.length, time: elapsed }));
     } catch (err) {
       console.error('Preprocessing failed:', err);
       // Force completion even on error
       setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'done' as const, preprocessProgress: 100 })));
       setDone(true);
-      toast.warning(`${sectionLabel}: processamento concluído com avisos.`);
+      toast.warning(t('dashboard.actions.preprocessWarning', { section: sectionLabel }));
     } finally {
       setPreprocessingSection(null);
     }
@@ -247,7 +250,7 @@ const Index = () => {
 
     const cost = calculateTokenCost(totalCombinations, settings);
     if (!hasEnoughTokens(currentPlan, tokenBalance, cost.total)) {
-      toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Reduza as combinações ou entre em contato com o suporte.`);
+      toast.error(t('dashboard.actions.insufficientTokens', { cost: cost.total, balance: tokenBalance }));
       return;
     }
 
@@ -294,45 +297,46 @@ const Index = () => {
             <Rocket className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
             <div>
               <h1 className="text-lg sm:text-2xl font-extrabold tracking-tight text-primary uppercase">
-                EscalaXPro
+                {t('auth.brand')}
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
-                Feito para escalar seus criativos de vídeo
+                {t('dashboard.tagline')}
               </p>
             </div>
           </div>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
-              <Coins className="w-4 h-4" /> Planos
+          <nav className="hidden md:flex items-center gap-4">
+            <LanguageSwitcher compact />
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/planos')}>
+              <Coins className="w-4 h-4" /> {t('dashboard.nav.plans')}
             </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
-              <Home className="w-4 h-4" /> Home
+              <Home className="w-4 h-4" /> {t('dashboard.nav.home')}
             </Button>
             {isAdmin && (
               <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/admin/plans')}>
-                <Zap className="w-4 h-4" /> Painel Admin
+                <Zap className="w-4 h-4" /> {t('dashboard.nav.admin')}
               </Button>
             )}
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/downloads')}>
-              <Download className="w-4 h-4" /> Meus Downloads
+              <Download className="w-4 h-4" /> {t('dashboard.nav.downloads')}
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasAutoSubtitles ? navigate('/auto-subtitles') : setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' })}>
-              <Type className="w-4 h-4" /> Legendas Auto
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasAutoSubtitles ? navigate('/auto-subtitles') : setUpsellFeature({ key: 'has_auto_subtitles', name: t('dashboard.nav.autoSub') })}>
+              <Type className="w-4 h-4" /> {t('dashboard.nav.autoSub')}
               {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasVoiceRewrite ? navigate('/voice-rewrite') : setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' })}>
-              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasVoiceRewrite ? navigate('/voice-rewrite') : setUpsellFeature({ key: 'has_voice_rewrite', name: t('dashboard.nav.voiceRewrite') })}>
+              <Mic className="w-4 h-4" /> {t('dashboard.nav.voiceRewrite')} <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => hasShortsReels ? navigate('/shorts-reels') : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}>
-              🚀 Novidades
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => hasShortsReels ? navigate('/shorts-reels') : setUpsellFeature({ key: 'has_shorts_reels', name: t('dashboard.nav.news') })}>
+              🚀 {t('dashboard.nav.news')}
               {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
-              <LogOut className="w-4 h-4" /> Sair
+              <LogOut className="w-4 h-4" /> {t('dashboard.nav.logout')}
             </Button>
           </nav>
 
@@ -345,36 +349,42 @@ const Index = () => {
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-border bg-background px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200">
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/plans'); setMobileMenuOpen(false); }}>
-              <Coins className="w-4 h-4" /> Planos
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/planos'); setMobileMenuOpen(false); }}>
+              <Coins className="w-4 h-4" /> {t('dashboard.nav.plans')}
             </Button>
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setMobileMenuOpen(false)}>
-              <Home className="w-4 h-4" /> Home
+              <Home className="w-4 h-4" /> {t('dashboard.nav.home')}
             </Button>
             {isAdmin && (
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { navigate('/admin/plans'); setMobileMenuOpen(false); }}>
-                <Zap className="w-4 h-4" /> Painel Admin
+                <Zap className="w-4 h-4" /> {t('dashboard.nav.admin')}
               </Button>
             )}
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { navigate('/downloads'); setMobileMenuOpen(false); }}>
-              <Download className="w-4 h-4" /> Meus Downloads
+              <Download className="w-4 h-4" /> {t('dashboard.nav.downloads')}
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasAutoSubtitles) { navigate('/auto-subtitles'); } else { setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' }); } setMobileMenuOpen(false); }}>
-              <Type className="w-4 h-4" /> Legendas Automáticas
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasAutoSubtitles) { navigate('/auto-subtitles'); } else { setUpsellFeature({ key: 'has_auto_subtitles', name: t('dashboard.nav.autoSub') }); } setMobileMenuOpen(false); }}>
+              <Type className="w-4 h-4" /> {t('dashboard.nav.autoSub')}
               {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasVoiceRewrite) { navigate('/voice-rewrite'); } else { setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' }); } setMobileMenuOpen(false); }}>
-              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => { if (hasVoiceRewrite) { navigate('/voice-rewrite'); } else { setUpsellFeature({ key: 'has_voice_rewrite', name: t('dashboard.nav.voiceRewrite') }); } setMobileMenuOpen(false); }}>
+              <Mic className="w-4 h-4" /> {t('dashboard.nav.voiceRewrite')} <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { if (hasShortsReels) { navigate('/shorts-reels'); } else { setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' }); } setMobileMenuOpen(false); }}>
-              🚀 Novas funcionalidades
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary" onClick={() => { if (hasShortsReels) { navigate('/shorts-reels'); } else { setUpsellFeature({ key: 'has_shorts_reels', name: t('dashboard.nav.news') }); } setMobileMenuOpen(false); }}>
+              🚀 {t('dashboard.nav.news')}
               {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
+            </Button>
+            <div className="pt-2 border-t border-border">
+              <LanguageSwitcher />
+            </div>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground" onClick={() => signOut()}>
+              <LogOut className="w-4 h-4" /> {t('dashboard.nav.logout')}
             </Button>
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
-                <LogOut className="w-4 h-4" /> Sair
+                <LogOut className="w-4 h-4" /> {t('dashboard.nav.logout')}
               </Button>
             </div>
           </div>
@@ -391,12 +401,12 @@ const Index = () => {
               </span>
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-foreground text-base sm:text-lg truncate">
-                Olá, {userName}! 👋
-              </p>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Bem-vindo(a) de volta ao EscalaXPro. Pronto(a) para escalar seus criativos?
-              </p>
+                <p className="font-bold text-foreground text-base sm:text-lg truncate">
+                  {t('dashboard.welcome', { name: userName })}
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('dashboard.welcomeSub')}
+                </p>
             </div>
           </div>
         )}
@@ -404,8 +414,7 @@ const Index = () => {
         {/* Hero text */}
         <div className="text-center space-y-2">
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Otimize sua produção de criativos em vídeo. Faça upload das peças e gere todas as
-            combinações possíveis automaticamente.
+            {t('dashboard.description')}
           </p>
         </div>
 
@@ -421,8 +430,8 @@ const Index = () => {
               </p>
               <p className="text-xs text-muted-foreground">
                 {currentPlan === 'unlimited' 
-                  ? '● Tokens ilimitados'
-                  : `● ${tokenBalance} tokens restantes`
+                  ? `● ${t('dashboard.tokensRemaining', { count: '∞' })}`
+                  : `● ${t('dashboard.tokensRemaining', { count: tokenBalance })}`
                 }
               </p>
             </div>
@@ -435,28 +444,28 @@ const Index = () => {
                 className="rounded-full border-primary/40 text-primary"
                 onClick={() => navigate('/admin/plans')}
               >
-                Painel Admin
+                {t('dashboard.nav.admin')}
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
               className="rounded-full border-accent/40 text-accent-foreground"
-              onClick={() => navigate('/plans')}
+              onClick={() => navigate('/planos')}
             >
-              <Zap className="w-3.5 h-3.5 mr-1" /> Upgrade
+              <Zap className="w-3.5 h-3.5 mr-1" /> {t('dashboard.upgrade')}
             </Button>
           </div>
         </div>
 
         {/* Video Format Selector */}
         <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-5 space-y-3">
-          <p className="font-bold text-foreground text-center">Formato do Vídeo</p>
+          <p className="font-bold text-foreground text-center">{t('dashboard.format')}</p>
           <div className="grid grid-cols-3 gap-3">
             {([
-              { value: '9:16' as const, label: 'Vertical', sub: '9:16', icon: Smartphone },
-              { value: '16:9' as const, label: 'Horizontal', sub: '16:9', icon: Monitor },
-              { value: '1:1' as const, label: 'Feed', sub: '1:1', icon: LayoutGrid },
+              { value: '9:16' as const, label: t('dashboard.vertical'), sub: '9:16', icon: Smartphone },
+              { value: '16:9' as const, label: t('dashboard.horizontal'), sub: '16:9', icon: Monitor },
+              { value: '1:1' as const, label: t('dashboard.feed'), sub: '1:1', icon: LayoutGrid },
             ]).map((fmt) => {
               const isActive = videoFormat === fmt.value;
               const Icon = fmt.icon;
@@ -487,7 +496,7 @@ const Index = () => {
             </div>
             <div>
               <p className="text-2xl font-bold">{totalCombinations}</p>
-              <p className="text-sm text-muted-foreground">Vídeos a gerar</p>
+              <p className="text-sm text-muted-foreground">{t('dashboard.stats.toGenerate')}</p>
             </div>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
@@ -498,7 +507,7 @@ const Index = () => {
               <p className="text-2xl font-bold">
                 {hooks.length + bodies.length + ctas.length}
               </p>
-              <p className="text-sm text-muted-foreground">Vídeos enviados</p>
+              <p className="text-sm text-muted-foreground">{t('dashboard.stats.sent')}</p>
             </div>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
@@ -509,7 +518,7 @@ const Index = () => {
               <p className="text-2xl font-bold">
                 {combinations.filter((c) => c.status === 'done').length}
               </p>
-              <p className="text-sm text-muted-foreground">Processados</p>
+              <p className="text-sm text-muted-foreground">{t('dashboard.stats.processed')}</p>
             </div>
           </div>
         </div>
@@ -517,8 +526,8 @@ const Index = () => {
         {/* Upload zones */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <VideoUploadZone
-            label="Ganchos"
-            description="Até 10 vídeos de abertura"
+            label={t('dashboard.zones.hooks.title')}
+            description={t('dashboard.zones.hooks.desc')}
             maxFiles={10}
             files={hooks}
             onFilesChange={setHooks}
@@ -526,11 +535,11 @@ const Index = () => {
             isPreprocessing={preprocessingSection === 'Gancho'}
             preprocessStarted={hooksStarted}
             onPreprocess={() => handlePreprocessSection('Gancho', hooks, setHooks, setHooksPreprocessed, setHooksStarted)}
-            preprocessLabel="Pré-processando ganchos..."
+            preprocessLabel={t('dashboard.zones.hooks.preprocessing')}
           />
           <VideoUploadZone
-            label="Corpo"
-            description="Até 5 vídeos de conteúdo"
+            label={t('dashboard.zones.body.title')}
+            description={t('dashboard.zones.body.desc')}
             maxFiles={5}
             files={bodies}
             onFilesChange={setBodies}
@@ -538,11 +547,11 @@ const Index = () => {
             isPreprocessing={preprocessingSection === 'Corpo'}
             preprocessStarted={bodiesStarted}
             onPreprocess={() => handlePreprocessSection('Corpo', bodies, setBodies, setBodiesPreprocessed, setBodiesStarted)}
-            preprocessLabel="Pré-processando corpos..."
+            preprocessLabel={t('dashboard.zones.body.preprocessing')}
           />
           <VideoUploadZone
-            label="CTA"
-            description="Até 2 vídeos de chamada"
+            label={t('dashboard.zones.cta.title')}
+            description={t('dashboard.zones.cta.desc')}
             maxFiles={2}
             files={ctas}
             onFilesChange={setCtas}
@@ -550,7 +559,7 @@ const Index = () => {
             isPreprocessing={preprocessingSection === 'CTA'}
             preprocessStarted={ctasStarted}
             onPreprocess={() => handlePreprocessSection('CTA', ctas, setCtas, setCtasPreprocessed, setCtasStarted)}
-            preprocessLabel="Pré-processando CTAs..."
+            preprocessLabel={t('dashboard.zones.cta.preprocessing')}
           />
         </div>
 
@@ -559,10 +568,10 @@ const Index = () => {
           <div className="max-w-md mx-auto space-y-5">
             {/* Total card */}
             <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">Total de Criativos que serão gerados:</p>
+              <p className="text-sm text-muted-foreground">{t('generate.totalTitle')}</p>
               <p className="text-5xl font-extrabold text-primary">{totalCombinations}</p>
               <p className="text-sm text-muted-foreground">
-                {hooks.length} gancho(s) × {bodies.length} corpo(s) × {ctas.length} CTA(s)
+                {t('generate.summary', { hooks: hooks.length, bodies: bodies.length, ctas: ctas.length })}
               </p>
               {(() => {
                 const cost = calculateTokenCost(totalCombinations, settings);
@@ -571,9 +580,9 @@ const Index = () => {
                   <div className={`flex items-center justify-center gap-2 text-xs pt-1 ${enough ? 'text-muted-foreground' : 'text-destructive'}`}>
                     <Coins className="w-3.5 h-3.5" />
                     <span>
-                      Custo: {cost.total} tokens
-                      {currentPlan !== 'enterprise' && ` · Saldo: ${tokenBalance}`}
-                      {!enough && ' · Insuficiente!'}
+                      {t('generate.cost', { total: cost.total })}
+                      {currentPlan !== 'enterprise' && ` · ${t('generate.balance', { balance: tokenBalance })}`}
+                      {!enough && ` · ${t('generate.insufficient')}`}
                     </span>
                   </div>
                 );
@@ -598,18 +607,18 @@ const Index = () => {
                 {isProcessing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Processando...
+                    {t('generate.processing')}
                   </>
                 ) : (
                   <>
                     <Clapperboard className="w-5 h-5" />
-                    Gerar Criativos
+                    {t('generate.button')}
                   </>
                 )}
               </Button>
               {!preprocessingDone && canProcess && (
                 <p className="text-xs text-muted-foreground text-center">
-                  O pré-processamento é opcional — clique em "Gerar Criativos" para começar direto.
+                  {t('generate.optional')}
                 </p>
               )}
               {isProcessing && (
@@ -620,7 +629,7 @@ const Index = () => {
                   onClick={handleCancel}
                 >
                   <Square className="w-4 h-4 mr-2" />
-                  Cancelar
+                  {t('generate.cancel')}
                 </Button>
               )}
             </div>
@@ -632,7 +641,7 @@ const Index = () => {
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
-              <span className="font-medium text-primary">{processingPhase || 'Preparando...'}</span>
+              <span className="font-medium text-primary">{processingPhase || t('generate.preparing')}</span>
             </div>
             <Progress value={undefined} className="h-2 animate-pulse" />
           </div>
@@ -668,7 +677,7 @@ const Index = () => {
             className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
             onClick={() => hasShortsReels ? navigate("/shorts-reels") : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}
           >
-            🚀 Novas funcionalidades
+            🚀 {t('generate.newFeatures')}
             {!hasShortsReels && <Lock className="w-4 h-4 ml-2" />}
           </Button>
         </div>

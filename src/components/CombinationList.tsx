@@ -5,24 +5,25 @@ import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
 import { toast } from 'sonner';
 import type { Combination } from '@/lib/video-processor';
+import { useTranslation } from 'react-i18next';
 
-const shareVideo = async (url: string, name: string) => {
+const shareVideo = async (url: string, name: string, t: any) => {
   try {
     const response = await fetch(url);
     const blob = await response.blob();
     const file = new File([blob], name, { type: blob.type || 'video/mp4' });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ title: name, text: 'Confira este vídeo! 🎬', files: [file] });
-      toast.success('Compartilhado com sucesso!');
+      await navigator.share({ title: name, text: t('combinations.checkVideo'), files: [file] });
+      toast.success(t('combinations.shareSuccess'));
     } else {
       const a = document.createElement('a');
       a.href = url;
       a.download = name;
       a.click();
-      toast.info('Vídeo baixado! Abra o Instagram e poste manualmente.');
+      toast.info(t('combinations.downloaded'));
     }
   } catch (err: any) {
-    if (err?.name !== 'AbortError') toast.error('Não foi possível compartilhar.');
+    if (err?.name !== 'AbortError') toast.error(t('combinations.shareError'));
   }
 };
 
@@ -41,6 +42,7 @@ export function CombinationList({
   onDownloadAll,
   isProcessing,
 }: CombinationListProps) {
+  const { t } = useTranslation();
   const [previewCombo, setPreviewCombo] = useState<Combination | null>(null);
   const doneCount = combinations.filter((c) => c.status === 'done').length;
   const errorCount = combinations.filter((c) => c.status === 'error').length;
@@ -52,25 +54,25 @@ export function CombinationList({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-lg">
-            Combinações ({combinations.length} vídeos)
+            {t('combinations.title', { count: combinations.length })}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {doneCount} concluído(s) · {errorCount > 0 ? `${errorCount} erro(s) · ` : ''}{combinations.length - doneCount - errorCount} restante(s)
+            {t('combinations.stats', { done: doneCount, remaining: combinations.length - doneCount - errorCount })}
+            {errorCount > 0 && t('combinations.errors', { count: errorCount })}
           </p>
         </div>
         {doneCount > 0 && (
           <Button onClick={onDownloadAll} variant="outline" size="sm">
             <Download className="w-4 h-4 mr-1" />
-            Baixar Todos ({doneCount})
+            {t('combinations.downloadAll', { count: doneCount })}
           </Button>
         )}
       </div>
 
       {/* Overall progress */}
-      {/* Overall progress — thicker bar with smooth animation */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Progresso geral</span>
+          <span>{t('combinations.overallProgress')}</span>
           <span>{Math.round(totalProgress)}%</span>
         </div>
         <Progress value={totalProgress} className="h-2.5 [&>div]:transition-all [&>div]:duration-500 [&>div]:ease-out" />
@@ -82,10 +84,10 @@ export function CombinationList({
           <div className="flex items-center gap-2">
             <Loader2 className="w-4 h-4 text-primary animate-spin" />
             <span className="text-sm font-medium text-primary">
-              Gerando: {processingCombo.outputName}
+              {t('combinations.generating', { name: processingCombo.outputName })}
             </span>
             <span className="ml-auto text-sm font-bold text-primary">
-              {currentProgress > 0 ? `${currentProgress}%` : 'Iniciando...'}
+              {currentProgress > 0 ? `${currentProgress}%` : t('combinations.starting')}
             </span>
           </div>
           <div className="relative">
@@ -95,7 +97,7 @@ export function CombinationList({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Vídeo {doneCount + errorCount + 1} de {combinations.length} • {Math.round(totalProgress)}% concluído
+            {t('combinations.videoOf', { current: doneCount + errorCount + 1, total: combinations.length, progress: Math.round(totalProgress) })}
           </p>
         </div>
       )}
@@ -141,7 +143,7 @@ export function CombinationList({
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => setPreviewCombo(combo)}
-                  title="Visualizar"
+                  title={t('combinations.view')}
                 >
                   <Play className="w-3.5 h-3.5" />
                 </Button>
@@ -149,8 +151,8 @@ export function CombinationList({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => shareVideo(combo.outputUrl!, combo.outputName)}
-                  title="Compartilhar"
+                  onClick={() => shareVideo(combo.outputUrl!, combo.outputName, t)}
+                  title={t('combinations.share')}
                 >
                   <Share2 className="w-3.5 h-3.5" />
                 </Button>
@@ -160,12 +162,12 @@ export function CombinationList({
                   className="h-7 w-7"
                   onClick={() => {
                     onDownload(combo);
-                    toast.info('Vídeo baixado! Abrindo Creator Studio...');
+                    toast.info(t('combinations.creatorStudio'));
                     setTimeout(() => {
                       window.open('https://business.facebook.com/latest/content_calendar', '_blank');
                     }, 1500);
                   }}
-                  title="Baixar e abrir Creator Studio"
+                  title={t('combinations.view')}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </Button>
@@ -174,7 +176,7 @@ export function CombinationList({
                   size="icon"
                   className="h-7 w-7 text-accent hover:text-accent"
                   onClick={() => onDownload(combo)}
-                  title="Baixar agora"
+                  title={t('combinations.downloadNow')}
                 >
                   <Download className="w-3.5 h-3.5" />
                 </Button>

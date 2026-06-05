@@ -1,4 +1,5 @@
 import { Settings2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   Select,
   SelectContent,
@@ -16,26 +17,29 @@ interface ProcessingSettingsProps {
   disabled?: boolean;
 }
 
-const resolutionOptions: { value: ResolutionPreset; label: string; desc: string }[] = [
-  { value: 'original', label: 'Original', desc: 'Sem alteração' },
-  { value: '1080p', label: '1080p', desc: 'Full HD – maior qualidade' },
-  { value: '720p', label: '720p', desc: 'HD – equilíbrio ideal' },
-  { value: '480p', label: '480p', desc: 'SD – mais rápido' },
-  { value: '360p', label: '360p', desc: 'Baixa – ultra rápido' },
+const getResolutionOptions = (t: any): { value: ResolutionPreset; label: string; desc: string }[] => [
+  { value: 'original', label: t('settings.resOriginal'), desc: t('settings.resOriginalDesc') },
+  { value: '1080p', label: '1080p', desc: t('settings.res1080pDesc') },
+  { value: '720p', label: '720p', desc: t('settings.res720pDesc') },
+  { value: '480p', label: '480p', desc: t('settings.res480pDesc') },
+  { value: '360p', label: '360p', desc: t('settings.res360pDesc') },
 ];
 
 export function ProcessingSettingsPanel({ settings, onChange, disabled }: ProcessingSettingsProps) {
+  const { t } = useTranslation();
+  const resolutionOptions = getResolutionOptions(t);
+
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-5">
       <div className="flex items-center gap-2">
         <Settings2 className="w-5 h-5 text-muted-foreground" />
-        <h3 className="font-semibold text-card-foreground">Configurações de Processamento</h3>
+        <h3 className="font-semibold text-card-foreground">{t('settings.title')}</h3>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {/* Resolution */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Resolução de saída</Label>
+          <Label className="text-sm font-medium">{t('settings.resolution')}</Label>
           <Select
             value={settings.resolution}
             onValueChange={(v) => onChange({ ...settings, resolution: v as ResolutionPreset })}
@@ -57,7 +61,7 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
 
         {/* Pre-process toggle */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Pré-processamento</Label>
+          <Label className="text-sm font-medium">{t('settings.preProcess')}</Label>
           <div className="flex items-center gap-3 pt-1">
             <Switch
               checked={settings.preProcess}
@@ -66,8 +70,8 @@ export function ProcessingSettingsPanel({ settings, onChange, disabled }: Proces
             />
             <span className="text-sm text-muted-foreground">
               {settings.preProcess
-                ? 'Modo turbo: cache rápido em até 7s, sem reescalar vídeos'
-                : 'Concatenação direta (pode falhar com formatos diferentes)'}
+                ? t('settings.turbo')
+                : t('settings.direct')}
             </span>
           </div>
         </div>
