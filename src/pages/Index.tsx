@@ -496,7 +496,7 @@ const Index = () => {
             </div>
             <div>
               <p className="text-2xl font-bold">{totalCombinations}</p>
-              <p className="text-sm text-muted-foreground">Vídeos a gerar</p>
+              <p className="text-sm text-muted-foreground">{t('dashboard.stats.toGenerate')}</p>
             </div>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
@@ -507,7 +507,7 @@ const Index = () => {
               <p className="text-2xl font-bold">
                 {hooks.length + bodies.length + ctas.length}
               </p>
-              <p className="text-sm text-muted-foreground">Vídeos enviados</p>
+              <p className="text-sm text-muted-foreground">{t('dashboard.stats.sent')}</p>
             </div>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
@@ -518,7 +518,7 @@ const Index = () => {
               <p className="text-2xl font-bold">
                 {combinations.filter((c) => c.status === 'done').length}
               </p>
-              <p className="text-sm text-muted-foreground">Processados</p>
+              <p className="text-sm text-muted-foreground">{t('dashboard.stats.processed')}</p>
             </div>
           </div>
         </div>
@@ -526,8 +526,8 @@ const Index = () => {
         {/* Upload zones */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <VideoUploadZone
-            label="Ganchos"
-            description="Até 10 vídeos de abertura"
+            label={t('dashboard.zones.hooks.title')}
+            description={t('dashboard.zones.hooks.desc')}
             maxFiles={10}
             files={hooks}
             onFilesChange={setHooks}
@@ -535,11 +535,11 @@ const Index = () => {
             isPreprocessing={preprocessingSection === 'Gancho'}
             preprocessStarted={hooksStarted}
             onPreprocess={() => handlePreprocessSection('Gancho', hooks, setHooks, setHooksPreprocessed, setHooksStarted)}
-            preprocessLabel="Pré-processando ganchos..."
+            preprocessLabel={t('dashboard.zones.hooks.preprocessing')}
           />
           <VideoUploadZone
-            label="Corpo"
-            description="Até 5 vídeos de conteúdo"
+            label={t('dashboard.zones.body.title')}
+            description={t('dashboard.zones.body.desc')}
             maxFiles={5}
             files={bodies}
             onFilesChange={setBodies}
@@ -547,7 +547,7 @@ const Index = () => {
             isPreprocessing={preprocessingSection === 'Corpo'}
             preprocessStarted={bodiesStarted}
             onPreprocess={() => handlePreprocessSection('Corpo', bodies, setBodies, setBodiesPreprocessed, setBodiesStarted)}
-            preprocessLabel="Pré-processando corpos..."
+            preprocessLabel={t('dashboard.zones.body.preprocessing')}
           />
           <VideoUploadZone
             label="CTA"
@@ -559,7 +559,7 @@ const Index = () => {
             isPreprocessing={preprocessingSection === 'CTA'}
             preprocessStarted={ctasStarted}
             onPreprocess={() => handlePreprocessSection('CTA', ctas, setCtas, setCtasPreprocessed, setCtasStarted)}
-            preprocessLabel="Pré-processando CTAs..."
+            preprocessLabel={t('dashboard.zones.cta.preprocessing')}
           />
         </div>
 
