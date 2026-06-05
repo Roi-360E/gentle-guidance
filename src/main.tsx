@@ -3,7 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 
 // Cache-busting: limpa caches antigos preservando auth
 try {
