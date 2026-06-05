@@ -141,6 +141,37 @@
       "cancel": "Cancelar",
       "preparing": "Preparando...",
       "newFeatures": "Novas Funcionalidades"
+    },
+    "combinations": {
+      "title": "Combinações ({{count}} vídeos)",
+      "stats": "{{done}} concluído(s) · {{remaining}} restante(s)",
+      "errors": "{{count}} erro(s) · ",
+      "downloadAll": "Baixar Todos ({{count}})",
+      "overallProgress": "Progresso geral",
+      "generating": "Gerando: {{name}}",
+      "starting": "Iniciando...",
+      "videoOf": "Vídeo {{current}} de {{total}} • {{progress}}% concluído",
+      "view": "Visualizar",
+      "share": "Compartilhar",
+      "shareSuccess": "Compartilhado com sucesso!",
+      "shareError": "Não foi possível compartilhar.",
+      "downloaded": "Vídeo baixado! Abra o Instagram e poste manualmente.",
+      "creatorStudio": "Vídeo baixado! Abrindo Creator Studio...",
+      "downloadNow": "Baixar agora",
+      "checkVideo": "Confira este vídeo! 🎬"
+    },
+    "settings": {
+      "title": "Configurações de Processamento",
+      "resolution": "Resolução de saída",
+      "resOriginal": "Original",
+      "resOriginalDesc": "Sem alteração",
+      "res1080pDesc": "Full HD – maior qualidade",
+      "res720pDesc": "HD – equilíbrio ideal",
+      "res480pDesc": "SD – mais rápido",
+      "res360pDesc": "Baixa – ultra rápido",
+      "preProcess": "Pré-processamento",
+      "turbo": "Modo turbo: cache rápido em até 7s, sem reescalar vídeos",
+      "direct": "Concatenação direta (pode falhar com formatos diferentes)"
     }
   }
 }
