@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    // PWA disabled temporarily to fix preview loading issues
+    /*
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'fonts/Inter-Variable.ttf'],
@@ -50,6 +52,7 @@ export default defineConfig(({ mode }) => ({
         ],
       },
     }),
+    */
   ].filter(Boolean),
   resolve: {
     alias: {
