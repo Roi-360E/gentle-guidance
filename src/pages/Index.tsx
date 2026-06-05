@@ -384,7 +384,7 @@ const Index = () => {
             </Button>
             <div className="border-t border-border pt-1 mt-1">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-destructive" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
-                <LogOut className="w-4 h-4" /> Sair
+                <LogOut className="w-4 h-4" /> {t('dashboard.nav.logout')}
               </Button>
             </div>
           </div>
@@ -401,12 +401,12 @@ const Index = () => {
               </span>
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-foreground text-base sm:text-lg truncate">
-                Olá, {userName}! 👋
-              </p>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Bem-vindo(a) de volta ao EscalaXPro. Pronto(a) para escalar seus criativos?
-              </p>
+                <p className="font-bold text-foreground text-base sm:text-lg truncate">
+                  {t('dashboard.welcome', { name: userName })}
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('dashboard.welcomeSub')}
+                </p>
             </div>
           </div>
         )}
@@ -414,8 +414,7 @@ const Index = () => {
         {/* Hero text */}
         <div className="text-center space-y-2">
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Otimize sua produção de criativos em vídeo. Faça upload das peças e gere todas as
-            combinações possíveis automaticamente.
+            {t('dashboard.description')}
           </p>
         </div>
 
@@ -431,8 +430,8 @@ const Index = () => {
               </p>
               <p className="text-xs text-muted-foreground">
                 {currentPlan === 'unlimited' 
-                  ? '● Tokens ilimitados'
-                  : `● ${tokenBalance} tokens restantes`
+                  ? `● ${t('dashboard.tokensRemaining', { count: '∞' })}`
+                  : `● ${t('dashboard.tokensRemaining', { count: tokenBalance })}`
                 }
               </p>
             </div>
@@ -445,28 +444,28 @@ const Index = () => {
                 className="rounded-full border-primary/40 text-primary"
                 onClick={() => navigate('/admin/plans')}
               >
-                Painel Admin
+                {t('dashboard.nav.admin')}
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
               className="rounded-full border-accent/40 text-accent-foreground"
-              onClick={() => navigate('/plans')}
+              onClick={() => navigate('/planos')}
             >
-              <Zap className="w-3.5 h-3.5 mr-1" /> Upgrade
+              <Zap className="w-3.5 h-3.5 mr-1" /> {t('dashboard.upgrade')}
             </Button>
           </div>
         </div>
 
         {/* Video Format Selector */}
         <div className="max-w-2xl mx-auto rounded-2xl border border-border bg-card p-5 space-y-3">
-          <p className="font-bold text-foreground text-center">Formato do Vídeo</p>
+          <p className="font-bold text-foreground text-center">{t('dashboard.format')}</p>
           <div className="grid grid-cols-3 gap-3">
             {([
-              { value: '9:16' as const, label: 'Vertical', sub: '9:16', icon: Smartphone },
-              { value: '16:9' as const, label: 'Horizontal', sub: '16:9', icon: Monitor },
-              { value: '1:1' as const, label: 'Feed', sub: '1:1', icon: LayoutGrid },
+              { value: '9:16' as const, label: t('dashboard.vertical'), sub: '9:16', icon: Smartphone },
+              { value: '16:9' as const, label: t('dashboard.horizontal'), sub: '16:9', icon: Monitor },
+              { value: '1:1' as const, label: t('dashboard.feed'), sub: '1:1', icon: LayoutGrid },
             ]).map((fmt) => {
               const isActive = videoFormat === fmt.value;
               const Icon = fmt.icon;
