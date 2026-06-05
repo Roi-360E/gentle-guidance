@@ -27,8 +27,11 @@ import { trackPixelEvent, trackCustomEvent } from '@/lib/pixel-tracker';
 import { useUtmCapture } from '@/hooks/useUtmCapture';
 import { NewUserWelcomePopup } from '@/components/NewUserWelcomePopup';
 import { usePowerUserTracking } from '@/hooks/useAudienceEvents';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 const Index = () => {
+  const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
