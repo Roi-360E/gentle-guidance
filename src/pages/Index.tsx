@@ -550,8 +550,8 @@ const Index = () => {
             preprocessLabel={t('dashboard.zones.body.preprocessing')}
           />
           <VideoUploadZone
-            label="CTA"
-            description="Até 2 vídeos de chamada"
+            label={t('dashboard.zones.cta.title')}
+            description={t('dashboard.zones.cta.desc')}
             maxFiles={2}
             files={ctas}
             onFilesChange={setCtas}
