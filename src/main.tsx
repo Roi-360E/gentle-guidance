@@ -3,7 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.3';
 
 // Cache-busting: limpa caches antigos preservando auth
 try {
@@ -33,14 +33,20 @@ try {
 
 // Source protection — only in production, outside iframes
 try {
+  const isSandbox = window.location.hostname.includes('lovableproject.com') || 
+                    window.location.hostname.includes('lovable.app') ||
+                    window.location.hostname.includes('localhost');
   const inIframe = window.self !== window.top;
-  if (!inIframe && !import.meta.env.DEV) {
+  
+  if (!inIframe && !isSandbox && !import.meta.env.DEV) {
     import("./lib/source-protection").then(m => m.enableSourceProtection()).catch(() => {});
   }
 } catch {}
 
 try {
-  createRoot(document.getElementById("root")!).render(<App />);
+  const container = document.getElementById("root");
+  if (!container) throw new Error("Root container not found");
+  createRoot(container).render(<App />);
 } catch (err) {
   console.error('[App] Fatal mount error:', err);
   const root = document.getElementById("root");
