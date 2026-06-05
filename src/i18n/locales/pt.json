@@ -100,6 +100,33 @@
       "voiceRewrite": "Voice Rewrite",
       "news": "Novidades",
       "logout": "Sair"
+    },
+    "zones": {
+      "hooks": {
+        "title": "Ganchos",
+        "desc": "Até 10 vídeos de abertura",
+        "preprocessing": "Pré-processando ganchos..."
+      },
+      "body": {
+        "title": "Corpo",
+        "desc": "Até 5 vídeos de conteúdo",
+        "preprocessing": "Pré-processando corpos..."
+      },
+      "cta": {
+        "title": "CTA",
+        "desc": "Até 2 vídeos de fechamento",
+        "preprocessing": "Pré-processando CTAs..."
+      }
+    },
+    "actions": {
+      "preprocessSuccess": "{{section}}: {{count}} vídeo(s) processados em {{time}}s! ✅",
+      "preprocessWarning": "{{section}}: processamento concluído com avisos.",
+      "insufficientTokens": "Tokens insuficientes! Custo: {{cost}} tokens, saldo: {{balance}}.",
+      "processingStarted": "Processamento iniciado...",
+      "processingCanceled": "Processamento cancelado.",
+      "combinationsError": "Erro: esperado {{expected}} combinações mas gerou {{actual}}.",
+      "successMessage": "{{count}} vídeo(s) gerado(s) e salvos em Meus Downloads! ✅",
+      "errorMessage": "Concluído com {{count}} erro(s). {{done}} vídeo(s) salvo(s) em Meus Downloads."
     }
   }
 }
