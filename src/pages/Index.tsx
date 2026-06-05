@@ -231,13 +231,13 @@ const Index = () => {
 
       setDone(true);
       const elapsed = ((performance.now() - sectionStart) / 1000).toFixed(1);
-      toast.success(`${sectionLabel}: ${files.length} vídeo(s) processados em ${elapsed}s! ✅`);
+      toast.success(t('dashboard.actions.preprocessSuccess', { section: sectionLabel, count: files.length, time: elapsed }));
     } catch (err) {
       console.error('Preprocessing failed:', err);
       // Force completion even on error
       setter(prev => prev.map(f => ({ ...f, preprocessStatus: 'done' as const, preprocessProgress: 100 })));
       setDone(true);
-      toast.warning(`${sectionLabel}: processamento concluído com avisos.`);
+      toast.warning(t('dashboard.actions.preprocessWarning', { section: sectionLabel }));
     } finally {
       setPreprocessingSection(null);
     }
@@ -250,7 +250,7 @@ const Index = () => {
 
     const cost = calculateTokenCost(totalCombinations, settings);
     if (!hasEnoughTokens(currentPlan, tokenBalance, cost.total)) {
-      toast.error(`Tokens insuficientes! Custo: ${cost.total} tokens, saldo: ${tokenBalance}. Reduza as combinações ou entre em contato com o suporte.`);
+      toast.error(t('dashboard.actions.insufficientTokens', { cost: cost.total, balance: tokenBalance }));
       return;
     }
 
@@ -568,10 +568,10 @@ const Index = () => {
           <div className="max-w-md mx-auto space-y-5">
             {/* Total card */}
             <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">Total de Criativos que serão gerados:</p>
+              <p className="text-sm text-muted-foreground">{t('generate.totalTitle')}</p>
               <p className="text-5xl font-extrabold text-primary">{totalCombinations}</p>
               <p className="text-sm text-muted-foreground">
-                {hooks.length} gancho(s) × {bodies.length} corpo(s) × {ctas.length} CTA(s)
+                {t('generate.summary', { hooks: hooks.length, bodies: bodies.length, ctas: ctas.length })}
               </p>
               {(() => {
                 const cost = calculateTokenCost(totalCombinations, settings);
@@ -580,9 +580,9 @@ const Index = () => {
                   <div className={`flex items-center justify-center gap-2 text-xs pt-1 ${enough ? 'text-muted-foreground' : 'text-destructive'}`}>
                     <Coins className="w-3.5 h-3.5" />
                     <span>
-                      Custo: {cost.total} tokens
-                      {currentPlan !== 'enterprise' && ` · Saldo: ${tokenBalance}`}
-                      {!enough && ' · Insuficiente!'}
+                      {t('generate.cost', { total: cost.total })}
+                      {currentPlan !== 'enterprise' && ` · ${t('generate.balance', { balance: tokenBalance })}`}
+                      {!enough && ` · ${t('generate.insufficient')}`}
                     </span>
                   </div>
                 );
@@ -607,18 +607,18 @@ const Index = () => {
                 {isProcessing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Processando...
+                    {t('generate.processing')}
                   </>
                 ) : (
                   <>
                     <Clapperboard className="w-5 h-5" />
-                    Gerar Criativos
+                    {t('generate.button')}
                   </>
                 )}
               </Button>
               {!preprocessingDone && canProcess && (
                 <p className="text-xs text-muted-foreground text-center">
-                  O pré-processamento é opcional — clique em "Gerar Criativos" para começar direto.
+                  {t('generate.optional')}
                 </p>
               )}
               {isProcessing && (
@@ -629,7 +629,7 @@ const Index = () => {
                   onClick={handleCancel}
                 >
                   <Square className="w-4 h-4 mr-2" />
-                  Cancelar
+                  {t('generate.cancel')}
                 </Button>
               )}
             </div>
@@ -641,7 +641,7 @@ const Index = () => {
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
-              <span className="font-medium text-primary">{processingPhase || 'Preparando...'}</span>
+              <span className="font-medium text-primary">{processingPhase || t('generate.preparing')}</span>
             </div>
             <Progress value={undefined} className="h-2 animate-pulse" />
           </div>
@@ -677,7 +677,7 @@ const Index = () => {
             className="bg-gradient-to-r from-primary via-accent to-primary text-primary-foreground font-bold text-sm px-10 py-6 rounded-full hover:opacity-90 uppercase tracking-wide"
             onClick={() => hasShortsReels ? navigate("/shorts-reels") : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}
           >
-            🚀 Novas funcionalidades
+            🚀 {t('generate.newFeatures')}
             {!hasShortsReels && <Lock className="w-4 h-4 ml-2" />}
           </Button>
         </div>
