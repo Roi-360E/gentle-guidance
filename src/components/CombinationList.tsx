@@ -41,6 +41,7 @@ export function CombinationList({
   onDownloadAll,
   isProcessing,
 }: CombinationListProps) {
+  const { t } = useTranslation();
   const [previewCombo, setPreviewCombo] = useState<Combination | null>(null);
   const doneCount = combinations.filter((c) => c.status === 'done').length;
   const errorCount = combinations.filter((c) => c.status === 'error').length;
@@ -52,16 +53,17 @@ export function CombinationList({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-lg">
-            Combinações ({combinations.length} vídeos)
+            {t('combinations.title', { count: combinations.length })}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {doneCount} concluído(s) · {errorCount > 0 ? `${errorCount} erro(s) · ` : ''}{combinations.length - doneCount - errorCount} restante(s)
+            {t('combinations.stats', { done: doneCount, remaining: combinations.length - doneCount - errorCount })}
+            {errorCount > 0 && t('combinations.errors', { count: errorCount })}
           </p>
         </div>
         {doneCount > 0 && (
           <Button onClick={onDownloadAll} variant="outline" size="sm">
             <Download className="w-4 h-4 mr-1" />
-            Baixar Todos ({doneCount})
+            {t('combinations.downloadAll', { count: doneCount })}
           </Button>
         )}
       </div>
@@ -70,7 +72,7 @@ export function CombinationList({
       {/* Overall progress — thicker bar with smooth animation */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Progresso geral</span>
+          <span>{t('combinations.overallProgress')}</span>
           <span>{Math.round(totalProgress)}%</span>
         </div>
         <Progress value={totalProgress} className="h-2.5 [&>div]:transition-all [&>div]:duration-500 [&>div]:ease-out" />
@@ -82,10 +84,10 @@ export function CombinationList({
           <div className="flex items-center gap-2">
             <Loader2 className="w-4 h-4 text-primary animate-spin" />
             <span className="text-sm font-medium text-primary">
-              Gerando: {processingCombo.outputName}
+              {t('combinations.generating', { name: processingCombo.outputName })}
             </span>
             <span className="ml-auto text-sm font-bold text-primary">
-              {currentProgress > 0 ? `${currentProgress}%` : 'Iniciando...'}
+              {currentProgress > 0 ? `${currentProgress}%` : t('combinations.starting')}
             </span>
           </div>
           <div className="relative">
@@ -95,7 +97,7 @@ export function CombinationList({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Vídeo {doneCount + errorCount + 1} de {combinations.length} • {Math.round(totalProgress)}% concluído
+            {t('combinations.videoOf', { current: doneCount + errorCount + 1, total: combinations.length, progress: Math.round(totalProgress) })}
           </p>
         </div>
       )}
