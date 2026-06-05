@@ -5,24 +5,25 @@ import { Progress } from '@/components/ui/progress';
 import { VideoPreviewDialog } from '@/components/VideoPreviewDialog';
 import { toast } from 'sonner';
 import type { Combination } from '@/lib/video-processor';
+import { useTranslation } from 'react-i18next';
 
-const shareVideo = async (url: string, name: string) => {
+const shareVideo = async (url: string, name: string, t: any) => {
   try {
     const response = await fetch(url);
     const blob = await response.blob();
     const file = new File([blob], name, { type: blob.type || 'video/mp4' });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ title: name, text: 'Confira este vídeo! 🎬', files: [file] });
-      toast.success('Compartilhado com sucesso!');
+      await navigator.share({ title: name, text: t('combinations.checkVideo'), files: [file] });
+      toast.success(t('combinations.shareSuccess'));
     } else {
       const a = document.createElement('a');
       a.href = url;
       a.download = name;
       a.click();
-      toast.info('Vídeo baixado! Abra o Instagram e poste manualmente.');
+      toast.info(t('combinations.downloaded'));
     }
   } catch (err: any) {
-    if (err?.name !== 'AbortError') toast.error('Não foi possível compartilhar.');
+    if (err?.name !== 'AbortError') toast.error(t('combinations.shareError'));
   }
 };
 
@@ -69,7 +70,6 @@ export function CombinationList({
       </div>
 
       {/* Overall progress */}
-      {/* Overall progress — thicker bar with smooth animation */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{t('combinations.overallProgress')}</span>
@@ -143,7 +143,7 @@ export function CombinationList({
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => setPreviewCombo(combo)}
-                  title="Visualizar"
+                  title={t('combinations.view')}
                 >
                   <Play className="w-3.5 h-3.5" />
                 </Button>
@@ -151,8 +151,8 @@ export function CombinationList({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => shareVideo(combo.outputUrl!, combo.outputName)}
-                  title="Compartilhar"
+                  onClick={() => shareVideo(combo.outputUrl!, combo.outputName, t)}
+                  title={t('combinations.share')}
                 >
                   <Share2 className="w-3.5 h-3.5" />
                 </Button>
@@ -162,12 +162,12 @@ export function CombinationList({
                   className="h-7 w-7"
                   onClick={() => {
                     onDownload(combo);
-                    toast.info('Vídeo baixado! Abrindo Creator Studio...');
+                    toast.info(t('combinations.creatorStudio'));
                     setTimeout(() => {
                       window.open('https://business.facebook.com/latest/content_calendar', '_blank');
                     }, 1500);
                   }}
-                  title="Baixar e abrir Creator Studio"
+                  title={t('combinations.view')}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </Button>
@@ -176,7 +176,7 @@ export function CombinationList({
                   size="icon"
                   className="h-7 w-7 text-accent hover:text-accent"
                   onClick={() => onDownload(combo)}
-                  title="Baixar agora"
+                  title={t('combinations.downloadNow')}
                 >
                   <Download className="w-3.5 h-3.5" />
                 </Button>
