@@ -297,45 +297,46 @@ const Index = () => {
             <Rocket className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
             <div>
               <h1 className="text-lg sm:text-2xl font-extrabold tracking-tight text-primary uppercase">
-                EscalaXPro
+                {t('auth.brand')}
               </h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
-                Feito para escalar seus criativos de vídeo
+                {t('dashboard.tagline')}
               </p>
             </div>
           </div>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/plans')}>
-              <Coins className="w-4 h-4" /> Planos
+          <nav className="hidden md:flex items-center gap-4">
+            <LanguageSwitcher compact />
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/planos')}>
+              <Coins className="w-4 h-4" /> {t('dashboard.nav.plans')}
             </Button>
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border">
-              <Home className="w-4 h-4" /> Home
+              <Home className="w-4 h-4" /> {t('dashboard.nav.home')}
             </Button>
             {isAdmin && (
               <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => navigate('/admin/plans')}>
-                <Zap className="w-4 h-4" /> Painel Admin
+                <Zap className="w-4 h-4" /> {t('dashboard.nav.admin')}
               </Button>
             )}
             <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => navigate('/downloads')}>
-              <Download className="w-4 h-4" /> Meus Downloads
+              <Download className="w-4 h-4" /> {t('dashboard.nav.downloads')}
               {isProcessing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasAutoSubtitles ? navigate('/auto-subtitles') : setUpsellFeature({ key: 'has_auto_subtitles', name: 'Legendas Automáticas' })}>
-              <Type className="w-4 h-4" /> Legendas Auto
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasAutoSubtitles ? navigate('/auto-subtitles') : setUpsellFeature({ key: 'has_auto_subtitles', name: t('dashboard.nav.autoSub') })}>
+              <Type className="w-4 h-4" /> {t('dashboard.nav.autoSub')}
               {!hasAutoSubtitles && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasVoiceRewrite ? navigate('/voice-rewrite') : setUpsellFeature({ key: 'has_voice_rewrite', name: 'Voice Rewrite' })}>
-              <Mic className="w-4 h-4" /> Voice Rewrite <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-border" onClick={() => hasVoiceRewrite ? navigate('/voice-rewrite') : setUpsellFeature({ key: 'has_voice_rewrite', name: t('dashboard.nav.voiceRewrite') })}>
+              <Mic className="w-4 h-4" /> {t('dashboard.nav.voiceRewrite')} <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">Beta</span>
               {!hasVoiceRewrite && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => hasShortsReels ? navigate('/shorts-reels') : setUpsellFeature({ key: 'has_shorts_reels', name: 'Novas Funcionalidades' })}>
-              🚀 Novidades
+            <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary text-primary" onClick={() => hasShortsReels ? navigate('/shorts-reels') : setUpsellFeature({ key: 'has_shorts_reels', name: t('dashboard.nav.news') })}>
+              🚀 {t('dashboard.nav.news')}
               {!hasShortsReels && <Lock className="w-3 h-3 text-muted-foreground" />}
             </Button>
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => signOut()}>
-              <LogOut className="w-4 h-4" /> Sair
+              <LogOut className="w-4 h-4" /> {t('dashboard.nav.logout')}
             </Button>
           </nav>
 
