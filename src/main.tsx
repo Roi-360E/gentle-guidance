@@ -3,7 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.3.4';
+const APP_VERSION = '2.3.5';
 
 // Cache-busting: limpa caches antigos preservando auth
 try {
@@ -26,10 +26,16 @@ try {
     saved.forEach(([k, v]) => localStorage.setItem(k, v));
     localStorage.setItem('app_version', APP_VERSION);
     if ('caches' in window) {
-      caches.keys().then(names => names.forEach(n => caches.delete(n)));
+      caches.keys().then(names => {
+        if (names) {
+          names.forEach(n => caches.delete(n));
+        }
+      });
     }
   }
-} catch {}
+} catch (e) {
+  console.warn('[App] Cache-busting failed:', e);
+}
 
 // Source protection removed to fix preview issues
 /*
