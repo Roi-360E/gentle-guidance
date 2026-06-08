@@ -26,15 +26,22 @@ const getResolutionOptions = (t: any): { value: ResolutionPreset; label: string;
   { value: '360p', label: '360p', desc: t('settings.res360pDesc') },
 ];
 
-export function ProcessingSettingsPanel({ settings, onChange, disabled }: ProcessingSettingsProps) {
+export function ProcessingSettingsPanel({ settings, onChange, disabled, preProcess }: ProcessingSettingsProps) {
   const { t } = useTranslation();
   const resolutionOptions = getResolutionOptions(t);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 space-y-5">
-      <div className="flex items-center gap-2">
-        <Settings2 className="w-5 h-5 text-muted-foreground" />
-        <h3 className="font-semibold text-card-foreground">{t('settings.title')}</h3>
+    <div className={`rounded-xl border border-border bg-card p-5 space-y-5 transition-all duration-300 ${preProcess ? 'opacity-50 ring-1 ring-primary/20 bg-primary/5' : ''}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Settings2 className="w-5 h-5 text-muted-foreground" />
+          <h3 className="font-semibold text-card-foreground">{t('settings.title')}</h3>
+        </div>
+        {preProcess && (
+          <div className="bg-primary/20 text-primary text-[10px] font-black uppercase px-2 py-0.5 rounded-full animate-pulse">
+            Turbo Ativo
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
