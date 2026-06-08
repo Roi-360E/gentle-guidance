@@ -3,7 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.3.6';
+const APP_VERSION = '2.3.7';
 
 // Cache-busting logic
 try {
