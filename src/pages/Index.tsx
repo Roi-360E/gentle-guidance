@@ -416,70 +416,57 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button 
-            variant={activeStat === 'toGenerate' ? 'default' : 'secondary'}
-            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
-            onClick={() => setActiveStat(activeStat === 'toGenerate' ? null : 'toGenerate')}
-          >
-            <span className="text-4xl font-black">{totalCombinations}</span>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.toGenerate')}</span>
-          </Button>
-          <Button 
-            variant={activeStat === 'sent' ? 'default' : 'secondary'}
-            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
-            onClick={() => setActiveStat(activeStat === 'sent' ? null : 'sent')}
-          >
-            <span className="text-4xl font-black">{hooks.length + bodies.length + ctas.length}</span>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.sent')}</span>
-          </Button>
-          <Button 
-            variant={activeStat === 'processed' ? 'default' : 'secondary'}
-            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
-            onClick={() => setActiveStat(activeStat === 'processed' ? null : 'processed')}
-          >
-            <span className="text-4xl font-black">{combinations.filter(c => c.status === 'done').length}</span>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.processed')}</span>
-          </Button>
-        </div>
-
         <div className="flex flex-col space-y-4">
           <h2 className="text-xl font-bold uppercase tracking-tight text-center">{t('dashboard.format')}</h2>
-          <div className="flex items-center justify-center gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Button
               variant="outline"
-              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '9:16' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              className={`rounded-xl h-40 flex-col gap-4 border-border hover:border-primary/50 hover:bg-primary/5 transition-all shadow-sm ${videoFormat === '9:16' ? 'bg-primary/10 border-primary text-primary ring-1 ring-primary' : ''}`}
               onClick={() => setVideoFormat('9:16')}
             >
-              <Smartphone className="w-6 h-6" />
-              <div className="flex flex-col">
-                <span className="font-bold">{t('dashboard.vertical')}</span>
-                <span className="text-[10px] opacity-50">9:16</span>
+              <Smartphone className="w-8 h-8" />
+              <div className="flex flex-col text-center">
+                <span className="text-lg font-black uppercase">{t('dashboard.vertical')}</span>
+                <span className="text-sm font-bold opacity-50">9:16</span>
               </div>
             </Button>
             <Button
               variant="outline"
-              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '16:9' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              className={`rounded-xl h-40 flex-col gap-4 border-border hover:border-primary/50 hover:bg-primary/5 transition-all shadow-sm ${videoFormat === '16:9' ? 'bg-primary/10 border-primary text-primary ring-1 ring-primary' : ''}`}
               onClick={() => setVideoFormat('16:9')}
             >
-              <Monitor className="w-6 h-6" />
-              <div className="flex flex-col">
-                <span className="font-bold">{t('dashboard.horizontal')}</span>
-                <span className="text-[10px] opacity-50">16:9</span>
+              <Monitor className="w-8 h-8" />
+              <div className="flex flex-col text-center">
+                <span className="text-lg font-black uppercase">{t('dashboard.horizontal')}</span>
+                <span className="text-sm font-bold opacity-50">16:9</span>
               </div>
             </Button>
             <Button
               variant="outline"
-              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '1:1' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              className={`rounded-xl h-40 flex-col gap-4 border-border hover:border-primary/50 hover:bg-primary/5 transition-all shadow-sm ${videoFormat === '1:1' ? 'bg-primary/10 border-primary text-primary ring-1 ring-primary' : ''}`}
               onClick={() => setVideoFormat('1:1')}
             >
-              <LayoutGrid className="w-6 h-6" />
-              <div className="flex flex-col">
-                <span className="font-bold">{t('dashboard.feed')}</span>
-                <span className="text-[10px] opacity-50">1:1</span>
+              <LayoutGrid className="w-8 h-8" />
+              <div className="flex flex-col text-center">
+                <span className="text-lg font-black uppercase">{t('dashboard.feed')}</span>
+                <span className="text-sm font-bold opacity-50">1:1</span>
               </div>
             </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+          <div className="bg-card/50 border border-border rounded-2xl p-6 flex flex-col items-center gap-2">
+            <span className="text-4xl font-black text-primary">{totalCombinations}</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('dashboard.stats.toGenerate')}</span>
+          </div>
+          <div className="bg-card/50 border border-border rounded-2xl p-6 flex flex-col items-center gap-2">
+            <span className="text-4xl font-black text-primary">{hooks.length + bodies.length + ctas.length}</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('dashboard.stats.sent')}</span>
+          </div>
+          <div className="bg-card/50 border border-border rounded-2xl p-6 flex flex-col items-center gap-2">
+            <span className="text-4xl font-black text-primary">{combinations.filter(c => c.status === 'done').length}</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('dashboard.stats.processed')}</span>
           </div>
         </div>
 
