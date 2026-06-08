@@ -431,30 +431,41 @@ const Index = () => {
           </Button>
         </div>
 
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col space-y-4">
+          <h2 className="text-xl font-bold uppercase tracking-tight text-center">{t('dashboard.format')}</h2>
+          <div className="flex items-center justify-center gap-3">
             <Button
               variant="outline"
-              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '9:16' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '9:16' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
               onClick={() => setVideoFormat('9:16')}
             >
-              <Smartphone className="w-4 h-4" />
-              <span className="font-bold">9:16</span>
+              <Smartphone className="w-6 h-6" />
+              <div className="flex flex-col">
+                <span className="font-bold">{t('dashboard.vertical')}</span>
+                <span className="text-[10px] opacity-50">9:16</span>
+              </div>
             </Button>
             <Button
               variant="outline"
-              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '1:1' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
-              onClick={() => setVideoFormat('1:1')}
-            >
-              <Square className="w-4 h-4" />
-              <span className="font-bold">1:1</span>
-            </Button>
-            <Button
-              variant="outline"
-              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '16:9' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '16:9' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
               onClick={() => setVideoFormat('16:9')}
             >
-              <Monitor className="w-4 h-4" />
-              <span className="font-bold">16:9</span>
+              <Monitor className="w-6 h-6" />
+              <div className="flex flex-col">
+                <span className="font-bold">{t('dashboard.horizontal')}</span>
+                <span className="text-[10px] opacity-50">16:9</span>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '1:1' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              onClick={() => setVideoFormat('1:1')}
+            >
+              <LayoutGrid className="w-6 h-6" />
+              <div className="flex flex-col">
+                <span className="font-bold">{t('dashboard.feed')}</span>
+                <span className="text-[10px] opacity-50">1:1</span>
+              </div>
             </Button>
           </div>
         </div>
