@@ -31,7 +31,6 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 const Index = () => {
-  const [activeStat, setActiveStat] = useState<'toGenerate' | 'sent' | 'processed' | null>(null);
   const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
