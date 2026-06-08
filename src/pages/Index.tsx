@@ -367,18 +367,53 @@ const Index = () => {
       )}
 
       <main className="container max-w-7xl mx-auto px-4 py-8 space-y-8 animate-in fade-in duration-500">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-2 border border-primary/20">
-              <Zap className="w-3 h-3 fill-primary" />
-              {planName} Plan
-            </div>
-            <h1 className="text-4xl md:text-5xl font-black text-foreground tracking-tighter leading-tight">
-              {t('dashboard.welcome.title', { name: userName })}
+        <div className="flex flex-col lg:flex-row items-center gap-6 p-8 bg-card border border-border rounded-2xl shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-primary text-3xl font-black shadow-inner">
+            {userName?.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 text-center lg:text-left space-y-1">
+            <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tighter leading-tight flex items-center justify-center lg:justify-start gap-2">
+              {t('dashboard.welcome', { name: userName })}
+              <span className="animate-bounce">👋</span>
             </h1>
-            <p className="text-muted-foreground text-lg max-w-2xl">
-              {t('dashboard.welcome.description')}
+            <p className="text-muted-foreground text-lg max-w-2xl font-medium">
+              {t('dashboard.welcomeSub')}
             </p>
+          </div>
+        </div>
+
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground font-medium max-w-2xl mx-auto">
+            {t('dashboard.description')}
+          </p>
+        </div>
+
+        <div className="max-w-md mx-auto w-full">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-md flex items-center justify-between group hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                <Coins className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-black tracking-tight">{planName}</span>
+                <span className="text-sm text-muted-foreground font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  {t('dashboard.tokensRemaining', { count: tokenBalance })}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => navigate('/admin/plans')} className="rounded-xl font-bold uppercase text-[10px]">
+                  {t('dashboard.nav.admin')}
+                </Button>
+              )}
+              <Button onClick={() => navigate('/planos')} size="sm" className="rounded-xl font-black uppercase text-[10px] gap-2 shadow-lg hover:shadow-primary/20">
+                <Zap className="w-3 h-3 fill-current" />
+                {t('dashboard.upgrade')}
+              </Button>
+            </div>
           </div>
         </div>
 
