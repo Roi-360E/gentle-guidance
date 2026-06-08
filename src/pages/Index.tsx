@@ -546,7 +546,6 @@ const Index = () => {
                 settings={settings}
                 onChange={setSettings}
                 disabled={isProcessing}
-                preProcess={settings.preProcess}
               />
 
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
