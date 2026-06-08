@@ -306,51 +306,30 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <LanguageSwitcher />
-            <div className="hidden md:flex items-center gap-2 bg-muted/50 border border-border rounded-full px-3 py-1.5 shadow-sm">
-              <Zap className="w-4 h-4 text-primary fill-primary" />
-              <div className="flex flex-col items-start mr-2">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold">{t('dashboard.header.currentBalance')}</span>
-                <span className="text-sm font-black text-foreground leading-none">{tokenBalance} {t('dashboard.header.tokens')}</span>
-              </div>
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="h-7 rounded-full text-[10px] font-bold uppercase tracking-wider px-3"
-                onClick={() => navigate('/planos')}
-              >
-                {t('dashboard.header.upgrade')}
+          <div className="flex items-center gap-4">
+            <div className="hidden lg:flex items-center gap-2">
+              <Button variant="ghost" onClick={() => navigate('/planos')} className="text-sm font-medium">
+                <Zap className="w-4 h-4 mr-1 text-primary" /> {t('dashboard.nav.plans')}
+              </Button>
+              <Button variant="ghost" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-sm font-medium">
+                <Home className="w-4 h-4 mr-1" /> {t('dashboard.nav.home')}
+              </Button>
+              {isAdmin && (
+                <Button variant="ghost" onClick={() => navigate('/admin/plans')} className="text-sm font-medium border border-primary/30 bg-primary/5">
+                  <Zap className="w-4 h-4 mr-1 text-primary" /> {t('dashboard.nav.admin')}
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => navigate('/downloads')} className="text-sm font-medium">
+                <Download className="w-4 h-4 mr-1" /> {t('dashboard.nav.downloads')}
+              </Button>
+              <Button variant="ghost" onClick={() => navigate('/subtitles')} className="text-sm font-medium">
+                <Type className="w-4 h-4 mr-1" /> {t('dashboard.nav.autoSub')}
+              </Button>
+              <Button variant="ghost" onClick={() => navigate('/voice-rewrite')} className="text-sm font-medium">
+                <Mic className="w-4 h-4 mr-1" /> {t('dashboard.nav.voiceRewrite')} <span className="ml-1 text-[8px] bg-yellow-500 text-black px-1 rounded-sm font-black">BETA</span>
               </Button>
             </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </Button>
-
-            <div className="hidden md:flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hover:bg-primary/10 hover:text-primary transition-colors"
-                onClick={() => navigate('/subtitles')}
-              >
-                <Type className="w-5 h-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hover:bg-primary/10 hover:text-primary transition-colors text-red-500 hover:text-red-400"
-                onClick={() => signOut()}
-              >
-                <LogOut className="w-5 h-5" />
-              </Button>
-            </div>
+            <LanguageSwitcher compact />
           </div>
         </div>
       </header>
