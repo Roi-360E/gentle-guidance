@@ -549,6 +549,51 @@ const Index = () => {
                 />
               </div>
             )}
+
+            {/* Feature Grid Quick Access */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-8">
+              <Button 
+                variant="secondary" 
+                className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5 relative overflow-hidden"
+                onClick={() => navigate('/subtitles')}
+              >
+                {!hasAutoSubtitles && <Lock className="absolute top-2 right-2 w-3 h-3 text-muted-foreground/50" />}
+                <Type className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.subtitles')}</span>
+              </Button>
+              <Button 
+                variant="secondary" 
+                className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5 relative overflow-hidden"
+                onClick={() => {
+                  if (hasVoiceRewrite || isAdmin) navigate('/voice-rewrite');
+                  else setUpsellFeature({ key: 'has_voice_rewrite', name: t('dashboard.features.voiceRewrite') });
+                }}
+              >
+                {(!hasVoiceRewrite && !isAdmin) && <Lock className="absolute top-2 right-2 w-3 h-3 text-muted-foreground/50" />}
+                <Mic className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.voiceRewrite')}</span>
+              </Button>
+              <Button 
+                variant="secondary" 
+                className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5 relative overflow-hidden"
+                onClick={() => {
+                  if (hasShortsReels || isAdmin) navigate('/shorts-reels');
+                  else setUpsellFeature({ key: 'has_shorts_reels', name: t('dashboard.features.shortsReels') });
+                }}
+              >
+                {(!hasShortsReels && !isAdmin) && <Lock className="absolute top-2 right-2 w-3 h-3 text-muted-foreground/50" />}
+                <Smartphone className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.shortsReels')}</span>
+              </Button>
+              <Button 
+                variant="secondary" 
+                className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5"
+                onClick={() => navigate('/downloads')}
+              >
+                <Download className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.library')}</span>
+              </Button>
+            </div>
           </div>
 
           <div className="lg:col-span-4">
