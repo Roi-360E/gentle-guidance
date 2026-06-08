@@ -289,9 +289,22 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="min-h-screen bg-background p-4 flex flex-col items-center justify-center">
+      <div className="bg-card border p-6 rounded-xl shadow-xl max-w-lg w-full text-center space-y-4">
+        <Rocket className="w-12 h-12 text-primary mx-auto" />
+        <h1 className="text-2xl font-bold text-primary uppercase tracking-tight">
+          TESTE DE CARREGAMENTO
+        </h1>
+        <p className="text-muted-foreground">
+          Se você está vendo esta mensagem, o aplicativo carregou corretamente no editor do Lovable.
+        </p>
+        <Button onClick={() => window.location.reload()} className="w-full">
+          Recarregar para Verificar
+        </Button>
+      </div>
+
+      <div className="mt-12 opacity-20 pointer-events-none">
+
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <Rocket className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
@@ -345,6 +358,8 @@ const Index = () => {
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
         </div>
+      </div>
+
 
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
