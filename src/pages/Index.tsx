@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 const Index = () => {
+  const [activeStat, setActiveStat] = useState<'toGenerate' | 'sent' | 'processed' | null>(null);
   const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -305,51 +306,30 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <LanguageSwitcher />
-            <div className="hidden md:flex items-center gap-2 bg-muted/50 border border-border rounded-full px-3 py-1.5 shadow-sm">
-              <Zap className="w-4 h-4 text-primary fill-primary" />
-              <div className="flex flex-col items-start mr-2">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold">{t('dashboard.header.currentBalance')}</span>
-                <span className="text-sm font-black text-foreground leading-none">{tokenBalance} {t('dashboard.header.tokens')}</span>
-              </div>
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="h-7 rounded-full text-[10px] font-bold uppercase tracking-wider px-3"
-                onClick={() => navigate('/planos')}
-              >
-                {t('dashboard.header.upgrade')}
+          <div className="flex items-center gap-4">
+            <div className="hidden lg:flex items-center gap-2">
+              <Button variant="ghost" onClick={() => navigate('/planos')} className="text-sm font-medium">
+                <Zap className="w-4 h-4 mr-1 text-primary" /> {t('dashboard.nav.plans')}
+              </Button>
+              <Button variant="ghost" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-sm font-medium">
+                <Home className="w-4 h-4 mr-1" /> {t('dashboard.nav.home')}
+              </Button>
+              {isAdmin && (
+                <Button variant="ghost" onClick={() => navigate('/admin/plans')} className="text-sm font-medium border border-primary/30 bg-primary/5">
+                  <Zap className="w-4 h-4 mr-1 text-primary" /> {t('dashboard.nav.admin')}
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => navigate('/downloads')} className="text-sm font-medium">
+                <Download className="w-4 h-4 mr-1" /> {t('dashboard.nav.downloads')}
+              </Button>
+              <Button variant="ghost" onClick={() => navigate('/subtitles')} className="text-sm font-medium">
+                <Type className="w-4 h-4 mr-1" /> {t('dashboard.nav.autoSub')}
+              </Button>
+              <Button variant="ghost" onClick={() => navigate('/voice-rewrite')} className="text-sm font-medium">
+                <Mic className="w-4 h-4 mr-1" /> {t('dashboard.nav.voiceRewrite')} <span className="ml-1 text-[8px] bg-yellow-500 text-black px-1 rounded-sm font-black">BETA</span>
               </Button>
             </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </Button>
-
-            <div className="hidden md:flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hover:bg-primary/10 hover:text-primary transition-colors"
-                onClick={() => navigate('/subtitles')}
-              >
-                <Type className="w-5 h-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hover:bg-primary/10 hover:text-primary transition-colors text-red-500 hover:text-red-400"
-                onClick={() => signOut()}
-              >
-                <LogOut className="w-5 h-5" />
-              </Button>
-            </div>
+            <LanguageSwitcher compact />
           </div>
         </div>
       </header>
@@ -387,44 +367,119 @@ const Index = () => {
       )}
 
       <main className="container max-w-7xl mx-auto px-4 py-8 space-y-8 animate-in fade-in duration-500">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-2 border border-primary/20">
-              <Zap className="w-3 h-3 fill-primary" />
-              {planName} Plan
-            </div>
-            <h1 className="text-4xl md:text-5xl font-black text-foreground tracking-tighter leading-tight">
-              {t('dashboard.welcome.title', { name: userName })}
+        <div className="flex flex-col lg:flex-row items-center gap-6 p-8 bg-card border border-border rounded-2xl shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-primary text-3xl font-black shadow-inner">
+            {userName?.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 text-center lg:text-left space-y-1">
+            <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tighter leading-tight flex items-center justify-center lg:justify-start gap-2">
+              {t('dashboard.welcome', { name: userName })}
+              <span className="animate-bounce">👋</span>
             </h1>
-            <p className="text-muted-foreground text-lg max-w-2xl">
-              {t('dashboard.welcome.subtitle')}
+            <p className="text-muted-foreground text-lg max-w-2xl font-medium">
+              {t('dashboard.welcomeSub')}
             </p>
           </div>
+        </div>
 
-          <div className="flex items-center gap-3">
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground font-medium max-w-2xl mx-auto">
+            {t('dashboard.description')}
+          </p>
+        </div>
+
+        <div className="max-w-md mx-auto w-full">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-md flex items-center justify-between group hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                <Coins className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-black tracking-tight">{planName}</span>
+                <span className="text-sm text-muted-foreground font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  {t('dashboard.tokensRemaining', { count: tokenBalance })}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => navigate('/admin/plans')} className="rounded-xl font-bold uppercase text-[10px]">
+                  {t('dashboard.nav.admin')}
+                </Button>
+              )}
+              <Button onClick={() => navigate('/planos')} size="sm" className="rounded-xl font-black uppercase text-[10px] gap-2 shadow-lg hover:shadow-primary/20">
+                <Zap className="w-3 h-3 fill-current" />
+                {t('dashboard.upgrade')}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Button 
+            variant={activeStat === 'toGenerate' ? 'default' : 'secondary'}
+            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
+            onClick={() => setActiveStat(activeStat === 'toGenerate' ? null : 'toGenerate')}
+          >
+            <span className="text-4xl font-black">{totalCombinations}</span>
+            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.toGenerate')}</span>
+          </Button>
+          <Button 
+            variant={activeStat === 'sent' ? 'default' : 'secondary'}
+            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
+            onClick={() => setActiveStat(activeStat === 'sent' ? null : 'sent')}
+          >
+            <span className="text-4xl font-black">{hooks.length + bodies.length + ctas.length}</span>
+            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.sent')}</span>
+          </Button>
+          <Button 
+            variant={activeStat === 'processed' ? 'default' : 'secondary'}
+            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
+            onClick={() => setActiveStat(activeStat === 'processed' ? null : 'processed')}
+          >
+            <span className="text-4xl font-black">{combinations.filter(c => c.status === 'done').length}</span>
+            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.processed')}</span>
+          </Button>
+        </div>
+
+        <div className="flex flex-col space-y-4">
+          <h2 className="text-xl font-bold uppercase tracking-tight text-center">{t('dashboard.format')}</h2>
+          <div className="flex items-center justify-center gap-3">
             <Button
               variant="outline"
-              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '9:16' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '9:16' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
               onClick={() => setVideoFormat('9:16')}
             >
-              <Smartphone className="w-4 h-4" />
-              <span className="font-bold">9:16</span>
+              <Smartphone className="w-6 h-6" />
+              <div className="flex flex-col">
+                <span className="font-bold">{t('dashboard.vertical')}</span>
+                <span className="text-[10px] opacity-50">9:16</span>
+              </div>
             </Button>
             <Button
               variant="outline"
-              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '1:1' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
-              onClick={() => setVideoFormat('1:1')}
-            >
-              <Square className="w-4 h-4" />
-              <span className="font-bold">1:1</span>
-            </Button>
-            <Button
-              variant="outline"
-              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '16:9' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '16:9' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
               onClick={() => setVideoFormat('16:9')}
             >
-              <Monitor className="w-4 h-4" />
-              <span className="font-bold">16:9</span>
+              <Monitor className="w-6 h-6" />
+              <div className="flex flex-col">
+                <span className="font-bold">{t('dashboard.horizontal')}</span>
+                <span className="text-[10px] opacity-50">16:9</span>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className={`rounded-xl h-24 w-32 flex-col gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '1:1' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              onClick={() => setVideoFormat('1:1')}
+            >
+              <LayoutGrid className="w-6 h-6" />
+              <div className="flex flex-col">
+                <span className="font-bold">{t('dashboard.feed')}</span>
+                <span className="text-[10px] opacity-50">1:1</span>
+              </div>
             </Button>
           </div>
         </div>
@@ -546,6 +601,7 @@ const Index = () => {
                 settings={settings}
                 onChange={setSettings}
                 disabled={isProcessing}
+                preProcess={settings.preProcess}
               />
 
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
