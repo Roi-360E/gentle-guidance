@@ -3,7 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.3.9';
+const APP_VERSION = '2.4.0';
 
 // Cache-busting logic
 try {
@@ -19,6 +19,7 @@ try {
         }
       });
     }
+    // We removed window.location.reload() to prevent loops in preview
   }
 } catch (e) {
   console.warn('[App] Cache-busting failed:', e);
