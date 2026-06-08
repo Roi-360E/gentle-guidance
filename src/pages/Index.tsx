@@ -289,39 +289,321 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 flex flex-col items-center justify-center">
-      <div className="bg-card border p-6 rounded-xl shadow-xl max-w-lg w-full text-center space-y-4 mb-8">
-        <Rocket className="w-12 h-12 text-primary mx-auto" />
-        <h1 className="text-2xl font-bold text-primary uppercase tracking-tight">
-          TESTE DE CARREGAMENTO
-        </h1>
-        <p className="text-muted-foreground">
-          Se você está vendo esta mensagem, o aplicativo carregou corretamente no editor do Lovable.
-        </p>
-        <Button onClick={() => window.location.reload()} className="w-full">
-          Recarregar para Verificar
-        </Button>
-      </div>
-
-      <div className="opacity-10 pointer-events-none select-none max-w-6xl w-full mx-auto space-y-8 blur-[1px]">
-        {/* Header (Simplified Mock) */}
-        <header className="border-b border-border py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-background pb-32">
+      {/* Navbar principal */}
+      <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-background/80 backdrop-blur-md">
+        <div className="container flex h-16 items-center justify-between gap-4 px-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-2">
-            <Rocket className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-extrabold text-primary uppercase">{t('auth.brand')}</h1>
+            <Rocket className="w-8 h-8 text-primary animate-pulse" />
+            <div className="flex flex-col">
+              <span className="text-xl font-black text-primary uppercase tracking-tighter leading-none">
+                {t('auth.brand')}
+              </span>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-[0.2em]">
+                Creative Engine
+              </span>
+            </div>
           </div>
-        </header>
 
-        <main className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="h-64 rounded-xl border border-dashed border-border bg-card/50"></div>
-            <div className="h-64 rounded-xl border border-dashed border-border bg-card/50"></div>
-            <div className="h-64 rounded-xl border border-dashed border-border bg-card/50"></div>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <div className="hidden md:flex items-center gap-2 bg-muted/50 border border-border rounded-full px-3 py-1.5 shadow-sm">
+              <Zap className="w-4 h-4 text-primary fill-primary" />
+              <div className="flex flex-col items-start mr-2">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold">{t('dashboard.header.currentBalance')}</span>
+                <span className="text-sm font-black text-foreground leading-none">{tokenBalance} {t('dashboard.header.tokens')}</span>
+              </div>
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="h-7 rounded-full text-[10px] font-bold uppercase tracking-wider px-3"
+                onClick={() => navigate('/planos')}
+              >
+                {t('dashboard.header.upgrade')}
+              </Button>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </Button>
+
+            <div className="hidden md:flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-primary/10 hover:text-primary transition-colors"
+                onClick={() => navigate('/subtitles')}
+              >
+                <Type className="w-5 h-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-primary/10 hover:text-primary transition-colors text-red-500 hover:text-red-400"
+                onClick={() => signOut()}
+              >
+                <LogOut className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
-          <div className="h-48 max-w-md mx-auto rounded-xl border border-border bg-card/50"></div>
-          <div className="h-16 max-w-xs mx-auto rounded-full bg-primary/20"></div>
-        </main>
-      </div>
+        </div>
+      </header>
+
+      {/* Menu mobile */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-x-0 top-16 z-40 bg-background border-b border-border p-4 animate-in slide-in-from-top duration-200">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between p-3 bg-muted rounded-xl border border-border">
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-foreground uppercase font-bold">{t('dashboard.header.currentBalance')}</span>
+                <span className="text-lg font-black text-foreground">{tokenBalance} {t('dashboard.header.tokens')}</span>
+              </div>
+              <Button onClick={() => navigate('/planos')} size="sm" className="rounded-full uppercase font-bold text-[10px]">
+                {t('dashboard.header.upgrade')}
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" className="justify-start gap-2" onClick={() => navigate('/subtitles')}>
+                <Type className="w-4 h-4" /> {t('dashboard.nav.subtitles')}
+              </Button>
+              <Button variant="outline" className="justify-start gap-2" onClick={() => navigate('/voice-rewrite')}>
+                <Mic className="w-4 h-4" /> {t('dashboard.nav.voiceRewrite')}
+              </Button>
+              <Button variant="outline" className="justify-start gap-2" onClick={() => navigate('/shorts-reels')}>
+                <Smartphone className="w-4 h-4" /> {t('dashboard.nav.shortsReels')}
+              </Button>
+              <Button variant="outline" className="justify-start gap-2 text-red-500 hover:text-red-400" onClick={() => signOut()}>
+                <LogOut className="w-4 h-4" /> {t('dashboard.nav.logout')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="container max-w-7xl mx-auto px-4 py-8 space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-2 border border-primary/20">
+              <Zap className="w-3 h-3 fill-primary" />
+              {planName} Plan
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black text-foreground tracking-tighter leading-tight">
+              {t('dashboard.welcome.title', { name: userName })}
+            </h1>
+            <p className="text-muted-foreground text-lg max-w-2xl">
+              {t('dashboard.welcome.subtitle')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '9:16' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              onClick={() => setVideoFormat('9:16')}
+            >
+              <Smartphone className="w-4 h-4" />
+              <span className="font-bold">9:16</span>
+            </Button>
+            <Button
+              variant="outline"
+              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '1:1' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              onClick={() => setVideoFormat('1:1')}
+            >
+              <Square className="w-4 h-4" />
+              <span className="font-bold">1:1</span>
+            </Button>
+            <Button
+              variant="outline"
+              className={`rounded-xl h-12 gap-2 border-primary/20 hover:bg-primary/5 transition-all ${videoFormat === '16:9' ? 'bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' : ''}`}
+              onClick={() => setVideoFormat('16:9')}
+            >
+              <Monitor className="w-4 h-4" />
+              <span className="font-bold">16:9</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Feature Grid Quick Access */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Button 
+            variant="secondary" 
+            className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5 relative overflow-hidden"
+            onClick={() => navigate('/subtitles')}
+          >
+            {!hasAutoSubtitles && <Lock className="absolute top-2 right-2 w-3 h-3 text-muted-foreground/50" />}
+            <Type className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.subtitles')}</span>
+          </Button>
+          <Button 
+            variant="secondary" 
+            className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5 relative overflow-hidden"
+            onClick={() => {
+              if (hasVoiceRewrite || isAdmin) navigate('/voice-rewrite');
+              else setUpsellFeature({ key: 'has_voice_rewrite', name: t('dashboard.features.voiceRewrite') });
+            }}
+          >
+            {(!hasVoiceRewrite && !isAdmin) && <Lock className="absolute top-2 right-2 w-3 h-3 text-muted-foreground/50" />}
+            <Mic className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.voiceRewrite')}</span>
+          </Button>
+          <Button 
+            variant="secondary" 
+            className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5 relative overflow-hidden"
+            onClick={() => {
+              if (hasShortsReels || isAdmin) navigate('/shorts-reels');
+              else setUpsellFeature({ key: 'has_shorts_reels', name: t('dashboard.features.shortsReels') });
+            }}
+          >
+            {(!hasShortsReels && !isAdmin) && <Lock className="absolute top-2 right-2 w-3 h-3 text-muted-foreground/50" />}
+            <Smartphone className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.shortsReels')}</span>
+          </Button>
+          <Button 
+            variant="secondary" 
+            className="group h-24 flex flex-col items-center justify-center gap-2 rounded-2xl border border-border hover:border-primary/50 transition-all hover:bg-primary/5"
+            onClick={() => navigate('/downloads')}
+          >
+            <Download className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold uppercase tracking-wider">{t('dashboard.features.library')}</span>
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-4">
+          <div className="lg:col-span-8 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <VideoUploadZone
+                label={t('dashboard.upload.hooks.label')}
+                description={t('dashboard.upload.hooks.description')}
+                maxFiles={10}
+                files={hooks}
+                onFilesChange={setHooks}
+                accentColor="bg-blue-500"
+                isPreprocessing={preprocessingSection === t('dashboard.upload.hooks.label')}
+                preprocessStarted={hooksStarted}
+                onPreprocess={() => handlePreprocessSection(t('dashboard.upload.hooks.label'), hooks, setHooks, setHooksPreprocessed, setHooksStarted)}
+              />
+              <VideoUploadZone
+                label={t('dashboard.upload.bodies.label')}
+                description={t('dashboard.upload.bodies.description')}
+                maxFiles={10}
+                files={bodies}
+                onFilesChange={setBodies}
+                accentColor="bg-purple-500"
+                isPreprocessing={preprocessingSection === t('dashboard.upload.bodies.label')}
+                preprocessStarted={bodiesStarted}
+                onPreprocess={() => handlePreprocessSection(t('dashboard.upload.bodies.label'), bodies, setBodies, setBodiesPreprocessed, setBodiesStarted)}
+              />
+              <VideoUploadZone
+                label={t('dashboard.upload.ctas.label')}
+                description={t('dashboard.upload.ctas.description')}
+                maxFiles={10}
+                files={ctas}
+                onFilesChange={setCtas}
+                accentColor="bg-pink-500"
+                isPreprocessing={preprocessingSection === t('dashboard.upload.ctas.label')}
+                preprocessStarted={ctasStarted}
+                onPreprocess={() => handlePreprocessSection(t('dashboard.upload.ctas.label'), ctas, setCtas, setCtasPreprocessed, setCtasStarted)}
+              />
+            </div>
+
+            {combinations.length > 0 && (
+              <div className="space-y-4 pt-4 animate-in slide-in-from-bottom duration-700">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-black text-foreground uppercase tracking-tight flex items-center gap-2">
+                    <LayoutGrid className="w-6 h-6 text-primary" />
+                    {t('dashboard.output.title')}
+                  </h2>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadAll}
+                    className="rounded-full font-bold uppercase text-xs"
+                    disabled={!combinations.some((c) => c.status === 'done')}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    {t('dashboard.output.downloadAll')}
+                  </Button>
+                </div>
+                <CombinationList
+                  combinations={combinations}
+                  onDownload={handleDownload}
+                  isProcessing={isProcessing}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-4">
+            <div className="sticky top-24 space-y-6">
+              <ProcessingSettingsPanel
+                settings={settings}
+                onSettingsChange={setSettings}
+                totalCombinations={totalCombinations}
+              />
+
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-bold text-muted-foreground uppercase tracking-wider">{t('dashboard.processing.estimatedTokens')}</span>
+                  <div className="flex items-center gap-1 font-black text-primary">
+                    <Coins className="w-4 h-4" />
+                    {calculateTokenCost(totalCombinations, settings).total}
+                  </div>
+                </div>
+
+                {!isProcessing ? (
+                  <Button
+                    className="w-full h-16 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg uppercase tracking-widest shadow-[0_10px_20px_-10px_rgba(var(--primary-rgb),0.5)] transition-all hover:scale-[1.02] active:scale-[0.98] group"
+                    disabled={!canProcess}
+                    onClick={handleProcess}
+                  >
+                    <Rocket className="w-6 h-6 mr-3 group-hover:animate-bounce" />
+                    {t('dashboard.processing.startBtn')}
+                  </Button>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm font-bold uppercase">
+                        <span className="text-primary animate-pulse">{processingPhase}</span>
+                        <span>{Math.round(currentProgress)}%</span>
+                      </div>
+                      <Progress value={currentProgress} className="h-3 rounded-full" />
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 rounded-xl font-bold uppercase tracking-wider border-red-500/20 text-red-500 hover:bg-red-500/10"
+                      onClick={handleCancel}
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      {t('dashboard.processing.cancelBtn')}
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-xl border border-border text-[11px] text-muted-foreground leading-relaxed">
+                  <HelpCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  {t('dashboard.processing.disclaimer')}
+                </div>
+              </div>
+
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="w-full h-12 rounded-xl border-dashed font-bold uppercase tracking-wider gap-2 opacity-50 hover:opacity-100"
+                  onClick={() => navigate('/admin/plans')}
+                >
+                  <Lock className="w-4 h-4" />
+                  Admin: Gerenciar Planos
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
 
       <ScriptChatFloat />
       <FeatureUpsellDialog
