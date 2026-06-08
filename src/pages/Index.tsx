@@ -456,31 +456,19 @@ const Index = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button 
-            variant={activeStat === 'toGenerate' ? 'default' : 'secondary'}
-            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
-            onClick={() => setActiveStat(activeStat === 'toGenerate' ? null : 'toGenerate')}
-          >
-            <span className="text-4xl font-black">{totalCombinations}</span>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.toGenerate')}</span>
-          </Button>
-          <Button 
-            variant={activeStat === 'sent' ? 'default' : 'secondary'}
-            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
-            onClick={() => setActiveStat(activeStat === 'sent' ? null : 'sent')}
-          >
-            <span className="text-4xl font-black">{hooks.length + bodies.length + ctas.length}</span>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.sent')}</span>
-          </Button>
-          <Button 
-            variant={activeStat === 'processed' ? 'default' : 'secondary'}
-            className="h-28 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border shadow-sm transition-all"
-            onClick={() => setActiveStat(activeStat === 'processed' ? null : 'processed')}
-          >
-            <span className="text-4xl font-black">{combinations.filter(c => c.status === 'done').length}</span>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-70">{t('dashboard.stats.processed')}</span>
-          </Button>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+          <div className="bg-card/50 border border-border rounded-2xl p-6 flex flex-col items-center gap-2">
+            <span className="text-4xl font-black text-primary">{totalCombinations}</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('dashboard.stats.toGenerate')}</span>
+          </div>
+          <div className="bg-card/50 border border-border rounded-2xl p-6 flex flex-col items-center gap-2">
+            <span className="text-4xl font-black text-primary">{hooks.length + bodies.length + ctas.length}</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('dashboard.stats.sent')}</span>
+          </div>
+          <div className="bg-card/50 border border-border rounded-2xl p-6 flex flex-col items-center gap-2">
+            <span className="text-4xl font-black text-primary">{combinations.filter(c => c.status === 'done').length}</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('dashboard.stats.processed')}</span>
+          </div>
         </div>
 
         {/* Feature Grid Quick Access - Hidden in this specific request to match previous state */}
