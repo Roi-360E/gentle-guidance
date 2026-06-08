@@ -531,7 +531,9 @@ const Index = () => {
                 </div>
                 <CombinationList
                   combinations={combinations}
+                  currentProgress={currentProgress}
                   onDownload={handleDownload}
+                  onDownloadAll={handleDownloadAll}
                   isProcessing={isProcessing}
                 />
               </div>
@@ -542,8 +544,8 @@ const Index = () => {
             <div className="sticky top-24 space-y-6">
               <ProcessingSettingsPanel
                 settings={settings}
-                onSettingsChange={setSettings}
-                totalCombinations={totalCombinations}
+                onChange={setSettings}
+                disabled={isProcessing}
               />
 
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
