@@ -3,7 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.3.8';
+const APP_VERSION = '2.3.9';
 
 // Cache-busting logic
 try {
@@ -19,8 +19,6 @@ try {
         }
       });
     }
-    // Force a single hard reload if version mismatch
-    window.location.reload();
   }
 } catch (e) {
   console.warn('[App] Cache-busting failed:', e);
