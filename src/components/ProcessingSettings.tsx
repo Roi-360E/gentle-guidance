@@ -15,6 +15,7 @@ interface ProcessingSettingsProps {
   settings: SettingsType;
   onChange: (settings: SettingsType) => void;
   disabled?: boolean;
+  preProcess: boolean;
 }
 
 const getResolutionOptions = (t: any): { value: ResolutionPreset; label: string; desc: string }[] => [
