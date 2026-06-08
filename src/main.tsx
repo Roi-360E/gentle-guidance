@@ -3,30 +3,9 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
-const APP_VERSION = '2.4.1';
+const rootElement = document.getElementById("root");
 
-// Cache-busting logic
-try {
-  const storedVersion = localStorage.getItem('app_version');
-  if (storedVersion !== APP_VERSION) {
-    localStorage.clear();
-    sessionStorage.clear();
-    localStorage.setItem('app_version', APP_VERSION);
-    if ('caches' in window) {
-      caches.keys().then(names => {
-        if (names) {
-          names.forEach(n => caches.delete(n));
-        }
-      });
-    }
-  }
-} catch (e) {
-  // Silent fail
-}
-
-const container = document.getElementById("root");
-if (container) {
-  const root = createRoot(container);
+if (rootElement) {
+  const root = createRoot(rootElement);
   root.render(<App />);
 }
-
